@@ -13,6 +13,7 @@ venv/
 .env
 .env.*
 !.env.example
+!configs/*.env.example
 
 # Models, adapters, datasets, and generated outputs
 /data/
@@ -21,6 +22,7 @@ venv/
 /checkpoints/
 /outputs/
 /logs/
+/environment-manifests/
 *.safetensors
 *.ckpt
 *.pt

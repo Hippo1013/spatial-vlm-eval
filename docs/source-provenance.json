@@ -1,8 +1,8 @@
 {
   "captured_at": "2026-07-26",
   "source_root": "/media/datasets/tangzecong/latent_reasoning",
-  "note": "Files were renamed and reorganized; scoring semantics remain v3.",
-  "files": {
+  "note": "MSMU scorer semantics remain v3; model adapters have independent inference protocol ids.",
+  "legacy_files": {
     "msmu_sft_baseline/data.py": "440D315DF868461661D3C1596CE139A3DFEEE36045E83C78C7A06C84671EF4E8",
     "msmu_sft_baseline/infer.py": "674FF38B7B8E91BA47286F2BCF90058BFDCED7CD0DF072879426A4134EF17E48",
     "msmu_sft_baseline/validate_predictions.py": "4B51D6EEDA0ED2772B5C5F7C99D377830193D7E5FA693F0806DDA4F062A884FD",
@@ -11,5 +11,37 @@
     "batch_msmu_official_infer.sh": "D0C44606CAB2ED1758E607972553880B1E218DBEACC0B944E501C2DB89DCBB40",
     "batch_msmu_sft_score_official_compat.sh": "B1C2ECB82C917D5E344B280988B38DF99F5F7752CAA2E309D9E345A11DFCDD22",
     "serve_msmu_local_judge.sh": "DB28D47195B655A2F6BBF2F4956A445FDF16DD643A4EF77E49938F2429EB5CF7"
+  },
+  "upstream_commits": {
+    "yliu-cs/SSR": "52a21a14a84a98f07575721dd3200f76c11930d8",
+    "yliu-cs/ml-depth-pro": "edb23bbab37cfc4d3fe1048a2f126ca7c590ab64",
+    "AnjieCheng/SpatialRGPT": "16715d4f1419997da18926c6ce574802d1eb3a37",
+    "bfshi/scaling_on_scales": "9c008a37540e761f53574b488979db6e49a64312",
+    "zhangquanchen/3DThinker": "c9469e01b719310b0eaecc1133317e4ecfc74d8c",
+    "BAAI-DCAI/SpatialBot": "775ad8cf2f9251261dcd70b2639133d506ff583f",
+    "isl-org/ZoeDepth": "d87f17b2f5fdcb174cf4fb115491f4a6c60de152"
+  },
+  "checkpoint_sha256": {
+    "apple/ml-depth-pro/depth_pro.pt": "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
+  },
+  "environment_artifact_sha256": {
+    "Dao-AILab/flash-attention/v2.7.4.post1/flash_attn-2.7.4.post1+cu12torch2.5cxx11abiFALSE-cp310-cp310-linux_x86_64.whl": "b267f80a08e516292cdd748056a2178a45b8abedf7fca123292eb17c21c8c87c"
+  },
+  "model_revisions": {
+    "llava-hf/llava-v1.6-mistral-7b-hf": "2424fdd47412fccc66d91719126b420e9fbd7065",
+    "llava-hf/llava-v1.6-34b-hf": "84e4488fffae48f9da316ec31288b7c03f102ec7",
+    "OpenGVLab/InternVL3-8B-hf": "259a3b64a14623c0ec91a045cb43f7c5af5fa6af",
+    "OpenGVLab/InternVL3-38B-hf": "b2a05c0c325235f7530d8274c313a1d01082e069",
+    "OpenGVLab/InternVL3-78B-hf": "3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356",
+    "Qwen/Qwen2.5-VL-7B-Instruct": "cc594898137f460bfe9f0759e9844b3ce807cfb5",
+    "openai/clip-vit-large-patch14": "32bd64288804d66eefd0ccbe215aa642df71cc41",
+    "google/siglip-so400m-patch14-384": "9fdffc58afc957d1a03a25b10dba0329ab15c2a3",
+    "state-spaces/mamba-130m-hf": "1e76775f628fbf1350fbe4dbb3d971ba64af25a1",
+    "Qwen/Qwen2.5-7B": "d149729398750b98c0af14eb82c78cfe92750796",
+    "yliu-cs/SSR-VLM-7B": "7bcb4636f1396325f27f7fbb2f2df121128931bf",
+    "yliu-cs/SSR-MIDI-7B": "8ed878fa16e3e440741ed8c1fedfcfe40710258d",
+    "a8cheng/SpatialRGPT-VILA1.5-8B": "64df7902f82b5053f5a53455095805e6de3a1f87",
+    "jankin123/3DThinker-Mindcube": "69a70411605f86ec69bada0a625bb96ddee995d9",
+    "RussRobin/SpatialBot-3B": "41d3b52c642058dfb087885bec0b8e37e0e67f8d"
   }
 }

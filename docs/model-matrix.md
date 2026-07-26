@@ -1,33 +1,61 @@
-# Evaluation Model Matrix
+# MSMU Evaluation Model Matrix
 
-本表是计划清单，不代表已经完成评测。每条正式结果必须同时记录 benchmark、model revision、
-prompt/template、image profile、decoding profile 和 scorer protocol。
+“Adapter available”只表示代码与本地 contract/mock 测试完成，不表示 GPU/API smoke 或 987 条评分已
+完成。每个正式结果必须同时记录 model revision、inference protocol、prompt/template、图像处理、
+decoding 和 scorer protocol；不同 inference protocol 不得在缺少 protocol 列的表中混合。
 
-## Closed source
+## 新增的 14 个 inference profile
 
-| Model | Status |
-|---|---|
-| GPT-5 | Planned |
-| Gemini 3.1 Pro | Planned |
+| Key | Model / locked revision | Input track | Backend | Inference protocol | Status |
+|---|---|---|---|---|---|
+| `gpt5` | `openai/gpt-5`，provider-managed | question-only RGB | OpenRouter / OpenAI | `msmu_gpt5_question_only_v1` | Adapter + mock tests；live key pending |
+| `gemini31pro` | `google/gemini-3.1-pro-preview`，provider-managed | question-only RGB | OpenRouter / Google | `msmu_gemini31pro_question_only_v1` | Adapter + mock tests；live key pending |
+| `llava_next_mistral_7b` | `llava-hf/llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | question-only RGB | vLLM 0.19 | `msmu_llava_next_mistral_7b_question_only_v1` | Processor passed；GPU smoke pending |
+| `llava_next_yi_34b` | `llava-hf/llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | question-only RGB | vLLM 0.19 TP=2 | `msmu_llava_next_yi_34b_question_only_v1` | Processor passed；TP=2 smoke pending |
+| `internvl3_8b` | `OpenGVLab/InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | question-only RGB | vLLM 0.19 | `msmu_internvl3_8b_question_only_v1` | Processor passed；GPU smoke pending |
+| `internvl3_38b` | `OpenGVLab/InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | question-only RGB | vLLM 0.19 TP=2 | `msmu_internvl3_38b_question_only_v1` | Processor passed；TP=2 smoke pending |
+| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | question-only RGB | vLLM 0.19 TP=2 config | `msmu_internvl3_78b_question_only_v1` | Processor/config passed；2×80GB forced load disabled |
+| `ssr` | `SSR-VLM-7B@7bcb4636f1396325f27f7fbb2f2df121128931bf` | fair RGB-only，无 TOR/MIDI/depth | official Transformers | `msmu_ssr_rgb_only_v1` | Source/checkpoint/static adapter passed；GPU smoke pending |
+| `ssr_native` | 上述 VLM + `SSR-MIDI-7B@8ed878fa16e3e440741ed8c1fedfcfe40710258d` | DepthPro + MIDI + 10 TOR | official Transformers | `msmu_ssr_native_depthpro_midi_tor10_native_v1` | Adapter/DepthPro/flash-attn/CLIP/Mamba static passed；SigLIP/Qwen publish pending |
+| `spatialrgpt` | `SpatialRGPT-VILA1.5-8B@64df7902f82b5053f5a53455095805e6de3a1f87` | RGB-only，无伪造 region/depth | official VILA | `msmu_spatialrgpt_rgb_only_v1` | Checkpoint/RGB processor static passed；compatible Torch/flash-attn loader pending |
+| `3dthinker` | `3DThinker-Mindcube@69a70411605f86ec69bada0a625bb96ddee995d9` | fair question-only RGB | modified Transformers | `msmu_3dthinker_question_only_v1` | Checkpoint/modified processor static passed；GPU smoke pending |
+| `3dthinker_native` | 同上 | official mental-3D control prompt | modified Transformers | `msmu_3dthinker_native_mental3d_native_v1` | Checkpoint/modified processor static passed；GPU smoke pending |
+| `spatialbot` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | fair RGB-only | official Bunny | `msmu_spatialbot_rgb_only_v1` | Source helpers passed；gated weight/xformers pending |
+| `spatialbot_native` | 同上 | same-RGB ZoeDepth RGB-D | official Bunny | `msmu_spatialbot_native_zoedepth_rgbd_native_v1` | Source helpers passed；gated weight/ZoeDepth/xformers pending |
 
-## Open source general-purpose VLMs
+## 既有 Qwen profile
 
-| Model | Status |
-|---|---|
-| llava-v1.6-mistral-7b-hf | Planned |
-| llava-v1.6-34b-hf | Planned |
-| Qwen2.5-VL-7B-Instruct | Adapter available |
-| Qwen2.5-VL-32B-Instruct | Planned; Qwen adapter compatible, deployment pending |
-| Qwen2.5-VL-72B-Instruct | Planned; Qwen adapter compatible, deployment pending |
-| InternVL3-8B | Planned |
-| InternVL3-38B | Planned |
-| InternVL3-78B | Planned |
-
-## Spatial-specialized models
-
-| Model | Upstream | Status |
+| Model | Inference protocol | Status |
 |---|---|---|
-| SSR | https://github.com/yliu-cs/SSR | Planned |
-| SpatialRGPT | https://github.com/AnjieCheng/SpatialRGPT | Planned |
-| 3DThinker | https://github.com/zhangquanchen/3DThinker | Planned |
-| SpatialBot | https://github.com/BAAI-DCAI/SpatialBot | Planned |
+| Qwen2.5-VL base / PEFT | `msmu_qwen25_vl_question_only_deterministic_v1` | Adapter available；greedy、192 tokens、pixel `12544..112896` |
+
+## 专用模型身份说明
+
+- SSR-VLM 与 SSR-MIDI 是同一原生推理栈的互补权重，不作为两个模型重复计分。SSR 使用上游
+  `yliu-cs/SSR@52a21a14a84a98f07575721dd3200f76c11930d8`；原生轨 DepthPro fork 锁定
+  `edb23bbab37cfc4d3fe1048a2f126ca7c590ab64`。MIDI checkpoint 的 `tor_proj` hidden size 为
+  3584，因此内部 LLM 锁定 `Qwen/Qwen2.5-7B@d149729398750b98c0af14eb82c78cfe92750796`，
+  不能替换成 3B。
+- SpatialRGPT 使用 `AnjieCheng/SpatialRGPT@16715d4f1419997da18926c6ce574802d1eb3a37`。
+  MSMU 没有 region/mask，题干也没有 region token，因此只建立 RGB-only 轨。
+- 3DThinker 使用 `zhangquanchen/3DThinker@c9469e01b719310b0eaecc1133317e4ecfc74d8c`。
+  公开权重必须标为 “MindCube-trained stage-1 checkpoint”，不能代表论文完整最终模型。
+- SpatialBot 使用 merged instruction checkpoint，而非 pretrain 或同权重的 LoRA 部署形态；上游锁定
+  `BAAI-DCAI/SpatialBot@775ad8cf2f9251261dcd70b2639133d506ff583f`。原生轨 ZoeDepth 锁定
+  `d87f17b2f5fdcb174cf4fb115491f4a6c60de152`，只从当前 MSMU RGB 估计深度。
+
+## 公平轨与原生轨
+
+公平轨只使用一张 MSMU RGB 和原题。原生轨可以启用模型官方设计中由该 RGB 派生的组件，但不能
+使用传感器/GT depth、reference、类别、额外 QA 或开放词汇检测器伪造 region。公平轨与原生轨的
+protocol id、输出目录和结果列必须保持独立。
+
+## 已知推理偏差
+
+- Gemini 轨按本项目预注册设置使用 temperature 0；这不是 provider 默认 profile。
+- SSR、SpatialRGPT、3DThinker 和 SpatialBot 为统一横评锁定了计划中的 greedy/token limit，可能与上游
+  demo 默认 sampling 或 token limit 不同。
+- SpatialBot native 按本项目明确合同把 ZoeDepth 米值量化为 `round(m * 1000)` 的 uint16 毫米。
+  锁定 ZoeDepth 源码的 `save_raw_16bit` helper 实际使用 `depth * 256`；因此本轨保留官方
+  SpatialBot 三通道 packing，但不是该 helper 的逐字节复刻。此差异已进入 inference protocol metadata，
+  不能与其他 depth quantization 混表。

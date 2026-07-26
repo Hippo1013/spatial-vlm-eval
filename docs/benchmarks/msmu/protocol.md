@@ -62,6 +62,44 @@ Qwen 必须删除字面 token，并用 structured image content 传图。
 这不是 SD-VLM 官方的 sampling profile（temperature 0.2、1024 new tokens），两者不得在同一
 对比表中混用。
 
+## 多模型 inference protocol
+
+scorer protocol 与 inference protocol 是两个正交身份。此次新增 adapter 不改变 judge prompt、阈值、
+列表长度语义、grounding 路由、cache key 或 macro-8 聚合，因此 canonical scorer id 保持不变。
+prompt、图像派生组件或 decoding 不同的轨使用独立 inference protocol：
+
+| Profile | Legal model input | Decoding | Inference protocol |
+|---|---|---|---|
+| GPT-5 | one RGB + original question | low reasoning, no temperature, 192 completion tokens | `msmu_gpt5_question_only_v1` |
+| Gemini 3.1 Pro preview | one RGB + original question | low reasoning, temperature 0, 192 completion tokens | `msmu_gemini31pro_question_only_v1` |
+| LLaVA-NeXT Mistral 7B | one RGB + original question | greedy, 192 | `msmu_llava_next_mistral_7b_question_only_v1` |
+| LLaVA-NeXT Yi 34B | one RGB + original question | greedy, 192 | `msmu_llava_next_yi_34b_question_only_v1` |
+| InternVL3 8B / 38B / 78B | one RGB + original question | greedy, 192 | model-size-specific `msmu_internvl3_*_question_only_v1` |
+| SSR fair | one RGB + original question；无 TOR/MIDI/depth | greedy, 192 | `msmu_ssr_rgb_only_v1` |
+| SSR native | one RGB + original question；same-RGB DepthPro + MIDI + 10 TOR | greedy, 192 | `msmu_ssr_native_depthpro_midi_tor10_native_v1` |
+| SpatialRGPT | one RGB + original question；无 region/mask/depth | greedy, 192 | `msmu_spatialrgpt_rgb_only_v1` |
+| 3DThinker fair | one RGB + original question | greedy, 192 | `msmu_3dthinker_question_only_v1` |
+| 3DThinker native | one RGB + original question + official begin-position mental-3D control prompt | greedy, 2048；last complete answer tag | `msmu_3dthinker_native_mental3d_native_v1` |
+| SpatialBot fair | one RGB + original question | greedy, 192 | `msmu_spatialbot_rgb_only_v1` |
+| SpatialBot native | one RGB + original question；same-RGB ZoeDepth uint16-mm derived depth | greedy, 192 | `msmu_spatialbot_native_zoedepth_rgbd_native_v1` |
+
+3DThinker native 缺少完整 `<answer>...</answer>` 时保留 raw response 作为 prediction 并写 warning，不能
+静默返回空值。SpatialBot native 的 depth 只能从当前 RGB 估计，不接受 GT/sensor depth。SpatialRGPT
+因 MSMU 无 region/mask 且题干无 region token，不运行 detector 伪造 region。
+
+SpatialBot depth 合同明确为 `clip(round(metres * 1000), 0, 65535)` 后做上游三通道 packing。锁定
+ZoeDepth 的 `save_raw_16bit` helper 使用 `depth * 256`，所以本项目的毫米量化不是该 helper 的字节级
+复刻；该已知偏差属于当前 inference protocol，若改为 `*256` 必须更换 inference protocol id 和测试。
+
+OpenAI-compatible 请求严格只有一个 user message，其中一个 question text part 和一个 PNG data URI；
+不发送 system、history、reference 或答案格式提示。OpenRouter 路由同时设置首方 provider only、
+`allow_fallbacks=false`、`require_parameters=true`、`data_collection=deny` 和 `zdr=true`，并在成功写
+journal 前校验 generation metadata 的 canonical model、provider 和 `num_media_prompt==1`。
+
+vLLM 0.19 服务必须设置 `--limit-mm-per-prompt.image 1`、锁定 revision/served name/TP/dtype。静态
+preflight 分别检查 LLaVA prompt 中恰有一个 `<image>`、InternVL prompt 中恰有一个
+`<IMG_CONTEXT>`，且 processor 返回非空 `pixel_values`；服务启动后还必须通过红/蓝合成图 canary。
+
 ## Prediction JSONL
 
 每行包含：
@@ -89,6 +127,10 @@ Qwen 必须删除字面 token，并用 structured image content 传图。
 空 prediction 不使 `passed` 变为 false，评分时会得到零分或抽取失败。其他结构/provenance 错误
 均为 hard error。`--allow-subset` 仅用于独立 validator 的调试，scorer 固定执行 full-split 校验，
 无法用该参数绕过。
+
+`--indices` 与 `--limit` 只控制推理 debug target。逐样本 journal 可以断点续跑；正式 JSONL 只有在
+所有 target 成功后才原子生成。带 `--indices`/`--limit` 的产物 metadata 必须是
+`publishable_inference=false`，pipeline 不允许调用 scorer。正式输出仍必须覆盖 `0..986`。
 
 ## Judge 与评分
 

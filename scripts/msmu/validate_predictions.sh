@@ -5,7 +5,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/../.." && pwd)"
-PYTHON="${PYTHON:-python}"
+PYTHON="${PYTHON:-${LATENT_PYTHON:-python}}"
 
 : "${PREDICTIONS:?Set PREDICTIONS to predictions.jsonl}"
 : "${DATASET_ROOT:?Set DATASET_ROOT to the local MSMU dataset root}"
