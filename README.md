@@ -30,6 +30,7 @@ MSMU-Bench 的 Qwen2.5-VL/PEFT 推理、预测校验和本地 judge v3 评分；
 ├── requirements/                 # 已验证环境版本与开发依赖
 ├── benchmark_paper/              # 本地论文目录；PDF 不入 Git
 ├── .env.example
+├── DEVLOG.md                      # 服务器实验报错与解决方法（精简）
 └── AGENTS.md
 ```
 
@@ -120,7 +121,9 @@ OUTPUT_DIR="$SCORE_OUTPUT_DIR" \
 ```
 
 `msmu-score` 在任何 judge 请求前会再次强制校验完整 test split。空 prediction 会作为明确 warning
-保留并继续评分；字段污染、缺失/重复 index、subset 或错误数据源会中止评分。
+保留并继续评分；prediction 必须使用精确六字段 schema，任何额外字段、缺失/重复 index、subset
+或错误数据源都会中止评分。`official_type` 仅由 scorer 在校验通过后从 dataset-owned `raw_type`
+派生，不接受 prediction 文件声明。
 
 ## 运行产物
 
@@ -134,6 +137,7 @@ infer.log
 local_judge_official_compat_v3_strict_quant_length/
 ├── prediction_validation.json
 ├── judge_cache.jsonl
+├── judge_failures.jsonl
 ├── scored_rows.jsonl
 ├── summary.json
 └── score.log
@@ -141,12 +145,18 @@ local_judge_official_compat_v3_strict_quant_length/
 
 正式报告至少读取：
 
+- `publishable == true` 且 `publication_gate_failures == []`
 - `num_samples == 987`
 - `missing_official_types == []`
+- `num_judge_failures == 0`
 - `official_macro8_accuracy`
 - `micro_accuracy`
 - `quantitative_match_success_rate`
 - `judge_model`、`judge_base_url` 与 `protocol`
+
+judge 的 HTTP、解析或响应 schema 失败不会写入成功 cache，并会在下次运行时自动重试。只要仍有
+未解决失败，scorer 就以非零状态退出，并写出 `publishable == false`、不含正式指标的诊断
+`summary.json` 以及 `judge_failures.jsonl`；该目录不得进入正式结果表。
 
 ## 测试
 
@@ -169,4 +179,5 @@ python -m compileall -q src tests
 
 详细边界见 [架构说明](docs/architecture.md) 与
 [MSMU 协议](docs/benchmarks/msmu/protocol.md)。协作者与自动化 agent 必须先阅读
-[AGENTS.md](AGENTS.md)。
+[AGENTS.md](AGENTS.md)。服务器实验中已解决的运行问题统一精简记录在
+[DEVLOG.md](DEVLOG.md)。

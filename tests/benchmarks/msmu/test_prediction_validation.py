@@ -55,6 +55,21 @@ class PredictionValidationTest(unittest.TestCase):
         self.assertFalse(report["passed"])
         self.assertIn("reference mismatch", report["errors"][0])
 
+    def test_unexpected_fields_are_hard_errors(self):
+        for key, value in {
+            "official_type": "existence",
+            "score": 1,
+            "judge": {"your_mark": 1},
+        }.items():
+            with self.subTest(key=key):
+                row = prediction_row()
+                row[key] = value
+                report = self.validate(row)
+                self.assertFalse(report["passed"])
+                self.assertTrue(
+                    any(f"unexpected keys ['{key}']" in error for error in report["errors"])
+                )
+
 
 class ScorerPreflightTest(unittest.TestCase):
     def test_invalid_report_aborts_before_scoring(self):

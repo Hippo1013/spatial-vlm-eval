@@ -5,6 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Sequence
 
+
 def load_arrow_split(dataset_root: str | Path, split: str) -> Any:
     """Load all Arrow shards for one MSMU split in filename order."""
 
@@ -140,9 +141,30 @@ RAW_TYPE_TO_FAMILY = {
     "zero": "existence",
 }
 
+FAMILY_TO_OFFICIAL_TYPE = {
+    "scale_estimation": "scale_estimation",
+    "absolute_distance": "absolute_distance",
+    "object_counting": "count",
+    "grounding": "grounding",
+    "reference_object_estimation": "refer_obj_estimation",
+    "relative_position": "relative_position",
+    "scale_comparison": "scale_compare",
+    "existence": "existence",
+}
+
 
 def task_family(raw_type: str) -> str:
     try:
         return RAW_TYPE_TO_FAMILY[str(raw_type)]
     except KeyError as exc:
         raise ValueError(f"Unknown MSMU-Bench raw type: {raw_type}") from exc
+
+
+def official_type_for_raw_type(raw_type: str) -> str:
+    """Map one dataset-owned raw type to the locked scorer category."""
+
+    family = task_family(raw_type)
+    try:
+        return FAMILY_TO_OFFICIAL_TYPE[family]
+    except KeyError as exc:
+        raise ValueError(f"Unknown MSMU-Bench task family: {family}") from exc

@@ -63,9 +63,14 @@ def validate_prediction_rows(
     warnings: list[str] = []
 
     for position, row in enumerate(rows):
-        missing = sorted(REQUIRED_FIELDS - set(row))
+        row_fields = set(row)
+        missing = sorted(REQUIRED_FIELDS - row_fields)
+        extra = sorted(row_fields - REQUIRED_FIELDS)
         if missing:
             errors.append(f"row_position={position}: missing keys {missing}")
+        if extra:
+            errors.append(f"row_position={position}: unexpected keys {extra}")
+        if missing:
             continue
         try:
             index = int(row["index"])

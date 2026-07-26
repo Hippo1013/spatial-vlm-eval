@@ -26,6 +26,7 @@ from typing import Any
 import numpy as np
 from tqdm.auto import tqdm
 
+from .data import official_type_for_raw_type
 from .prediction_validation import validate_predictions, write_validation_report
 
 
@@ -42,16 +43,7 @@ OFFICIAL_QUAL_TYPES = {"relative_position", "scale_compare", "existence"}
 # reused when only the scoring logic is corrected.
 JUDGE_CACHE_PROTOCOL = "sdvlm_official_compat_local_judge_v2_grounding_split"
 SCORER_PROTOCOL = "sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length"
-FAMILY_TO_OFFICIAL_TYPE = {
-    "scale_estimation": "scale_estimation",
-    "absolute_distance": "absolute_distance",
-    "object_counting": "count",
-    "grounding": "grounding",
-    "reference_object_estimation": "refer_obj_estimation",
-    "relative_position": "relative_position",
-    "scale_comparison": "scale_compare",
-    "existence": "existence",
-}
+MSMU_OFFICIAL_TEST_SIZE = 987
 
 
 def parse_args() -> argparse.Namespace:
@@ -81,6 +73,29 @@ def append_jsonl(path: Path, row: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8") as handle:
         handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
+def write_jsonl(path: Path, rows: list[dict[str, Any]]) -> None:
+    """Atomically replace a JSONL artifact with the rows from this run."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(path.suffix + ".tmp")
+    with temporary_path.open("w", encoding="utf-8") as handle:
+        for row in rows:
+            handle.write(json.dumps(row, ensure_ascii=False) + "\n")
+    temporary_path.replace(path)
+
+
+def write_json(path: Path, value: dict[str, Any]) -> None:
+    """Atomically replace a JSON artifact."""
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary_path = path.with_suffix(path.suffix + ".tmp")
+    temporary_path.write_text(
+        json.dumps(value, ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+    temporary_path.replace(path)
 
 
 def validated_predictions_for_scoring(
@@ -118,29 +133,9 @@ def validated_predictions_for_scoring(
 
 
 def official_type(row: dict[str, Any]) -> str:
-    if "official_type" in row:
-        return str(row["official_type"])
-    family = str(row.get("task_family") or "")
-    if family in FAMILY_TO_OFFICIAL_TYPE:
-        return FAMILY_TO_OFFICIAL_TYPE[family]
-    raw_type = str(row.get("raw_type") or "")
-    raw_map = {
-        "width": "scale_estimation",
-        "height": "scale_estimation",
-        "size": "scale_estimation",
-        "distance": "absolute_distance",
-        "count": "count",
-        "position": "grounding",
-        "refer_two_objects": "refer_obj_estimation",
-        "refer_three_objects": "refer_obj_estimation",
-        "left/right": "relative_position",
-        "taller_two_object": "scale_compare",
-        "tall_three_objects": "scale_compare",
-        "zero": "existence",
-    }
-    if raw_type in raw_map:
-        return raw_map[raw_type]
-    raise ValueError(f"Cannot map row to official type: raw_type={raw_type!r}, task_family={family!r}")
+    """Derive scorer routing only from the dataset-owned raw type."""
+
+    return official_type_for_raw_type(str(row.get("raw_type") or ""))
 
 
 def evaluate_quan_dist_question(question: str, answer: str, pred: str) -> str:
@@ -377,6 +372,110 @@ def extract_json(text: str) -> dict[str, Any]:
     return value
 
 
+def judge_response_error(row: dict[str, Any], response: Any) -> str | None:
+    """Return why a judge response is unusable, or ``None`` when usable.
+
+    A response with the expected keys may still describe a model-answer
+    extraction failure (for example an empty coordinate list). That is a valid
+    judge response and remains scoreable as zero. Infrastructure, parsing, and
+    response-schema failures are not scoreable and must be retried.
+    """
+
+    if not isinstance(response, dict):
+        return "judge response is not a JSON object"
+    if "__parse_error__" in response:
+        return f"judge request/parse failure: {response['__parse_error__']}"
+
+    kind = official_type(row)
+    if kind == "grounding":
+        if grounding_subtype(row["question"]) == "coordinate_of_object":
+            coordinate_keys = {"answer_coordinates", "response_coordinates"}
+            legacy_keys = {"answer_in_meters", "response_in_meters"}
+            if not (coordinate_keys <= set(response) or legacy_keys <= set(response)):
+                return (
+                    "grounding coordinate response lacks either "
+                    "answer/response_coordinates or answer/response_in_meters"
+                )
+            return None
+        required = {"answer_object", "response_object", "your_mark"}
+    elif kind in OFFICIAL_QUANT_TYPES:
+        required = {"answer_in_meters", "response_in_meters"}
+    elif kind in OFFICIAL_QUAL_TYPES:
+        required = {"your_mark"}
+    else:
+        return f"unknown official type: {kind}"
+
+    missing = sorted(required - set(response))
+    if missing:
+        return f"judge response missing required keys: {missing}"
+    if "your_mark" in required and response.get("your_mark") is None:
+        return "judge response has null your_mark"
+    return None
+
+
+def cache_entry_is_usable(
+    row: dict[str, Any],
+    entry: Any,
+    *,
+    expected_cache_key: str,
+) -> bool:
+    """Return whether a cached response can safely skip a judge request."""
+
+    if not isinstance(entry, dict):
+        return False
+    if entry.get("cache_key") != expected_cache_key:
+        return False
+    return judge_response_error(row, entry.get("judge")) is None
+
+
+def judge_cache_candidate(
+    row: dict[str, Any],
+    result: Any,
+    *,
+    base_url: str,
+    model: str,
+) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
+    """Build either a successful cache row or a non-cacheable failure row."""
+
+    error = judge_response_error(row, result)
+    if error is not None:
+        return None, {
+            "index": int(row["index"]),
+            "error": error,
+            "judge": result,
+        }
+    return {
+        "index": int(row["index"]),
+        "cache_key": cache_key(row, base_url=base_url, model=model),
+        "judge_model": model,
+        "judge_base_url": base_url,
+        "judge": result,
+    }, None
+
+
+def publication_gate_status(
+    *,
+    validation_passed: bool,
+    num_samples: int,
+    indices: list[int],
+    missing_official_types: list[str],
+    judge_failure_count: int,
+) -> tuple[bool, dict[str, bool], list[str]]:
+    """Evaluate the machine-readable gates for a publishable summary."""
+
+    checks = {
+        "prediction_validation_passed": bool(validation_passed),
+        "full_official_test_split": (
+            num_samples == MSMU_OFFICIAL_TEST_SIZE
+            and sorted(indices) == list(range(MSMU_OFFICIAL_TEST_SIZE))
+        ),
+        "all_official_types_present": not missing_official_types,
+        "judge_failures_zero": judge_failure_count == 0,
+    }
+    failures = [name for name, passed in checks.items() if not passed]
+    return not failures, checks, failures
+
+
 def call_chat(row: dict[str, Any], base_url: str, model: str, api_key: str, retries: int) -> dict[str, Any]:
     payload = {
         "model": model,
@@ -398,7 +497,11 @@ def call_chat(row: dict[str, Any], base_url: str, model: str, api_key: str, retr
             with opener.open(request, timeout=180) as response:
                 result = json.loads(response.read().decode("utf-8"))
             last_content = str(result["choices"][0]["message"]["content"])
-            return extract_json(last_content)
+            parsed = extract_json(last_content)
+            schema_error = judge_response_error(row, parsed)
+            if schema_error is not None:
+                raise ValueError(schema_error)
+            return parsed
         except Exception as exc:  # noqa: BLE001
             last_error = exc
             time.sleep(2**attempt)
@@ -608,17 +711,22 @@ def main() -> None:
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     cache_path = output_dir / "judge_cache.jsonl"
+    judge_failures_path = output_dir / "judge_failures.jsonl"
     cached = {}
     if cache_path.exists():
         cached = {int(row["index"]): row for row in read_jsonl(cache_path)}
 
-    pending = [
-        row
-        for row in predictions
-        if int(row["index"]) not in cached
-        or cached[int(row["index"])].get("cache_key")
-        != cache_key(row, base_url=args.base_url, model=args.model)
-    ]
+    pending = []
+    for row in predictions:
+        expected_cache_key = cache_key(row, base_url=args.base_url, model=args.model)
+        if not cache_entry_is_usable(
+            row,
+            cached.get(int(row["index"])),
+            expected_cache_key=expected_cache_key,
+        ):
+            pending.append(row)
+
+    judge_failures: list[dict[str, Any]] = []
     if pending:
         with ThreadPoolExecutor(max_workers=args.workers) as executor:
             futures = {
@@ -627,16 +735,81 @@ def main() -> None:
             }
             for future in tqdm(as_completed(futures), total=len(futures), desc="Official-compatible local judge"):
                 row = futures[future]
-                result = future.result()
-                cached_row = {
-                    "index": int(row["index"]),
-                    "cache_key": cache_key(row, base_url=args.base_url, model=args.model),
-                    "judge_model": args.model,
-                    "judge_base_url": args.base_url,
-                    "judge": result,
-                }
+                try:
+                    result = future.result()
+                except Exception as exc:  # noqa: BLE001
+                    result = {"__parse_error__": f"unhandled judge worker failure: {exc}"}
+                cached_row, failure = judge_cache_candidate(
+                    row,
+                    result,
+                    base_url=args.base_url,
+                    model=args.model,
+                )
+                if failure is not None:
+                    judge_failures.append(failure)
+                    continue
+                assert cached_row is not None
                 cached[int(row["index"])] = cached_row
                 append_jsonl(cache_path, cached_row)
+
+    unresolved_rows = []
+    for row in predictions:
+        expected_cache_key = cache_key(row, base_url=args.base_url, model=args.model)
+        if not cache_entry_is_usable(
+            row,
+            cached.get(int(row["index"])),
+            expected_cache_key=expected_cache_key,
+        ):
+            unresolved_rows.append(row)
+
+    failure_by_index = {int(failure["index"]): failure for failure in judge_failures}
+    unresolved_failures = [
+        failure_by_index.get(
+            int(row["index"]),
+            {
+                "index": int(row["index"]),
+                "error": "no usable judge response is cached",
+            },
+        )
+        for row in unresolved_rows
+    ]
+    write_jsonl(judge_failures_path, unresolved_failures)
+
+    prediction_official_types = {official_type(row) for row in predictions}
+    expected_official_types = OFFICIAL_QUANT_TYPES | OFFICIAL_QUAL_TYPES
+    prediction_missing_types = sorted(expected_official_types - prediction_official_types)
+    if unresolved_failures:
+        publishable, publication_gates, publication_gate_failures = publication_gate_status(
+            validation_passed=True,
+            num_samples=len(predictions),
+            indices=[int(row["index"]) for row in predictions],
+            missing_official_types=prediction_missing_types,
+            judge_failure_count=len(unresolved_failures),
+        )
+        failure_summary = {
+            "publishable": publishable,
+            "status": "blocked_by_judge_failures",
+            "result_kind": "official-compatible internal score",
+            "num_prediction_rows": len(predictions),
+            "num_scored_samples": 0,
+            "num_judge_failures": len(unresolved_failures),
+            "judge_failure_indices": [
+                int(failure["index"]) for failure in unresolved_failures
+            ],
+            "missing_official_types": prediction_missing_types,
+            "publication_gates": publication_gates,
+            "publication_gate_failures": publication_gate_failures,
+            "judge_model": args.model,
+            "judge_base_url": args.base_url,
+            "protocol": SCORER_PROTOCOL,
+            "judge_failure_report": str(judge_failures_path),
+        }
+        write_json(output_dir / "summary.json", failure_summary)
+        print(json.dumps(failure_summary, ensure_ascii=False, indent=2))
+        raise SystemExit(
+            f"Scoring blocked: {len(unresolved_failures)} judge request/schema "
+            f"failure(s); see {judge_failures_path}. Failed responses were not cached."
+        )
 
     scored_rows: list[dict[str, Any]] = []
     family_scores: dict[str, list[float]] = defaultdict(list)
@@ -657,7 +830,6 @@ def main() -> None:
         official_type_scores[kind].append(score)
         scored_rows.append({**row, "official_type": kind, "score": score, "judge": judge, **details})
 
-    expected_official_types = OFFICIAL_QUANT_TYPES | OFFICIAL_QUAL_TYPES
     official_summary = {
         kind: {"count": len(values), "accuracy": sum(values) / len(values)}
         for kind, values in sorted(official_type_scores.items())
@@ -668,7 +840,42 @@ def main() -> None:
     }
     missing = sorted(expected_official_types - set(official_summary))
     official_macro8 = None if missing else sum(official_summary[k]["accuracy"] for k in expected_official_types) / 8
+    publishable, publication_gates, publication_gate_failures = publication_gate_status(
+        validation_passed=True,
+        num_samples=len(scored_rows),
+        indices=[int(row["index"]) for row in scored_rows],
+        missing_official_types=missing,
+        judge_failure_count=0,
+    )
+    if not publishable:
+        blocked_summary = {
+            "publishable": False,
+            "status": "blocked_by_publication_gates",
+            "result_kind": "official-compatible internal score",
+            "num_prediction_rows": len(predictions),
+            "num_scored_samples": len(scored_rows),
+            "num_judge_failures": 0,
+            "missing_official_types": missing,
+            "publication_gates": publication_gates,
+            "publication_gate_failures": publication_gate_failures,
+            "judge_model": args.model,
+            "judge_base_url": args.base_url,
+            "protocol": SCORER_PROTOCOL,
+        }
+        write_json(output_dir / "summary.json", blocked_summary)
+        print(json.dumps(blocked_summary, ensure_ascii=False, indent=2))
+        raise SystemExit(
+            "Scoring completed but publication gates failed: "
+            + ", ".join(publication_gate_failures)
+        )
+
     summary = {
+        "publishable": True,
+        "status": "complete",
+        "result_kind": "official-compatible internal score",
+        "publication_gates": publication_gates,
+        "publication_gate_failures": publication_gate_failures,
+        "num_judge_failures": 0,
         "num_samples": len(scored_rows),
         "micro_accuracy": sum(row["score"] for row in scored_rows) / len(scored_rows),
         "official_macro8_accuracy": official_macro8,
@@ -692,7 +899,7 @@ def main() -> None:
     with (output_dir / "scored_rows.jsonl").open("w", encoding="utf-8") as handle:
         for row in scored_rows:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
-    (output_dir / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
+    write_json(output_dir / "summary.json", summary)
     print(json.dumps(summary, ensure_ascii=False, indent=2))
 
 

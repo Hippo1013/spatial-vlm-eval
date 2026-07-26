@@ -72,12 +72,16 @@ Qwen 必须删除字面 token，并用 structured image content 传图。
 
 前五个字段由 official row 和固定映射生成，只有 `prediction` 来自模型。输出中的 question 删除
 字面 `<image>` 并做首尾 whitespace 清理；reference 做首尾 whitespace 清理。不得手写或改述。
+这是精确六字段 schema；`official_type`、`score`、`judge` 或其他任何额外字段均不属于 prediction，
+必须作为 hard error 拒绝。`official_type` 只能由 scorer 在完整校验通过后根据 dataset-owned
+`raw_type` 经固定映射派生。
 
 ## 强制校验
 
 校验器检查：
 
 - 恰好 987 条、index 为 0..986 且无重复；
+- 每行恰好包含规定的六个字段，不得缺少或增加字段；
 - raw type、task family、question、reference 与 test row 一致；
 - 八类数量正确；
 - 空 prediction 明确列入 warnings。
@@ -124,18 +128,33 @@ official_macro8_accuracy = mean(
 )
 ```
 
-`micro_accuracy` 只作补充。正式 summary 必须满足 `num_samples == 987` 且
-`missing_official_types == []`。
+`micro_accuracy` 只作补充。正式 summary 必须同时满足：
+
+- `publishable == true`；
+- prediction 完整校验通过；
+- `num_samples == 987` 且 index 精确覆盖 `0..986`；
+- `missing_official_types == []`；
+- `num_judge_failures == 0`。
+
+上述状态由 `publication_gates` 和 `publication_gate_failures` 以机器可读形式记录。未通过门禁的
+诊断 summary 不含可引用的正式指标，不得进入结果表。
 
 ## Cache 与产物
 
 cache key 包含 protocol、official type、question、reference、prediction、完整 judge prompt、judge
 model 和 endpoint。更换上述任一内容不会复用旧 response。每个模型和协议仍必须使用独立目录。
 
+只有能够解析且满足对应任务响应 schema 的 judge 结果才写入 `judge_cache.jsonl`。HTTP/超时、JSON
+解析或响应 schema 失败写入独立的 `judge_failures.jsonl`，不得作为完成项缓存；已有 cache 中的
+失败记录也必须视为 pending 并在下次运行时重试。只要存在未解决 judge 失败，scorer 必须写出
+`publishable == false` 的诊断 summary 并以非零状态退出。该可靠性修复不改变合法 judge response
+的评分语义，因此保留当前 scorer/cache protocol id。
+
 评分目录输出：
 
 - `prediction_validation.json`
 - `judge_cache.jsonl`
+- `judge_failures.jsonl`
 - `scored_rows.jsonl`
 - `summary.json`
 - 运行日志
