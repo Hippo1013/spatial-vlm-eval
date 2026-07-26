@@ -1,0 +1,36 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Environments and local configuration
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+
+# Models, adapters, datasets, and generated outputs
+/data/
+/datasets/
+/models/
+/checkpoints/
+/outputs/
+/logs/
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+
+# Reference papers remain local; sources are documented in benchmark_paper/README.md.
+benchmark_paper/*.pdf
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

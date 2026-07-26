@@ -1,0 +1,7 @@
+# Versions verified on the Ubuntu evaluation server on 2026-07-26.
+datasets==4.8.5
+numpy==2.2.6
+peft==0.19.1
+torch==2.5.1
+tqdm==4.67.3
+transformers==5.8.1

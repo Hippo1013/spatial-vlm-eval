@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spatial-vlm-eval"
+version = "0.1.0"
+description = "Reproducible evaluation pipelines for spatial vision-language models"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "datasets>=4.8,<5",
+  "numpy>=2,<3",
+  "peft>=0.19,<0.20",
+  "torch>=2.5,<3",
+  "tqdm>=4.67,<5",
+  "transformers>=5.8,<6",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "ruff>=0.11"]
+
+[project.scripts]
+msmu-qwen-peft-infer = "spatial_vlm_eval.models.qwen25_vl.peft_infer:main"
+msmu-validate = "spatial_vlm_eval.benchmarks.msmu.prediction_validation:main"
+msmu-score = "spatial_vlm_eval.benchmarks.msmu.scorer:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,1 @@
+"""MSMU-Bench tests."""

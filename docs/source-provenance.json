@@ -1,0 +1,15 @@
+{
+  "captured_at": "2026-07-26",
+  "source_root": "/media/datasets/tangzecong/latent_reasoning",
+  "note": "Files were renamed and reorganized; scoring semantics remain v3.",
+  "files": {
+    "msmu_sft_baseline/data.py": "440D315DF868461661D3C1596CE139A3DFEEE36045E83C78C7A06C84671EF4E8",
+    "msmu_sft_baseline/infer.py": "674FF38B7B8E91BA47286F2BCF90058BFDCED7CD0DF072879426A4134EF17E48",
+    "msmu_sft_baseline/validate_predictions.py": "4B51D6EEDA0ED2772B5C5F7C99D377830193D7E5FA693F0806DDA4F062A884FD",
+    "msmu_sft_baseline/score_official_compat.py": "0A917C2CFDF475C44D621F0F3BBA2C8903A05BA13EC9C9195523EEECC02CF4A5",
+    "msmu_sft_baseline/test_score_official_compat.py": "71A6EC547F469498CEDBE6B11A67470DE1949DBE2EF7F263470E7FB49F108B2D",
+    "batch_msmu_official_infer.sh": "D0C44606CAB2ED1758E607972553880B1E218DBEACC0B944E501C2DB89DCBB40",
+    "batch_msmu_sft_score_official_compat.sh": "B1C2ECB82C917D5E344B280988B38DF99F5F7752CAA2E309D9E345A11DFCDD22",
+    "serve_msmu_local_judge.sh": "DB28D47195B655A2F6BBF2F4956A445FDF16DD643A4EF77E49938F2429EB5CF7"
+  }
+}
