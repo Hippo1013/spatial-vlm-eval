@@ -257,12 +257,17 @@ ZOEDEPTH_CHECKPOINT=/local/ZoeD_M12_NK.pt \
 6. 正式 validator；
 7. 单独启动 local judge，最后设置 `RUN_SCORE=1`。
 
+人工执行优先使用 `run_manual_stage1.sh`、`run_manual_stage2.sh` 和
+`run_manual_stage3.sh`。阶段三的 `MODEL score` 会自动设置 `SCORE_ONLY=1`，只解析原运行目录、执行
+完整 validator 和 scorer，不重新加载被测模型或再次调用付费 API。
+
 评分示例：
 
 ```bash
 unset INDICES LIMIT
 PIPELINE=scripts/msmu/run_ssr_pipeline.sh  # 换成当前 profile 对应的 family pipeline
 RUN_SCORE=1 \
+SCORE_ONLY=1 \
 JUDGE_BASE_URL=http://127.0.0.1:18080/v1 \
 JUDGE_MODEL_NAME=msmu-judge \
   bash "$PIPELINE"

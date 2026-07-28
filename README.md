@@ -22,7 +22,8 @@ judge v3 scorer。模型适配与 benchmark 评分分层，任何模型都不能
 完整 profile、权重 revision 和部署状态见 [模型矩阵](docs/model-matrix.md)，命令与服务器验收顺序见
 [MSMU 多模型推理手册](docs/msmu-inference.md)。人工测试从[三阶段入口](docs/msmu-all-model-test-commands.md)
 开始，依次执行[阶段一](docs/msmu-stage1-canary.md)、[阶段二](docs/msmu-stage2-smoke8.md)和
-[阶段三](docs/msmu-stage3-full-eval.md)。
+[阶段三](docs/msmu-stage3-full-eval.md)。每个阶段均有统一模型入口脚本，会自动加载 `.env.server`；
+无需逐行复制各 adapter 的环境变量和 pipeline 命令。
 
 ## 仓库结构
 

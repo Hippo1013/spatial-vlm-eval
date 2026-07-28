@@ -2,203 +2,102 @@
 
 ## 目标
 
-运行 official `test` split 全部 987 条，先通过完整 validator，再用独立 local judge 评分。只有本阶段
-通过 publication gates 的 summary 才能进入结果表。
-
-固定输出目录：
+运行 official `test` split 全部 987 条，通过完整 validator 后用独立 local judge 评分。只有本阶段通过
+publication gates 的 summary 才能进入结果表。固定写入：
 
 ```text
 /media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987/
 ```
 
-只有阶段二通过的模型才能执行本阶段。
+只有阶段二通过的模型才能进入本阶段。脚本会自动清除 `LIMIT`、`INDICES` 和
+`MSMU_SMOKE_INDICES`，不会把 subset 参数带入正式运行。
 
-## 1. 开始前必须执行
+## 第一步：完整推理
 
-```bash
-source /media/datasets/tangzecong/latent_reasoning/spatial-vlm-eval/scripts/msmu/prepare_manual_test.sh
-
-# 这是正式全量的关键：清除所有 subset 参数。
-unset LIMIT INDICES MSMU_SMOKE_INDICES
-
-# judge endpoint 必须和被测 vLLM endpoint 分开。
-export JUDGE_BASE_URL=http://127.0.0.1:18080/v1
-export JUDGE_MODEL_NAME=msmu-judge
-```
-
-下面命令默认 `RUN_SCORE=1`，要求 judge 已经 ready。如果 GPU 不够同时运行被测模型和 judge：
-
-1. 先把当前模型命令中的 `RUN_SCORE=1` 改为 `RUN_SCORE=0`，完成 987 条推理与 validator；
-2. 停止被测模型，启动 judge；
-3. 使用完全相同的 `RUN_NAME` 重跑，改回 `RUN_SCORE=1`。runner 会 resume，不会重推 987 条。
-
-## 2. API 模型
-
-GPT-5：
+LLaVA/InternVL 先在终端 A 启动被测服务：
 
 ```bash
-env -u LIMIT -u INDICES -u INFERENCE_BASE_URL \
-RUN_NAME="03_full987/gpt5-openrouter" RUN_SCORE=1 \
-PROFILE=gpt5 BACKEND=openrouter \
-  bash scripts/msmu/run_openai_compatible_pipeline.sh
+bash scripts/msmu/run_manual_stage3.sh MODEL serve
 ```
 
-Gemini 3.1 Pro：
+然后在终端 B 生成并校验 987 条：
 
 ```bash
-env -u LIMIT -u INDICES -u INFERENCE_BASE_URL \
-RUN_NAME="03_full987/gemini31pro-openrouter" RUN_SCORE=1 \
-PROFILE=gemini31pro BACKEND=openrouter \
-  bash scripts/msmu/run_openai_compatible_pipeline.sh
+bash scripts/msmu/run_manual_stage3.sh MODEL infer
 ```
 
-正式全量前应确认 API 预算。本文默认 OpenRouter；如果使用首方 API，必须改 backend、key 和 run slug。
-
-## 3. vLLM 模型
-
-先启动当前模型的 vLLM 服务。被测服务使用 `18081`，不能把它当作 `18080` 的 judge。
-
-LLaVA-NeXT Mistral 7B：
+API、Qwen 和空间专用模型不需要单独的 `serve`，直接执行 `infer`：
 
 ```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/llava-next-mistral-7b-vllm" RUN_SCORE=1 \
-PROFILE=llava_next_mistral_7b BACKEND=vllm \
-SERVED_MODEL_NAME=llava-next-mistral-7b-msmu INFERENCE_BASE_URL=http://127.0.0.1:18081/v1 \
-  bash scripts/msmu/run_openai_compatible_pipeline.sh
+bash scripts/msmu/run_manual_stage3.sh MODEL infer
 ```
 
-LLaVA-NeXT Yi 34B：
+例如：
 
 ```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/llava-next-yi-34b-vllm" RUN_SCORE=1 \
-PROFILE=llava_next_yi_34b BACKEND=vllm \
-SERVED_MODEL_NAME=llava-next-yi-34b-msmu INFERENCE_BASE_URL=http://127.0.0.1:18081/v1 \
-  bash scripts/msmu/run_openai_compatible_pipeline.sh
+bash scripts/msmu/run_manual_stage3.sh qwen25_vl_base infer
 ```
 
-InternVL3 8B：
+`infer` 固定使用 `RUN_SCORE=0`，不会提前调用 judge。失败后用完全相同的命令重跑即可 resume。
+
+## 第二步：启动独立 judge
+
+确认完整推理和 validator 已通过，然后停止不再需要的被测模型服务。在一个独立终端启动 judge：
 
 ```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/internvl3-8b-vllm" RUN_SCORE=1 \
-PROFILE=internvl3_8b BACKEND=vllm \
-SERVED_MODEL_NAME=internvl3-8b-msmu INFERENCE_BASE_URL=http://127.0.0.1:18081/v1 \
-  bash scripts/msmu/run_openai_compatible_pipeline.sh
+bash scripts/msmu/run_manual_stage3.sh judge serve
 ```
 
-InternVL3 38B：
+它从 `.env.server` 读取 `JUDGE_MODEL`，固定提供
+`http://127.0.0.1:18080/v1`，并在启动前运行 GPU preflight。指定其他已协调 GPU：
 
 ```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/internvl3-38b-vllm" RUN_SCORE=1 \
-PROFILE=internvl3_38b BACKEND=vllm \
-SERVED_MODEL_NAME=internvl3-38b-msmu INFERENCE_BASE_URL=http://127.0.0.1:18081/v1 \
-  bash scripts/msmu/run_openai_compatible_pipeline.sh
+MANUAL_JUDGE_CUDA_VISIBLE_DEVICES=1 \
+  bash scripts/msmu/run_manual_stage3.sh judge serve
 ```
 
-InternVL3 78B（`internvl3_78b`）当前没有获准的 full-run 命令。
+被测 vLLM 固定使用 `18081`；judge 与被测服务不能使用同一个 endpoint。
 
-## 4. Qwen2.5-VL
+## 第三步：只评分已有结果
 
-先做 GPU preflight：
+judge ready 后，在另一个终端执行：
 
 ```bash
-CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}" MIN_FREE_GPU_MIB=30000 \
-  bash scripts/msmu/gpu_preflight.sh
+bash scripts/msmu/run_manual_stage3.sh MODEL score
 ```
 
-Qwen base：
+`score` 会解析同一 `RUN_NAME` 的既有 `predictions.jsonl`，先做正式完整校验，再调用 judge。它不会
+重新加载待测模型，也不会再次请求 GPT/Gemini API。
+
+例如：
 
 ```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/qwen25-vl-base" RUN_SCORE=1 \
-BASE_MODEL="${QWEN_BASE_MODEL}" BASE_MODEL_REVISION="${QWEN_BASE_REVISION}" \
-  bash scripts/msmu/run_qwen_peft_pipeline.sh
+bash scripts/msmu/run_manual_stage3.sh qwen25_vl_base score
 ```
 
-Qwen PEFT：
+可用模型名：
 
 ```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/qwen25-vl-peft" RUN_SCORE=1 \
-BASE_MODEL="${QWEN_BASE_MODEL}" BASE_MODEL_REVISION="${QWEN_BASE_REVISION}" \
-CHECKPOINT="${QWEN_PEFT_CHECKPOINT}" CHECKPOINT_REVISION="${QWEN_PEFT_REVISION:-}" \
-  bash scripts/msmu/run_qwen_peft_pipeline.sh
+bash scripts/msmu/run_manual_stage3.sh --list
 ```
 
-多个 PEFT checkpoint 必须使用不同 slug。
+`internvl3_78b` 会被脚本拒绝。
 
-## 5. 空间专用模型
+## 推荐 tmux 名称
 
-SSR fair：
+session 使用 `msmu-s3`，窗口建议：
 
-```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/ssr-rgb-only" RUN_SCORE=1 PROFILE=ssr \
-  bash scripts/msmu/run_ssr_pipeline.sh
+```text
+MODEL-srv     # 仅 vLLM 被测模型需要
+MODEL-full    # 987 条推理
+judge-srv     # 本地 judge
+MODEL-score   # 正式评分
 ```
 
-SSR native：
-
-```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/ssr-native" RUN_SCORE=1 PROFILE=ssr_native \
-  bash scripts/msmu/run_ssr_pipeline.sh
-```
-
-SpatialRGPT：
-
-```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/spatialrgpt-rgb-only" RUN_SCORE=1 \
-MODEL_PATH="${SPATIALRGPT_MODEL}" \
-  bash scripts/msmu/run_spatialrgpt_pipeline.sh
-```
-
-3DThinker fair：
-
-```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/3dthinker-fair" RUN_SCORE=1 \
-PROFILE=3dthinker MODEL_PATH="${THREEDTHINKER_MODEL}" \
-  bash scripts/msmu/run_3dthinker_pipeline.sh
-```
-
-3DThinker native：
-
-```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/3dthinker-native" RUN_SCORE=1 \
-PROFILE=3dthinker_native MODEL_PATH="${THREEDTHINKER_MODEL}" \
-  bash scripts/msmu/run_3dthinker_pipeline.sh
-```
-
-SpatialBot fair：
-
-```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/spatialbot-rgb-only" RUN_SCORE=1 \
-PROFILE=spatialbot MODEL_PATH="${SPATIALBOT_MODEL}" \
-  bash scripts/msmu/run_spatialbot_pipeline.sh
-```
-
-SpatialBot native：
-
-```bash
-env -u LIMIT -u INDICES \
-RUN_NAME="03_full987/spatialbot-native" RUN_SCORE=1 \
-PROFILE=spatialbot_native MODEL_PATH="${SPATIALBOT_MODEL}" \
-  bash scripts/msmu/run_spatialbot_pipeline.sh
-```
-
-## 6. 正式通过标准
-
-在当前模型的深层目录中确认：
+## 正式通过标准
 
 - `predictions.jsonl` 恰好 987 行，index 精确覆盖 `0..986`；
-- `predictions.jsonl.metadata.json` 中 `num_predictions: 987`、dataset `num_targets: 987`、
+- metadata 中 `num_predictions: 987`、dataset `num_targets: 987`、
   `publishable_inference: true`；
 - `prediction_validation.json` 中 `passed: true`、`allow_subset: false`、
   `num_prediction_rows: 987`、`num_unique_indices: 987`；
@@ -208,10 +107,11 @@ PROFILE=spatialbot_native MODEL_PATH="${SPATIALBOT_MODEL}" \
 查看正式产物：
 
 ```bash
-find "${OUTPUT_ROOT}/03_full987" -type f \
+find /media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987 \
+  -type f \
   \( -name 'prediction_validation.json' -o -name 'predictions.jsonl.metadata.json' \
      -o -name 'summary.json' \) \
   -print | sort
 ```
 
-需要我检查时，只需提供 SSH 连接方式；不要发送 API key。
+需要检查结果时只需提供 SSH 连接方式，不要发送 API key。

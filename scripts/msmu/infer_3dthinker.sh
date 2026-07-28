@@ -15,6 +15,10 @@ case "${PROFILE}" in
 esac
 RUN_NAME="${RUN_NAME:-${PROFILE}-mindcube-stage1}"
 source "${SCRIPT_DIR}/_run_paths.sh"
+if [[ "${RESOLVE_PATHS_ONLY:-0}" == "1" ]]; then
+  if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
+  exit 0
+fi
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"
 MIN_FREE_GPU_MIB="${MIN_FREE_GPU_MIB:-24000}" "${SCRIPT_DIR}/gpu_preflight.sh"

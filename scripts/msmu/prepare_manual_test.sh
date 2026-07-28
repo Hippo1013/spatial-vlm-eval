@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Source once per terminal before running any manual MSMU test stage.
+# Source before hand-written commands; the run_manual_stage*.sh wrappers source it automatically.
 
 if [[ -z "${BASH_VERSION:-}" ]]; then
   echo "[msmu-prepare] use Bash and run: source scripts/msmu/prepare_manual_test.sh" >&2
@@ -76,6 +76,8 @@ _msmu_prepare_manual_test() {
   fi
 
   export OUTPUT_ROOT="${manual_output%/}"
+  export NO_PROXY="${NO_PROXY:+${NO_PROXY},}127.0.0.1,localhost"
+  export no_proxy="${NO_PROXY}"
   mkdir -p "${OUTPUT_ROOT}/01_canary" "${OUTPUT_ROOT}/02_smoke8" "${OUTPUT_ROOT}/03_full987" || return 2
   cd "${REPO_ROOT}" || return 2
   set -o pipefail
@@ -83,7 +85,7 @@ _msmu_prepare_manual_test() {
   echo "[msmu-prepare] repository=${REPO_ROOT}"
   echo "[msmu-prepare] dataset=${DATASET_ROOT}"
   echo "[msmu-prepare] output=${OUTPUT_ROOT}"
-  echo "[msmu-prepare] ready; choose one command from docs/msmu-stage1-canary.md"
+  echo "[msmu-prepare] ready; choose one command from the current stage document"
 }
 
 _msmu_prepare_manual_test

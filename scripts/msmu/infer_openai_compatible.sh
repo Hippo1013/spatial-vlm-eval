@@ -48,6 +48,10 @@ esac
 
 RUN_NAME="${RUN_NAME:-${PROFILE}-${BACKEND}}"
 source "${SCRIPT_DIR}/_run_paths.sh"
+if [[ "${RESOLVE_PATHS_ONLY:-0}" == "1" ]]; then
+  if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
+  exit 0
+fi
 
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 mkdir -p "$(dirname "${OUTPUT}")"

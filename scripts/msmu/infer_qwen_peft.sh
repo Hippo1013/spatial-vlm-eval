@@ -14,6 +14,10 @@ MODEL_REVISION_TAG="${BASE_MODEL_REVISION:-local-unspecified}"
 INFERENCE_PROTOCOL="msmu_qwen25_vl_question_only_deterministic_v1"
 RUN_NAME="${RUN_NAME:-qwen25-vl-peft}"
 source "${SCRIPT_DIR}/_run_paths.sh"
+if [[ "${RESOLVE_PATHS_ONLY:-0}" == "1" ]]; then
+  if [[ "${BASH_SOURCE[0]}" != "$0" ]]; then return 0; fi
+  exit 0
+fi
 
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-0}"

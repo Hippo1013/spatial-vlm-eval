@@ -65,10 +65,36 @@ class VLLMLaunchConfigTest(unittest.TestCase):
         self.assertIn("JUDGE_BASE_URL:?", pipeline)
         self.assertIn('BASE_URL="${JUDGE_BASE_URL}"', pipeline)
 
+    def test_score_only_resolves_paths_without_loading_any_tested_model(self):
+        pipeline = (self.repository / "scripts" / "msmu" / "_run_model_pipeline.sh").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn('SCORE_ONLY:-0', pipeline)
+        self.assertIn('RESOLVE_PATHS_ONLY=1 source "${INFER_SCRIPT}"', pipeline)
+        wrappers = [
+            "infer_openai_compatible.sh",
+            "infer_qwen_peft.sh",
+            "infer_ssr.sh",
+            "infer_spatialrgpt.sh",
+            "infer_3dthinker.sh",
+            "infer_spatialbot.sh",
+        ]
+        for name in wrappers:
+            with self.subTest(name=name):
+                script = (self.repository / "scripts" / "msmu" / name).read_text(
+                    encoding="utf-8"
+                )
+                self.assertIn('RESOLVE_PATHS_ONLY:-0', script)
+                self.assertIn('return 0', script)
+
     def test_documented_msmu_shell_paths_exist(self):
         documents = [
             self.repository / "README.md",
             self.repository / "docs" / "msmu-inference.md",
+            self.repository / "docs" / "msmu-all-model-test-commands.md",
+            self.repository / "docs" / "msmu-stage1-canary.md",
+            self.repository / "docs" / "msmu-stage2-smoke8.md",
+            self.repository / "docs" / "msmu-stage3-full-eval.md",
         ]
         references: set[str] = set()
         for document in documents:
