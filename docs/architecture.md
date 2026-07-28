@@ -77,6 +77,11 @@ GPU preflight 只读取 `nvidia-smi`；显存不足、利用率超限或已有 c
 `JUDGE_BASE_URL`，避免把被测模型 endpoint 错当成 judge。`INDICES`/`LIMIT` 自动进入 subset validator，
 且 pipeline 硬拒绝 subset scoring。
 
+阶段三串行调度器只编排 inference 与完整 validator，不复制模型或 benchmark 逻辑。它在独立 session/
+process group 中启动每个模型，使用 fsync journal 的文件活动做停滞 watchdog，只终止自己记录的
+process group，并在进入下一条轨前等待相应 GPU 无 compute process。独占锁、同 commit 完成标记和
+活动进程记录防止重复批次、跨代码版本误续跑或意外接管其他服务；judge/scoring 始终留在后续独立阶段。
+
 ## 输出布局
 
 未显式设置 `OUTPUT` 时，公共路径函数生成：

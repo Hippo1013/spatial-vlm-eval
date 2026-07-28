@@ -194,7 +194,16 @@ class ManualStageScriptTest(unittest.TestCase):
         self.assertEqual(smoke.returncode, 4)
         self.assertEqual(full.returncode, 4)
         self.assertIn("not approved", smoke.stderr)
-        self.assertIn("not approved", full.stderr)
+        self.assertIn("70B+", full.stderr)
+
+    def test_qwen72_stage3_is_excluded_but_earlier_stages_remain_available(self):
+        canary = self.run_stage(1, "qwen25_vl_72b")
+        smoke = self.run_stage(2, "qwen25_vl_72b")
+        full = self.run_stage(3, "qwen25_vl_72b", "infer")
+        self.assertEqual(canary.returncode, 0, canary.stderr)
+        self.assertEqual(smoke.returncode, 0, smoke.stderr)
+        self.assertEqual(full.returncode, 4)
+        self.assertIn("70B+", full.stderr)
 
     def test_peft_slug_includes_parent_and_checkpoint_name(self):
         result = self.run_stage(1, "qwen25_vl_peft")
@@ -214,7 +223,6 @@ class ManualStageScriptTest(unittest.TestCase):
             "gemini31pro",
             "qwen25_vl_base",
             "qwen25_vl_32b",
-            "qwen25_vl_72b",
             "qwen25_vl_peft",
             "ssr",
             "ssr_native",
@@ -236,6 +244,139 @@ class ManualStageScriptTest(unittest.TestCase):
             for model in sorted(vllm_models | direct_models):
                 with self.subTest(stage=stage, model=model, action=action):
                     self.assertEqual(self.run_stage(stage, model, action).returncode, 0)
+
+
+class SerialStage3InferenceScriptTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.repository = Path(__file__).resolve().parents[2]
+        cls.script = cls.repository / "scripts" / "msmu" / "run_stage3_serial_inference.sh"
+
+    def setUp(self):
+        self.temporary_directory = tempfile.TemporaryDirectory()
+        temporary = Path(self.temporary_directory.name)
+        self.output_root = temporary / "manual-output"
+        self.server_env = temporary / "server.env"
+        values = {
+            "REPO_ROOT": self.repository,
+            "DATASET_ROOT": temporary / "dataset",
+            "OUTPUT_ROOT": temporary / "outputs",
+            "MANUAL_TEST_OUTPUT_ROOT": self.output_root,
+            "QWEN_BASE_MODEL": temporary / "qwen",
+            "QWEN_BASE_REVISION": "qwen-revision",
+            "QWEN_32B_MODEL": temporary / "qwen-32b",
+            "QWEN_32B_REVISION": "qwen-32b-revision",
+            "LLAVA_MISTRAL_7B_MODEL": temporary / "llava-mistral",
+            "LLAVA_YI_34B_MODEL": temporary / "llava-yi",
+            "INTERNVL3_8B_MODEL": temporary / "internvl-8b",
+            "INTERNVL3_38B_MODEL": temporary / "internvl-38b",
+            "SPATIALRGPT_MODEL": temporary / "spatialrgpt",
+            "THREEDTHINKER_MODEL": temporary / "3dthinker",
+            "SPATIALBOT_MODEL": temporary / "spatialbot",
+        }
+        self.server_env.write_text(
+            "".join(f'{key}="{value}"\n' for key, value in values.items()),
+            encoding="utf-8",
+        )
+
+    def tearDown(self):
+        self.temporary_directory.cleanup()
+
+    def run_batch(self, *arguments, extra_environment=None):
+        environment = dict(os.environ)
+        for key in [
+            "BATCH_CONTINUE_ON_ERROR",
+            "BATCH_MODEL_ATTEMPTS",
+            "BATCH_SKIP_COMPLETED",
+            "BATCH_STALL_TIMEOUT_SECONDS",
+            "MANUAL_CUDA_VISIBLE_DEVICES",
+        ]:
+            environment.pop(key, None)
+        environment.update(
+            {
+                "MSMU_SERVER_ENV": str(self.server_env),
+                "MANUAL_DRY_RUN": "1",
+            }
+        )
+        if extra_environment:
+            environment.update(extra_environment)
+        return subprocess.run(
+            ["bash", str(self.script), *arguments],
+            cwd=self.repository,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
+    def test_plan_has_exactly_thirteen_tracks_and_explicit_exclusions(self):
+        result = self.run_batch("--list")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        included = [line for line in result.stdout.splitlines() if "\t" not in line]
+        self.assertEqual(
+            included,
+            [
+                "llava_next_mistral_7b",
+                "llava_next_yi_34b",
+                "internvl3_8b",
+                "internvl3_38b",
+                "qwen25_vl_base",
+                "qwen25_vl_32b",
+                "ssr",
+                "ssr_native",
+                "spatialrgpt",
+                "3dthinker",
+                "3dthinker_native",
+                "spatialbot",
+                "spatialbot_native",
+            ],
+        )
+        for excluded in [
+            "gpt5",
+            "gemini31pro",
+            "qwen25_vl_72b",
+            "internvl3_78b",
+            "qwen25_vl_peft",
+        ]:
+            self.assertIn(f"excluded\t{excluded}\t", result.stdout)
+
+    def test_dry_run_dispatches_every_included_track_without_scoring(self):
+        result = self.run_batch()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        dispatched = [
+            line.split("model=", 1)[1].split(" ", 1)[0]
+            for line in result.stdout.splitlines()
+            if line.startswith("[msmu-batch] dry-run: model=")
+        ]
+        self.assertEqual(len(dispatched), 13)
+        self.assertEqual(len(set(dispatched)), 13)
+        self.assertNotIn("qwen25_vl_72b", dispatched)
+        self.assertNotIn("internvl3_78b", dispatched)
+        self.assertNotIn("qwen25_vl_peft", dispatched)
+        self.assertIn("RUN_SCORE=0", result.stdout)
+        self.assertNotIn("RUN_SCORE=1", result.stdout)
+        self.assertIn("no GPU/API/judge action was taken", result.stdout)
+
+    def test_invalid_watchdog_timeout_fails_before_dispatch(self):
+        result = self.run_batch(
+            extra_environment={"BATCH_STALL_TIMEOUT_SECONDS": "0"},
+        )
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("must be greater than zero", result.stderr)
+
+    def test_script_contains_owned_group_watchdog_lock_and_resume_guards(self):
+        script = self.script.read_text(encoding="utf-8")
+        self.assertIn("BATCH_STALL_TIMEOUT_SECONDS", script)
+        self.assertIn("predictions.jsonl.journal.jsonl", script)
+        self.assertIn('setsid env "${child_env_cleanup[@]}"', script)
+        self.assertIn('kill -TERM -- "-${pid}"', script)
+        self.assertIn('kill -KILL -- "-${pid}"', script)
+        self.assertIn("flock -n 9", script)
+        self.assertIn("port 18081 is already occupied", script)
+        self.assertIn('sock.connect_ex(("127.0.0.1", 18081))', script)
+        self.assertIn("active_process.env", script)
+        self.assertIn("BATCH_SKIP_COMPLETED", script)
+        self.assertIn("-u NO_RESUME", script)
 
 
 class ScoreOnlyPathResolutionTest(unittest.TestCase):

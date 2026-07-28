@@ -277,6 +277,21 @@ ZOEDEPTH_CHECKPOINT=/local/ZoeD_M12_NK.pt \
 `run_manual_stage3.sh`。阶段三的 `MODEL score` 会自动设置 `SCORE_ONLY=1`，只解析原运行目录、执行
 完整 validator 和 scorer，不重新加载被测模型或再次调用付费 API。
 
+本轮阶段三排除 GPT-5、Gemini、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B。其余 13 条本地轨
+使用串行入口一次完成部署、完整推理、validator 和 GPU 释放：
+
+```bash
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_stage3_serial_inference.sh
+bash scripts/msmu/run_stage3_serial_inference.sh --check
+bash scripts/msmu/run_stage3_serial_inference.sh
+bash scripts/msmu/run_stage3_serial_inference.sh --status
+```
+
+该入口不评分。它使用独占锁、vLLM readiness timeout、逐样本 journal 活动 watchdog、每模型两次
+可恢复尝试、自有进程组信号清理和 GPU 释放门禁。任何非本批次 GPU 进程或已存在的 inference
+endpoint 都只会导致有界等待/退出，不会被终止。完整参数见
+[阶段三文档](msmu-stage3-full-eval.md)。
+
 评分示例：
 
 ```bash

@@ -77,6 +77,8 @@ sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length
 5. 修改 shell 脚本时运行 `bash -n scripts/**/*.sh`（在 Bash/Ubuntu 环境）。
 6. 修改实际推理协议后，先做 `--limit` smoke test，再跑完整 987 条；subset 不得发布。
 7. 正式评分前检查 `prediction_validation.json`，评分后检查 summary 的样本数和八类完整性。
+8. 当前阶段三计划使用 `run_stage3_serial_inference.sh` 串行运行 13 条本地轨；不得加入两个 API、
+   Qwen PEFT、Qwen2.5-VL-72B 或 InternVL3-78B，除非用户重新批准测试范围。
 
 ## 结果与命名
 

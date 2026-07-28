@@ -57,6 +57,7 @@ manual-three-stage-v1/
 ```
 
 pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol；三个阶段不共用 journal。
+阶段三串行批处理的调度状态另存于 `03_full987/_serial_inference/`，不会混入任何模型的正式结果目录。
 
 ## 共同约定
 
@@ -68,6 +69,18 @@ pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol
   basename 加入 run slug，避免与其他 PEFT checkpoint 共用输出。
 - 如需自定义唯一输出名，可设置 `MANUAL_RUN_SLUG=name`；只允许字母、数字、点、下划线和连字符。
 - `internvl3_78b` 只允许阶段一静态检查，阶段二和阶段三由脚本强制拒绝。
+- 本轮阶段三不测两个 API、Qwen PEFT 和两个 70B+ 模型；`qwen25_vl_72b` 的阶段一/二结果保留，
+  但阶段三与 `internvl3_78b` 一样由脚本拒绝。
+
+阶段三 13 条本地轨推荐使用串行入口；它自动管理 vLLM 服务、失败恢复、watchdog 和 GPU 释放：
+
+```bash
+bash scripts/msmu/run_stage3_serial_inference.sh --list
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_stage3_serial_inference.sh
+bash scripts/msmu/run_stage3_serial_inference.sh --check
+bash scripts/msmu/run_stage3_serial_inference.sh
+bash scripts/msmu/run_stage3_serial_inference.sh --status
+```
 
 三个阶段共用 tmux session `msmu`。当前 Qwen 窗口固定为：
 

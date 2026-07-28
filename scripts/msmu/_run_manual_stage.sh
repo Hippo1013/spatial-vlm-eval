@@ -544,8 +544,8 @@ case "${stage}" in
       serve_judge
       exit 0
     fi
-    if [[ "${model}" == "internvl3_78b" ]]; then
-      blocked "internvl3_78b is not approved for stage 3"
+    if [[ "${model}" == "internvl3_78b" || "${model}" == "qwen25_vl_72b" ]]; then
+      blocked "${model} is excluded from stage 3 because 70B+ models are outside the accepted test plan"
     fi
     action="${action:-infer}"
     case "${action}" in

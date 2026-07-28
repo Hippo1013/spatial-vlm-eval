@@ -25,6 +25,11 @@ judge v3 scorer。模型适配与 benchmark 评分分层，任何模型都不能
 [阶段三](docs/msmu-stage3-full-eval.md)。每个阶段均有统一模型入口脚本，会自动加载 `.env.server`；
 无需逐行复制各 adapter 的环境变量和 pipeline 命令。
 
+阶段三可用 `scripts/msmu/run_stage3_serial_inference.sh` 串行完成当前获准的 13 条本地推理轨：逐个
+部署、完整 987 条、正式 validator、释放 GPU 后再进入下一条，并支持 watchdog、失败重试与 journal
+续跑。当前批次明确排除两个 API、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B；评分仍在全部推理
+完成后用独立 judge 执行。
+
 ## 仓库结构
 
 ```text
