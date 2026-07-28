@@ -22,6 +22,8 @@ internvl3_8b
 internvl3_38b
 internvl3_78b
 qwen25_vl_base
+qwen25_vl_32b
+qwen25_vl_72b
 qwen25_vl_peft
 ssr
 ssr_native
@@ -155,6 +157,11 @@ served_model_name=""
 serve_script=""
 default_devices="0"
 api_key_variable=""
+qwen_model=""
+qwen_revision=""
+qwen_device_map="single"
+qwen_batch_size="8"
+qwen_min_free_gpu_mib="30000"
 
 api_backend="${MANUAL_API_BACKEND:-openrouter}"
 case "${model}" in
@@ -225,10 +232,38 @@ case "${model}" in
     ;;
   qwen25_vl_base)
     model_kind="qwen"
+    profile="qwen25_vl_7b"
     run_slug="qwen25-vl-base"
+    qwen_model="${QWEN_BASE_MODEL:-}"
+    qwen_revision="${QWEN_BASE_REVISION:-}"
+    default_devices="0"
+    ;;
+  qwen25_vl_32b)
+    model_kind="qwen"
+    profile="qwen25_vl_32b"
+    run_slug="qwen25-vl-32b"
+    qwen_model="${QWEN_32B_MODEL:-}"
+    qwen_revision="${QWEN_32B_REVISION:-}"
+    default_devices="0"
+    qwen_batch_size="1"
+    qwen_min_free_gpu_mib="75000"
+    ;;
+  qwen25_vl_72b)
+    model_kind="qwen"
+    profile="qwen25_vl_72b"
+    run_slug="qwen25-vl-72b"
+    qwen_model="${QWEN_72B_MODEL:-}"
+    qwen_revision="${QWEN_72B_REVISION:-}"
+    default_devices="0,1"
+    qwen_device_map="balanced"
+    qwen_batch_size="1"
+    qwen_min_free_gpu_mib="75000"
     ;;
   qwen25_vl_peft)
     model_kind="qwen_peft"
+    profile="qwen25_vl_7b"
+    qwen_model="${QWEN_BASE_MODEL:-}"
+    qwen_revision="${QWEN_BASE_REVISION:-}"
     require_value QWEN_PEFT_CHECKPOINT "${QWEN_PEFT_CHECKPOINT:-}"
     checkpoint_parent="$(basename "$(dirname "${QWEN_PEFT_CHECKPOINT}")")"
     checkpoint_name="$(basename "${QWEN_PEFT_CHECKPOINT}")"
@@ -339,8 +374,8 @@ dry_run_internvl78_config() {
 }
 
 qwen_gpu_preflight() {
-  local devices="${MANUAL_CUDA_VISIBLE_DEVICES:-${CUDA_VISIBLE_DEVICES:-0}}"
-  run_command env CUDA_VISIBLE_DEVICES="${devices}" MIN_FREE_GPU_MIB=30000 \
+  local devices="${MANUAL_CUDA_VISIBLE_DEVICES:-${default_devices}}"
+  run_command env CUDA_VISIBLE_DEVICES="${devices}" MIN_FREE_GPU_MIB="${qwen_min_free_gpu_mib}" \
     bash "${SCRIPT_DIR}/gpu_preflight.sh"
 }
 
@@ -384,14 +419,16 @@ run_model_pipeline() {
           bash "${SCRIPT_DIR}/run_openai_compatible_pipeline.sh"
       ;;
     qwen|qwen_peft)
-      require_value QWEN_BASE_MODEL "${QWEN_BASE_MODEL:-}"
-      require_value QWEN_BASE_REVISION "${QWEN_BASE_REVISION:-}"
+      require_value QWEN_MODEL "${qwen_model}"
+      require_value QWEN_REVISION "${qwen_revision}"
       if [[ "${score}" != "1" ]]; then qwen_gpu_preflight; fi
       local -a qwen_args=(
         env "${unset_args[@]}" ${target_assignments[@]+"${target_assignments[@]}"}
         RUN_NAME="${run_name}" RUN_SCORE="${score}" SCORE_ONLY="${score}"
         JUDGE_BASE_URL="${judge_base_url}"
-        BASE_MODEL="${QWEN_BASE_MODEL}" BASE_MODEL_REVISION="${QWEN_BASE_REVISION}"
+        PROFILE="${profile}" BASE_MODEL="${qwen_model}" BASE_MODEL_REVISION="${qwen_revision}"
+        CUDA_VISIBLE_DEVICES="${MANUAL_CUDA_VISIBLE_DEVICES:-${default_devices}}"
+        DEVICE_MAP="${qwen_device_map}" BATCH_SIZE="${qwen_batch_size}"
       )
       if [[ "${model_kind}" == "qwen_peft" ]]; then
         qwen_args+=(CHECKPOINT="${QWEN_PEFT_CHECKPOINT}" CHECKPOINT_REVISION="${QWEN_PEFT_REVISION:-}")

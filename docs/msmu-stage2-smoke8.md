@@ -52,11 +52,14 @@ bash scripts/msmu/run_manual_stage2.sh MODEL
 ```bash
 bash scripts/msmu/run_manual_stage2.sh gpt5
 bash scripts/msmu/run_manual_stage2.sh qwen25_vl_base
+bash scripts/msmu/run_manual_stage2.sh qwen25_vl_32b
+bash scripts/msmu/run_manual_stage2.sh qwen25_vl_72b
 bash scripts/msmu/run_manual_stage2.sh ssr_native
 bash scripts/msmu/run_manual_stage2.sh spatialbot_native
 ```
 
-API backend、key、PEFT checkpoint 和 GPU 覆盖方式与阶段一相同。可用模型名：
+`qwen25_vl_base` 是 7B；32B/72B 的单卡/双卡设置、API backend、key、PEFT checkpoint 和 GPU
+覆盖方式与阶段一相同。可用模型名：
 
 ```bash
 bash scripts/msmu/run_manual_stage2.sh --list
@@ -64,8 +67,8 @@ bash scripts/msmu/run_manual_stage2.sh --list
 
 ## 推荐 tmux 名称
 
-session 使用 `msmu-s2`。vLLM 窗口使用 `MODEL-srv` 和 `MODEL-smoke8`；其他模型使用
-`MODEL-smoke8`。
+继续使用 session `msmu` 和阶段一同一模型窗口，不另建 stage2 session。阶段二在该模型阶段一通过
+并卸载后，直接在同一窗口执行阶段二命令。
 
 ## 通过标准
 

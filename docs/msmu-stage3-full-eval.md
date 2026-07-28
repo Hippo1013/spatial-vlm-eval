@@ -36,6 +36,8 @@ bash scripts/msmu/run_manual_stage3.sh MODEL infer
 
 ```bash
 bash scripts/msmu/run_manual_stage3.sh qwen25_vl_base infer
+bash scripts/msmu/run_manual_stage3.sh qwen25_vl_32b infer
+bash scripts/msmu/run_manual_stage3.sh qwen25_vl_72b infer
 ```
 
 `infer` 固定使用 `RUN_SCORE=0`，不会提前调用 judge。失败后用完全相同的命令重跑即可 resume。
@@ -73,6 +75,8 @@ bash scripts/msmu/run_manual_stage3.sh MODEL score
 
 ```bash
 bash scripts/msmu/run_manual_stage3.sh qwen25_vl_base score
+bash scripts/msmu/run_manual_stage3.sh qwen25_vl_32b score
+bash scripts/msmu/run_manual_stage3.sh qwen25_vl_72b score
 ```
 
 可用模型名：
@@ -85,7 +89,7 @@ bash scripts/msmu/run_manual_stage3.sh --list
 
 ## 推荐 tmux 名称
 
-session 使用 `msmu-s3`，窗口建议：
+继续使用三个阶段共用的 session `msmu`，窗口职责建议：
 
 ```text
 MODEL-srv     # 仅 vLLM 被测模型需要

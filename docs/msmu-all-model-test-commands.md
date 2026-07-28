@@ -35,6 +35,8 @@ bash scripts/msmu/run_manual_stage3.sh --list
 ```bash
 bash scripts/msmu/run_manual_stage1.sh --help
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_base
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_32b
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_72b
 ```
 
 `MANUAL_DRY_RUN=1` 只打印将要执行的底层命令，不占 GPU、不调用 API。
@@ -59,8 +61,18 @@ pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol
 ## 共同约定
 
 - 一次只选择一个模型；模型通过当前阶段后才进入下一阶段。
+- `qwen25_vl_base` 是 7B；另外两个入口是 `qwen25_vl_32b` 和 `qwen25_vl_72b`。32B 默认单卡，
+  72B 默认双卡 `0,1` balanced 加载，三者输出目录互不复用。
 - API key 只在当前终端导出，不能写入 Git。
 - `qwen25_vl_peft` 从 `.env.server` 读取 `QWEN_PEFT_CHECKPOINT`；脚本会把 checkpoint 所在目录和
   basename 加入 run slug，避免与其他 PEFT checkpoint 共用输出。
 - 如需自定义唯一输出名，可设置 `MANUAL_RUN_SLUG=name`；只允许字母、数字、点、下划线和连字符。
 - `internvl3_78b` 只允许阶段一静态检查，阶段二和阶段三由脚本强制拒绝。
+
+三个阶段共用 tmux session `msmu`。当前 Qwen 窗口固定为：
+
+```text
+12-qwen-base
+21-qwen32b
+22-qwen72b
+```

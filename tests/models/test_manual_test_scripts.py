@@ -26,6 +26,10 @@ class ManualStageScriptTest(unittest.TestCase):
             "MANUAL_TEST_OUTPUT_ROOT": self.output_root,
             "QWEN_BASE_MODEL": temporary / "qwen",
             "QWEN_BASE_REVISION": "qwen-revision",
+            "QWEN_32B_MODEL": temporary / "qwen-32b",
+            "QWEN_32B_REVISION": "qwen-32b-revision",
+            "QWEN_72B_MODEL": temporary / "qwen-72b",
+            "QWEN_72B_REVISION": "qwen-72b-revision",
             "QWEN_PEFT_CHECKPOINT": temporary / "run-a" / "checkpoint-100",
             "LLAVA_MISTRAL_7B_MODEL": temporary / "llava-mistral",
             "LLAVA_YI_34B_MODEL": temporary / "llava-yi",
@@ -122,6 +126,22 @@ class ManualStageScriptTest(unittest.TestCase):
         self.assertIn("SCORE_ONLY=0", result.stdout)
         self.assertIn("01_canary/qwen25-vl-base", result.stdout)
 
+    def test_large_qwen_profiles_use_distinct_models_and_device_maps(self):
+        qwen32 = self.run_stage(1, "qwen25_vl_32b")
+        qwen72 = self.run_stage(1, "qwen25_vl_72b")
+        self.assertEqual(qwen32.returncode, 0, qwen32.stderr)
+        self.assertEqual(qwen72.returncode, 0, qwen72.stderr)
+        self.assertIn("PROFILE=qwen25_vl_32b", qwen32.stdout)
+        self.assertIn("BASE_MODEL=", qwen32.stdout)
+        self.assertIn("qwen-32b", qwen32.stdout)
+        self.assertIn("CUDA_VISIBLE_DEVICES=0", qwen32.stdout)
+        self.assertIn("DEVICE_MAP=single", qwen32.stdout)
+        self.assertIn("MIN_FREE_GPU_MIB=75000", qwen32.stdout)
+        self.assertIn("PROFILE=qwen25_vl_72b", qwen72.stdout)
+        self.assertIn("qwen-72b", qwen72.stdout)
+        self.assertIn("CUDA_VISIBLE_DEVICES=0\\,1", qwen72.stdout)
+        self.assertIn("DEVICE_MAP=balanced", qwen72.stdout)
+
     def test_stage1_api_uses_two_samples_and_backend_specific_slug(self):
         result = self.run_stage(
             1,
@@ -193,6 +213,8 @@ class ManualStageScriptTest(unittest.TestCase):
             "gpt5",
             "gemini31pro",
             "qwen25_vl_base",
+            "qwen25_vl_32b",
+            "qwen25_vl_72b",
             "qwen25_vl_peft",
             "ssr",
             "ssr_native",

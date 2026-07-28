@@ -73,11 +73,15 @@ bash scripts/msmu/run_manual_stage1.sh MODEL
 
 ```bash
 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_base
+bash scripts/msmu/run_manual_stage1.sh qwen25_vl_32b
+bash scripts/msmu/run_manual_stage1.sh qwen25_vl_72b
 bash scripts/msmu/run_manual_stage1.sh ssr_native
 bash scripts/msmu/run_manual_stage1.sh spatialbot_native
 ```
 
-直接加载的本地模型自动运行 GPU preflight，并生成 1 条真实结果。GPT-5/Gemini 默认通过 OpenRouter
+`qwen25_vl_base` 是 7B。32B 默认使用 GPU 0，72B 默认使用 GPU `0,1` 并做 balanced 加载；
+两种大模型固定 batch size 1。直接加载的本地模型自动运行 GPU preflight，并生成 1 条真实结果。
+GPT-5/Gemini 默认通过 OpenRouter
 生成 2 条结果，运行前先在当前终端导出 key：
 
 ```bash
@@ -97,14 +101,14 @@ MANUAL_API_BACKEND=google bash scripts/msmu/run_manual_stage1.sh gemini31pro
 
 ## 推荐 tmux 名称
 
-session 使用 `msmu-s1`。vLLM 模型使用两个窗口，例如：
+三个阶段共用 session `msmu`。vLLM 模型使用两个窗口，例如：
 
 ```text
 llava-m7b-srv
 llava-m7b-check
 ```
 
-其他模型使用一个窗口，例如 `qwen-base-run` 或 `ssr-native-run`。
+其他模型使用一个窗口；Qwen 固定为 `12-qwen-base`、`21-qwen32b`、`22-qwen72b`。
 
 ## 通过标准
 

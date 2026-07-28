@@ -49,6 +49,10 @@ Qwen 必须删除字面 token，并用 structured image content 传图。
 
 ## 当前 Qwen profile
 
+当前登记 `Qwen2.5-VL-7B-Instruct`、`32B-Instruct` 和 `72B-Instruct` 三种参数量；
+`qwen25_vl_base` 手工入口明确指 7B。三者输入和 decoding 设置一致，但 model revision、
+inference protocol 与输出目录独立。
+
 | Setting | Value |
 |---|---|
 | Chat template | Qwen2.5-VL native template |
@@ -75,6 +79,7 @@ prompt、图像派生组件或 decoding 不同的轨使用独立 inference proto
 | LLaVA-NeXT Mistral 7B | one RGB + original question | greedy, 192 | `msmu_llava_next_mistral_7b_question_only_v1` |
 | LLaVA-NeXT Yi 34B | one RGB + original question | greedy, 192 | `msmu_llava_next_yi_34b_question_only_v1` |
 | InternVL3 8B / 38B / 78B | one RGB + original question | greedy, 192 | model-size-specific `msmu_internvl3_*_question_only_v1` |
+| Qwen2.5-VL 7B / 32B / 72B | one RGB + original question；structured image content | greedy, 192；72B 双卡 balanced | model-size-specific `msmu_qwen25_vl*_question_only_deterministic_v1` |
 | SSR fair | one RGB + original question；无 TOR/MIDI/depth | greedy, 192 | `msmu_ssr_rgb_only_v1` |
 | SSR native | one RGB + original question；same-RGB DepthPro + MIDI + 10 TOR | greedy, 192 | `msmu_ssr_native_depthpro_midi_tor10_native_v1` |
 | SpatialRGPT | one RGB + original question；无 region/mask/depth | greedy, 192 | `msmu_spatialrgpt_rgb_only_v1` |

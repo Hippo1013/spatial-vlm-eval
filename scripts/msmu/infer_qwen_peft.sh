@@ -11,7 +11,22 @@ PYTHON="${PYTHON:-${LATENT_PYTHON:-python}}"
 : "${DATASET_ROOT:?Set DATASET_ROOT to the local MSMU dataset root}"
 
 MODEL_REVISION_TAG="${BASE_MODEL_REVISION:-local-unspecified}"
-INFERENCE_PROTOCOL="msmu_qwen25_vl_question_only_deterministic_v1"
+PROFILE="${PROFILE:-qwen25_vl_7b}"
+case "${PROFILE}" in
+  qwen25_vl_7b)
+    INFERENCE_PROTOCOL="msmu_qwen25_vl_question_only_deterministic_v1"
+    ;;
+  qwen25_vl_32b)
+    INFERENCE_PROTOCOL="msmu_qwen25_vl_32b_question_only_deterministic_v1"
+    ;;
+  qwen25_vl_72b)
+    INFERENCE_PROTOCOL="msmu_qwen25_vl_72b_question_only_deterministic_v1"
+    ;;
+  *)
+    echo "[msmu-infer] unsupported Qwen profile: ${PROFILE}" >&2
+    exit 2
+    ;;
+esac
 RUN_NAME="${RUN_NAME:-qwen25-vl-peft}"
 source "${SCRIPT_DIR}/_run_paths.sh"
 if [[ "${RESOLVE_PATHS_ONLY:-0}" == "1" ]]; then
@@ -27,6 +42,7 @@ mkdir -p "$(dirname "${OUTPUT}")"
 LOG_PATH="${LOG_PATH:-${OUTPUT%.jsonl}.infer.log}"
 
 args=(
+  --profile "${PROFILE}"
   --base-model "${BASE_MODEL}"
   --dataset-root "${DATASET_ROOT}"
   --output "${OUTPUT}"
@@ -34,6 +50,7 @@ args=(
   --max-new-tokens "${MAX_NEW_TOKENS:-192}"
   --image-min-pixels "${IMAGE_MIN_PIXELS:-12544}"
   --image-max-pixels "${IMAGE_MAX_PIXELS:-112896}"
+  --device-map "${DEVICE_MAP:-single}"
   --base-model-revision "${BASE_MODEL_REVISION:-local-unspecified}"
   --retries "${INFERENCE_RETRIES:-0}"
 )

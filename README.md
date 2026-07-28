@@ -8,16 +8,16 @@ judge v3 scorer。模型适配与 benchmark 评分分层，任何模型都不能
 ## 当前状态
 
 - Benchmark：MSMU-Bench official `test` split（987 条）。
-- 现有 Qwen：Qwen2.5-VL base/PEFT deterministic profile。
+- Qwen：Qwen2.5-VL 7B base/PEFT、32B、72B deterministic profile；72B 在两张 A800 上均衡加载。
 - 新增适配：GPT-5、Gemini 3.1 Pro、2 个 LLaVA-NeXT、3 个 InternVL3，以及 SSR、
-  SpatialRGPT、3DThinker、SpatialBot；共 14 个新增 inference profile。
+  SpatialRGPT、3DThinker、SpatialBot；连同 3 个 Qwen 参数量共注册 17 个 inference profile。
 - 主指标：八个 official type accuracy 的非加权平均 `official_macro8_accuracy`。
 - scorer protocol 保持为
   `sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length`。
 - 当前分数性质：official-compatible internal score，不是 GPT-4-Turbo strict official score。
-- 当前已完成 adapter、contract/mock 回归、静态 processor/provenance 验证和运行编排；付费 API 与
-  GPU 真实推理结果尚未生成，
-  不能把“adapter available”写成“evaluation completed”。
+- adapter、contract/mock 回归、静态 processor/provenance 验证和运行编排已完成；各模型的 live
+  阶段状态以模型矩阵和固定输出目录中的 validator 为准，不能把“adapter available”写成
+  “evaluation completed”。
 
 完整 profile、权重 revision 和部署状态见 [模型矩阵](docs/model-matrix.md)，命令与服务器验收顺序见
 [MSMU 多模型推理手册](docs/msmu-inference.md)。人工测试从[三阶段入口](docs/msmu-all-model-test-commands.md)

@@ -39,8 +39,8 @@ benchmark 的协议文档和相关测试。
 - 每条模型输入只有对应图片和第一条 user question。
 - 不向被测模型输入 reference、raw type、task family、其他 QA 或同图历史。
 - 对 Qwen 删除字面 `<image>`，用 structured image content，并使用原生 chat template。
-- 当前 Qwen profile 为 greedy、`num_beams=1`、`max_new_tokens=192`、图像像素范围
-  `12544..112896`。
+- 当前 Qwen2.5-VL 7B/32B/72B profile 均为 greedy、`num_beams=1`、`max_new_tokens=192`、
+  图像像素范围 `12544..112896`；不同参数量必须使用独立 model revision、protocol 和输出目录。
 - 正式输出必须覆盖 index `0..986`；前五个元数据字段由 test row 确定，只有 prediction 来自模型。
 - 空 prediction 是 warning，允许进入评分并得到零分或抽取失败；不得把它静默吞掉。
 - scorer 必须在 judge 前强制运行完整校验。不得增加绕过正式校验的 scorer 参数。

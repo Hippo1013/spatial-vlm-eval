@@ -175,7 +175,23 @@ PROFILE=gemini31pro BACKEND=google LIMIT=2 bash scripts/msmu/run_openai_compatib
 GPT-5 不发送 temperature；Gemini 轨按本项目锁定为 temperature 0；两者 low reasoning、192 completion
 tokens。先核对两条 live smoke 的 provider、图片计数、generation metadata 与费用，再批准全量。
 
-## 6. 空间专用模型
+## 6. Qwen 与空间专用模型
+
+### Qwen2.5-VL 7B / 32B / 72B
+
+手工测试统一使用：
+
+```bash
+bash scripts/msmu/run_manual_stage1.sh qwen25_vl_base  # 7B
+bash scripts/msmu/run_manual_stage1.sh qwen25_vl_32b   # 单卡，batch size 1
+bash scripts/msmu/run_manual_stage1.sh qwen25_vl_72b   # 双卡 balanced，batch size 1
+```
+
+`.env.server` 分别提供 `QWEN_BASE_MODEL`/`QWEN_BASE_REVISION`、
+`QWEN_32B_MODEL`/`QWEN_32B_REVISION` 和 `QWEN_72B_MODEL`/`QWEN_72B_REVISION`。
+72B 必须同时通过两张 GPU 的空闲检查，不允许退化成 CPU/disk offload；三种参数量使用相同的
+structured image、原生 chat template、greedy/192-token/pixel 设置，但使用独立 inference protocol
+和输出目录。`qwen25_vl_peft` 只对应 7B base。
 
 ### SSR
 

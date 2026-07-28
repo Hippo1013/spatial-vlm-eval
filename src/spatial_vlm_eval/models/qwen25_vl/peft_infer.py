@@ -9,11 +9,14 @@ from typing import Any
 
 from ...benchmarks.msmu.data import MSMUModelInput, QwenGenerationCollator
 from ..common.cli import add_msmu_run_arguments, execute_msmu_cli
+from ..common.provenance import verify_hf_snapshot_revision
 from ..common.runtime import GenerationResult, InferenceAdapter
+from ..profiles import get_profile, profile_keys
 
 QWEN_MAX_NEW_TOKENS = 192
 QWEN_IMAGE_MIN_PIXELS = 12544
 QWEN_IMAGE_MAX_PIXELS = 112896
+QWEN_PROFILE_KEYS = profile_keys("qwen25_vl")
 
 
 class QwenPeftAdapter(InferenceAdapter):
@@ -22,6 +25,7 @@ class QwenPeftAdapter(InferenceAdapter):
     def __init__(
         self,
         *,
+        profile_key: str,
         base_model: str,
         base_model_revision: str,
         checkpoint: str | None,
@@ -30,15 +34,34 @@ class QwenPeftAdapter(InferenceAdapter):
         max_new_tokens: int,
         image_min_pixels: int,
         image_max_pixels: int,
+        device_map: str,
     ) -> None:
+        self.profile = get_profile(profile_key)
+        if self.profile.family != "qwen25_vl":
+            raise ValueError(f"Profile {profile_key!r} is not a Qwen2.5-VL profile")
         self.base_model = str(base_model)
         self.base_model_revision = str(base_model_revision)
+        if self.base_model_revision != self.profile.revision:
+            raise ValueError(
+                f"Profile {self.profile.key} is locked to revision {self.profile.revision}; "
+                f"got {self.base_model_revision}"
+            )
+        self.base_model_snapshot_revision_verified = verify_hf_snapshot_revision(
+            self.base_model,
+            self.base_model_revision,
+            "Qwen2.5-VL base model",
+        )
         self.checkpoint = str(checkpoint) if checkpoint else None
         self.checkpoint_revision = str(checkpoint_revision) if checkpoint_revision else None
         self.batch_size = int(batch_size)
         self.max_new_tokens = int(max_new_tokens)
         self.image_min_pixels = int(image_min_pixels)
         self.image_max_pixels = int(image_max_pixels)
+        self.device_map = str(device_map)
+        if self.device_map not in {"single", "balanced"}:
+            raise ValueError("device_map must be 'single' or 'balanced'")
+        if self.profile.default_tensor_parallel_size == 2 and self.device_map != "balanced":
+            raise ValueError(f"Profile {self.profile.key} requires balanced two-GPU loading")
         locked = (
             self.max_new_tokens,
             self.image_min_pixels,
@@ -94,8 +117,24 @@ class QwenPeftAdapter(InferenceAdapter):
             dtype=torch.bfloat16,
             attn_implementation="sdpa",
             local_files_only=True,
-            device_map={"": 0},
+            device_map={"": 0} if self.device_map == "single" else "balanced",
         )
+        if self.device_map == "balanced":
+            placements = set(getattr(self.model, "hf_device_map", {}).values())
+            if placements & {"cpu", "disk"}:
+                raise RuntimeError(
+                    f"Balanced Qwen loading used forbidden CPU/disk offload: {sorted(map(str, placements))}"
+                )
+            cuda_devices = {
+                int(value)
+                for value in placements
+                if isinstance(value, int) or (isinstance(value, str) and value.isdigit())
+            }
+            if self.profile.default_tensor_parallel_size == 2 and len(cuda_devices) != 2:
+                raise RuntimeError(
+                    f"Profile {self.profile.key} must be distributed over two visible GPUs; "
+                    f"got device map {getattr(self.model, 'hf_device_map', {})}"
+                )
         if self.checkpoint:
             self.model = PeftModel.from_pretrained(
                 self.model,
@@ -117,9 +156,9 @@ class QwenPeftAdapter(InferenceAdapter):
             "checkpoint": checkpoint,
             "checkpoint_revision": self.checkpoint_revision,
             "backend": "transformers-qwen25-vl-peft",
-            "profile": "qwen25_vl",
+            "profile": self.profile.key,
             "input_profile": "question_only",
-            "inference_protocol": "msmu_qwen25_vl_question_only_deterministic_v1",
+            "inference_protocol": self.profile.inference_protocol,
             "chat_template": self.processor.chat_template,
             "system_prompt": (
                 "You are a helpful assistant."
@@ -139,6 +178,8 @@ class QwenPeftAdapter(InferenceAdapter):
                 "use_cache": True,
             },
             "batch_size": self.batch_size,
+            "device_map": self.device_map,
+            "model_snapshot_revision_verified": self.base_model_snapshot_revision_verified,
             "processor_class": type(self.processor).__name__,
             "runtime": self._runtime_versions,
             "upstream": {
@@ -183,6 +224,7 @@ class QwenPeftAdapter(InferenceAdapter):
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--profile", choices=QWEN_PROFILE_KEYS, default="qwen25_vl_7b")
     parser.add_argument("--base-model", required=True)
     parser.add_argument("--base-model-revision", default="local-unspecified")
     parser.add_argument("--checkpoint", default=None, help="PEFT adapter checkpoint; omit for base.")
@@ -191,6 +233,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-new-tokens", type=int, default=QWEN_MAX_NEW_TOKENS)
     parser.add_argument("--image-min-pixels", type=int, default=QWEN_IMAGE_MIN_PIXELS)
     parser.add_argument("--image-max-pixels", type=int, default=QWEN_IMAGE_MAX_PIXELS)
+    parser.add_argument("--device-map", choices=("single", "balanced"), default="single")
     add_msmu_run_arguments(parser)
     return parser.parse_args()
 
@@ -198,6 +241,7 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     adapter = QwenPeftAdapter(
+        profile_key=args.profile,
         base_model=args.base_model,
         base_model_revision=args.base_model_revision,
         checkpoint=args.checkpoint,
@@ -206,6 +250,7 @@ def main() -> None:
         max_new_tokens=args.max_new_tokens,
         image_min_pixels=args.image_min_pixels,
         image_max_pixels=args.image_max_pixels,
+        device_map=args.device_map,
     )
     execute_msmu_cli(args, adapter)
 

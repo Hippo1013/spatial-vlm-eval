@@ -4,7 +4,7 @@
 完成。每个正式结果必须同时记录 model revision、inference protocol、prompt/template、图像处理、
 decoding 和 scorer protocol；不同 inference protocol 不得在缺少 protocol 列的表中混合。
 
-## 新增的 14 个 inference profile
+## 当前 17 个 inference profile
 
 | Key | Model / locked revision | Input track | Backend | Inference protocol | Status |
 |---|---|---|---|---|---|
@@ -15,6 +15,9 @@ decoding 和 scorer protocol；不同 inference protocol 不得在缺少 protoco
 | `internvl3_8b` | `OpenGVLab/InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | question-only RGB | vLLM 0.19 | `msmu_internvl3_8b_question_only_v1` | Processor passed；GPU smoke pending |
 | `internvl3_38b` | `OpenGVLab/InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | question-only RGB | vLLM 0.19 TP=2 | `msmu_internvl3_38b_question_only_v1` | Processor passed；TP=2 smoke pending |
 | `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | question-only RGB | vLLM 0.19 TP=2 config | `msmu_internvl3_78b_question_only_v1` | Processor/config passed；2×80GB forced load disabled |
+| `qwen25_vl_7b` | `Qwen/Qwen2.5-VL-7B-Instruct@cc594898137f460bfe9f0759e9844b3ce807cfb5` | question-only RGB | Transformers，单卡 | `msmu_qwen25_vl_question_only_deterministic_v1` | 手工入口名 `qwen25_vl_base`；stage 1/2 passed |
+| `qwen25_vl_32b` | `Qwen/Qwen2.5-VL-32B-Instruct@7cfb30d71a1f4f49a57592323337a4a4727301da` | question-only RGB | Transformers，单卡 | `msmu_qwen25_vl_32b_question_only_deterministic_v1` | 权重完整；stage 1/2 pending |
+| `qwen25_vl_72b` | `Qwen/Qwen2.5-VL-72B-Instruct@89c86200743eec961a297729e7990e8f2ddbc4c5` | question-only RGB | Transformers，双卡 balanced | `msmu_qwen25_vl_72b_question_only_deterministic_v1` | 权重完整；stage 1/2 pending |
 | `ssr` | `SSR-VLM-7B@7bcb4636f1396325f27f7fbb2f2df121128931bf` | fair RGB-only，无 TOR/MIDI/depth | official Transformers | `msmu_ssr_rgb_only_v1` | Source/checkpoint/static adapter passed；GPU smoke pending |
 | `ssr_native` | 上述 VLM + `SSR-MIDI-7B@8ed878fa16e3e440741ed8c1fedfcfe40710258d` | DepthPro + MIDI + 10 TOR | official Transformers | `msmu_ssr_native_depthpro_midi_tor10_native_v1` | Adapter/DepthPro/flash-attn/CLIP/Mamba static passed；SigLIP/Qwen publish pending |
 | `spatialrgpt` | `SpatialRGPT-VILA1.5-8B@64df7902f82b5053f5a53455095805e6de3a1f87` | RGB-only，无伪造 region/depth | official VILA | `msmu_spatialrgpt_rgb_only_v1` | Checkpoint/RGB processor static passed；compatible Torch/flash-attn loader pending |
@@ -23,11 +26,9 @@ decoding 和 scorer protocol；不同 inference protocol 不得在缺少 protoco
 | `spatialbot` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | fair RGB-only | official Bunny | `msmu_spatialbot_rgb_only_v1` | Source helpers passed；gated weight/xformers pending |
 | `spatialbot_native` | 同上 | same-RGB ZoeDepth RGB-D | official Bunny | `msmu_spatialbot_native_zoedepth_rgbd_native_v1` | Source helpers passed；gated weight/ZoeDepth/xformers pending |
 
-## 既有 Qwen profile
-
-| Model | Inference protocol | Status |
-|---|---|---|
-| Qwen2.5-VL base / PEFT | `msmu_qwen25_vl_question_only_deterministic_v1` | Adapter available；greedy、192 tokens、pixel `12544..112896` |
+Qwen 三个参数量均使用原生 structured image content/chat template、greedy、192 tokens 和
+pixel `12544..112896`。`qwen25_vl_base` 明确指 7B；PEFT 入口只叠加到该 7B base，本轮不测试 PEFT。
+三个参数量的 model revision、inference protocol 和输出目录互相独立。
 
 ## 专用模型身份说明
 
