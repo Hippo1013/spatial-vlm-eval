@@ -16,6 +16,7 @@ from ..profiles import get_profile
 SPATIALBOT_REVISION = "41d3b52c642058dfb087885bec0b8e37e0e67f8d"
 ZOEDEPTH_REVISION = "d87f17b2f5fdcb174cf4fb115491f4a6c60de152"
 ZOEDEPTH_DERIVED_BUFFER_COUNT = 24
+MIDAS_RELATIVE_POSITION_MODULE_COUNT = 24
 
 
 def meters_to_uint16_millimeters(depth_meters: Any) -> Any:
@@ -94,6 +95,29 @@ def install_legacy_timm_layers_alias(
 
     module_registry.setdefault("timm.layers", legacy_layers)
     module_registry.setdefault("timm.layers.norm_act", legacy_norm_act)
+
+
+def patch_midas_relative_position_sizes(model: Any) -> int:
+    """Cast MiDaS BEiT window sizes to Python ints for Torch 2.1 interpolation."""
+
+    patched = 0
+    for module in model.modules():
+        original = getattr(module, "_get_rel_pos_bias", None)
+        if original is None or getattr(module, "_msmu_python_int_compat", False):
+            continue
+
+        def get_rel_pos_bias(window_size: Any, _original: Any = original) -> Any:
+            return _original(tuple(int(value) for value in window_size))
+
+        module._get_rel_pos_bias = get_rel_pos_bias
+        module._msmu_python_int_compat = True
+        patched += 1
+    if patched != MIDAS_RELATIVE_POSITION_MODULE_COUNT:
+        raise RuntimeError(
+            "Unexpected MiDaS relative-position module count: "
+            f"expected {MIDAS_RELATIVE_POSITION_MODULE_COUNT}, got {patched}"
+        )
+    return patched
 
 
 def spatialbot_prompt(profile_key: str, question: str) -> str:
@@ -210,6 +234,9 @@ class SpatialBotAdapter(InferenceAdapter):
                     ".attn.relative_position_index" if native else None
                 ),
                 "zoedepth_resize_size_cast": "numpy scalar to Python int" if native else None,
+                "midas_relative_position_size_cast_modules": (
+                    MIDAS_RELATIVE_POSITION_MODULE_COUNT if native else None
+                ),
                 "timm_layers_compat": "alias timm.models.layers when timm.layers is absent",
             },
             "decoding": {
@@ -301,6 +328,7 @@ class SpatialBotAdapter(InferenceAdapter):
             Path(self.zoedepth_checkpoint),
             self.torch,
         )
+        patch_midas_relative_position_sizes(self.zoedepth)
         for parameter in self.zoedepth.parameters():
             parameter.requires_grad_(False)
 

@@ -9,11 +9,13 @@ from PIL import Image
 
 from spatial_vlm_eval.models.profiles import PROFILES
 from spatial_vlm_eval.models.spatialbot.infer import (
+    MIDAS_RELATIVE_POSITION_MODULE_COUNT,
     ZOEDEPTH_DERIVED_BUFFER_COUNT,
     encode_spatialbot_depth,
     install_legacy_timm_layers_alias,
     load_zoedepth_checkpoint_compat,
     meters_to_uint16_millimeters,
+    patch_midas_relative_position_sizes,
     patch_zoedepth_resize_python_int,
     spatialbot_prompt,
 )
@@ -144,6 +146,33 @@ class ProfileRegistryTest(unittest.TestCase):
 
 
 class SpecializedProfileSwitchTest(unittest.TestCase):
+    def test_spatialbot_midas_relative_position_sizes_are_python_ints(self):
+        class FakeAttention:
+            def __init__(self):
+                self.received = None
+
+            def _get_rel_pos_bias(self, window_size):
+                self.received = window_size
+                return window_size
+
+        class FakeModel:
+            def __init__(self):
+                self.attention = [
+                    FakeAttention() for _ in range(MIDAS_RELATIVE_POSITION_MODULE_COUNT)
+                ]
+
+            def modules(self):
+                return iter(self.attention)
+
+        model = FakeModel()
+        self.assertEqual(
+            patch_midas_relative_position_sizes(model),
+            MIDAS_RELATIVE_POSITION_MODULE_COUNT,
+        )
+        output = model.attention[0]._get_rel_pos_bias((np.int64(7), np.int64(9)))
+        self.assertEqual(output, (7, 9))
+        self.assertTrue(all(type(value) is int for value in model.attention[0].received))
+
     def test_spatialbot_installs_legacy_timm_alias_without_overwriting(self):
         existing = object()
         legacy_layers = object()
