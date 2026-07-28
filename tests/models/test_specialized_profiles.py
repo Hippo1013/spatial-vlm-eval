@@ -1,4 +1,5 @@
 import hashlib
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,6 +26,7 @@ from spatial_vlm_eval.models.ssr.infer import (
     _verify_file_sha256,
     _verify_local_hidden_size,
     ssr_component_switches,
+    ssr_autoroot_entrypoint,
     ssr_image_views,
     ssr_question,
     tor_prefix,
@@ -137,6 +139,25 @@ class ProfileRegistryTest(unittest.TestCase):
 
 
 class SpecializedProfileSwitchTest(unittest.TestCase):
+    def test_ssr_autoroot_is_anchored_to_upstream_and_restored(self):
+        original = sys.argv[0]
+        with tempfile.TemporaryDirectory() as directory:
+            upstream = Path(directory)
+            entrypoint = upstream / "infer.py"
+            entrypoint.write_text("# upstream entrypoint\n", encoding="utf-8")
+            with ssr_autoroot_entrypoint(upstream):
+                self.assertEqual(sys.argv[0], str(entrypoint.resolve()))
+            self.assertEqual(sys.argv[0], original)
+
+            with self.assertRaisesRegex(RuntimeError, "probe"):
+                with ssr_autoroot_entrypoint(upstream):
+                    raise RuntimeError("probe")
+            self.assertEqual(sys.argv[0], original)
+
+        with self.assertRaisesRegex(FileNotFoundError, "entrypoint is missing"):
+            with ssr_autoroot_entrypoint(Path(directory)):
+                pass
+
     def test_ssr_fair_and_native_switches_cannot_cross(self):
         question = "How far is the chair?"
         self.assertEqual(ssr_question("ssr", question), question)

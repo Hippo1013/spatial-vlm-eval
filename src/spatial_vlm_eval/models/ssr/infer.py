@@ -6,6 +6,8 @@ import argparse
 import hashlib
 import json
 import sys
+from collections.abc import Iterator
+from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
@@ -30,6 +32,27 @@ SSR_MAMBA_MODEL_REVISION = "1e76775f628fbf1350fbe4dbb3d971ba64af25a1"
 SSR_MIDI_LLM_MODEL_ID = "Qwen/Qwen2.5-7B"
 SSR_MIDI_LLM_MODEL_REVISION = "d149729398750b98c0af14eb82c78cfe92750796"
 TOR_COUNT = 10
+
+
+@contextmanager
+def ssr_autoroot_entrypoint(upstream_root: Path) -> Iterator[None]:
+    """Anchor SSR's ``autoroot`` import to the locked upstream checkout.
+
+    Upstream ``ssr.models.vlm`` imports ``autoroot==1.0.1``, which searches for
+    ``.project-root`` starting at ``sys.argv[0]``.  Our module entrypoint lives in
+    this repository, so expose SSR's own ``infer.py`` only for that import and
+    restore the real CLI entrypoint immediately afterwards.
+    """
+
+    entrypoint = Path(upstream_root).resolve() / "infer.py"
+    if not entrypoint.is_file():
+        raise FileNotFoundError(f"SSR upstream entrypoint is missing: {entrypoint}")
+    original = sys.argv[0]
+    sys.argv[0] = str(entrypoint)
+    try:
+        yield
+    finally:
+        sys.argv[0] = original
 
 
 def tor_prefix(count: int = TOR_COUNT) -> str:
@@ -387,8 +410,10 @@ class SSRAdapter(InferenceAdapter):
         if str(self.upstream_root) not in sys.path:
             sys.path.insert(0, str(self.upstream_root))
         import torch
-        from ssr.models.vlm import SSRVLM
         from transformers import Qwen2_5_VLProcessor
+
+        with ssr_autoroot_entrypoint(self.upstream_root):
+            from ssr.models.vlm import SSRVLM
 
         self.torch = torch
         self.device = torch.device(self.device_name)
