@@ -15,6 +15,7 @@ from ..profiles import get_profile
 
 SPATIALBOT_REVISION = "41d3b52c642058dfb087885bec0b8e37e0e67f8d"
 ZOEDEPTH_REVISION = "d87f17b2f5fdcb174cf4fb115491f4a6c60de152"
+ZOEDEPTH_DERIVED_BUFFER_COUNT = 24
 
 
 def meters_to_uint16_millimeters(depth_meters: Any) -> Any:
@@ -41,6 +42,26 @@ def encode_spatialbot_depth(depth_millimeters: Any) -> Any:
     encoded[:, :, 1] = (depth // 32) * 8
     encoded[:, :, 2] = (depth % 32) * 8
     return encoded
+
+
+def load_zoedepth_checkpoint_compat(model: Any, checkpoint: Path, torch_module: Any) -> list[str]:
+    """Strictly load ZoeDepth while ignoring TIMM-derived position-index buffers."""
+
+    payload = torch_module.load(checkpoint, map_location="cpu")
+    state_dict = payload.get("model", payload)
+    normalized = {
+        (key[7:] if key.startswith("module.") else key): value for key, value in state_dict.items()
+    }
+    ignored = sorted(key for key in normalized if key.endswith(".attn.relative_position_index"))
+    if len(ignored) != ZOEDEPTH_DERIVED_BUFFER_COUNT:
+        raise RuntimeError(
+            "Unexpected ZoeDepth derived-buffer count: "
+            f"expected {ZOEDEPTH_DERIVED_BUFFER_COUNT}, got {len(ignored)}"
+        )
+    for key in ignored:
+        del normalized[key]
+    model.load_state_dict(normalized, strict=True)
+    return ignored
 
 
 def spatialbot_prompt(profile_key: str, question: str) -> str:
@@ -150,6 +171,12 @@ class SpatialBotAdapter(InferenceAdapter):
                 "depth_encoding": "official SpatialBot 3-channel uint16 packing" if native else None,
                 "zoedepth_revision": self.zoedepth_revision if native else None,
                 "zoedepth_checkpoint": self.zoedepth_checkpoint if native else None,
+                "zoedepth_ignored_derived_buffer_count": (
+                    ZOEDEPTH_DERIVED_BUFFER_COUNT if native else None
+                ),
+                "zoedepth_ignored_derived_buffer_suffix": (
+                    ".attn.relative_position_index" if native else None
+                ),
             },
             "decoding": {
                 "do_sample": False,
@@ -224,8 +251,13 @@ class SpatialBotAdapter(InferenceAdapter):
 
         config = get_config("zoedepth_nk", "infer")
         if hasattr(config, "pretrained_resource"):
-            config.pretrained_resource = f"local::{self.zoedepth_checkpoint}"
+            config.pretrained_resource = None
         self.zoedepth = build_model(config).to(self.device_name).eval()
+        load_zoedepth_checkpoint_compat(
+            self.zoedepth,
+            Path(self.zoedepth_checkpoint),
+            self.torch,
+        )
         for parameter in self.zoedepth.parameters():
             parameter.requires_grad_(False)
 

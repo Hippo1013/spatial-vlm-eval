@@ -9,7 +9,9 @@ from PIL import Image
 
 from spatial_vlm_eval.models.profiles import PROFILES
 from spatial_vlm_eval.models.spatialbot.infer import (
+    ZOEDEPTH_DERIVED_BUFFER_COUNT,
     encode_spatialbot_depth,
+    load_zoedepth_checkpoint_compat,
     meters_to_uint16_millimeters,
     spatialbot_prompt,
 )
@@ -140,6 +142,36 @@ class ProfileRegistryTest(unittest.TestCase):
 
 
 class SpecializedProfileSwitchTest(unittest.TestCase):
+    def test_spatialbot_zoedepth_only_ignores_expected_derived_buffers(self):
+        test_case = self
+
+        class FakeTorch:
+            @staticmethod
+            def load(_path, map_location):
+                test_case.assertEqual(map_location, "cpu")
+                state = {"model.weight": "weight"}
+                for index in range(ZOEDEPTH_DERIVED_BUFFER_COUNT):
+                    state[
+                        f"module.core.blocks.{index}.attn.relative_position_index"
+                    ] = index
+                return {"model": state}
+
+        class FakeModel:
+            def load_state_dict(_self, state, strict):
+                test_case.assertTrue(strict)
+                test_case.assertEqual(state, {"model.weight": "weight"})
+
+        ignored = load_zoedepth_checkpoint_compat(FakeModel(), Path("checkpoint.pt"), FakeTorch())
+        self.assertEqual(len(ignored), ZOEDEPTH_DERIVED_BUFFER_COUNT)
+
+        class WrongTorch:
+            @staticmethod
+            def load(_path, map_location):
+                return {"model": {"model.weight": "weight"}}
+
+        with self.assertRaisesRegex(RuntimeError, "expected 24, got 0"):
+            load_zoedepth_checkpoint_compat(FakeModel(), Path("checkpoint.pt"), WrongTorch())
+
     def test_ssr_adapter_offline_flag_uses_transformers_adapter_kwargs(self):
         with tempfile.TemporaryDirectory() as directory:
             self.assertEqual(
