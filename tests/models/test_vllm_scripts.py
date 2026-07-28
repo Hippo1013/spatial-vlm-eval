@@ -160,5 +160,68 @@ esac
         self.assertEqual(allowed.returncode, 0, allowed.stderr)
 
 
+class ManualTestPreparationTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.repository = Path(__file__).resolve().parents[2]
+        cls.script = cls.repository / "scripts" / "msmu" / "prepare_manual_test.sh"
+
+    def test_script_must_be_sourced(self):
+        completed = subprocess.run(
+            ["bash", str(self.script)],
+            cwd=self.repository,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("must be sourced", completed.stderr)
+
+    def test_sourcing_loads_config_and_creates_three_stage_directories(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            base_output = temporary / "outputs"
+            server_env = temporary / "server.env"
+            server_env.write_text(
+                "\n".join(
+                    [
+                        f"REPO_ROOT={self.repository}",
+                        "DATASET_ROOT=/locked/msmu",
+                        f"OUTPUT_ROOT={base_output}",
+                        "BASE_MODEL=/locked/qwen-vl",
+                        "BASE_MODEL_REVISION=locked-qwen-revision",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            environment = dict(os.environ)
+            environment["MSMU_SERVER_ENV"] = str(server_env)
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    (
+                        'source "$1" || exit $?; '
+                        'printf "resolved=%s\\npwd=%s\\nqwen=%s@%s\\n" '
+                        '"$OUTPUT_ROOT" "$PWD" "$QWEN_BASE_MODEL" "$QWEN_BASE_REVISION"'
+                    ),
+                    "bash",
+                    str(self.script),
+                ],
+                cwd=temporary,
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            manual_output = base_output / "manual-three-stage-v1"
+            self.assertIn(f"resolved={manual_output}", completed.stdout)
+            self.assertIn(f"pwd={self.repository}", completed.stdout)
+            self.assertIn("qwen=/locked/qwen-vl@locked-qwen-revision", completed.stdout)
+            for stage in ["01_canary", "02_smoke8", "03_full987"]:
+                self.assertTrue((manual_output / stage).is_dir())
+
+
 if __name__ == "__main__":
     unittest.main()
