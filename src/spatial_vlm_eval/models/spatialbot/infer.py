@@ -52,11 +52,18 @@ def load_zoedepth_checkpoint_compat(model: Any, checkpoint: Path, torch_module: 
     normalized = {
         (key[7:] if key.startswith("module.") else key): value for key, value in state_dict.items()
     }
-    ignored = sorted(key for key in normalized if key.endswith(".attn.relative_position_index"))
-    if len(ignored) != ZOEDEPTH_DERIVED_BUFFER_COUNT:
+    derived = sorted(key for key in normalized if key.endswith(".attn.relative_position_index"))
+    if len(derived) != ZOEDEPTH_DERIVED_BUFFER_COUNT:
         raise RuntimeError(
             "Unexpected ZoeDepth derived-buffer count: "
-            f"expected {ZOEDEPTH_DERIVED_BUFFER_COUNT}, got {len(ignored)}"
+            f"expected {ZOEDEPTH_DERIVED_BUFFER_COUNT}, got {len(derived)}"
+        )
+    expected_keys = set(model.state_dict())
+    ignored = [key for key in derived if key not in expected_keys]
+    if len(ignored) not in {0, ZOEDEPTH_DERIVED_BUFFER_COUNT}:
+        raise RuntimeError(
+            "ZoeDepth target model only partially matches derived buffers: "
+            f"{ZOEDEPTH_DERIVED_BUFFER_COUNT - len(ignored)} present, {len(ignored)} absent"
         )
     for key in ignored:
         del normalized[key]
@@ -196,8 +203,8 @@ class SpatialBotAdapter(InferenceAdapter):
                 "depth_encoding": "official SpatialBot 3-channel uint16 packing" if native else None,
                 "zoedepth_revision": self.zoedepth_revision if native else None,
                 "zoedepth_checkpoint": self.zoedepth_checkpoint if native else None,
-                "zoedepth_ignored_derived_buffer_count": (
-                    ZOEDEPTH_DERIVED_BUFFER_COUNT if native else None
+                "zoedepth_derived_buffer_compat_counts": (
+                    [0, ZOEDEPTH_DERIVED_BUFFER_COUNT] if native else None
                 ),
                 "zoedepth_ignored_derived_buffer_suffix": (
                     ".attn.relative_position_index" if native else None

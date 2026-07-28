@@ -179,6 +179,9 @@ class SpecializedProfileSwitchTest(unittest.TestCase):
                 return {"model": state}
 
         class FakeModel:
+            def state_dict(_self):
+                return {"model.weight": "weight"}
+
             def load_state_dict(_self, state, strict):
                 test_case.assertTrue(strict)
                 test_case.assertEqual(state, {"model.weight": "weight"})
@@ -193,6 +196,24 @@ class SpecializedProfileSwitchTest(unittest.TestCase):
 
         with self.assertRaisesRegex(RuntimeError, "expected 24, got 0"):
             load_zoedepth_checkpoint_compat(FakeModel(), Path("checkpoint.pt"), WrongTorch())
+
+        class LegacyModel:
+            def state_dict(_self):
+                state = {"model.weight": "old"}
+                for index in range(ZOEDEPTH_DERIVED_BUFFER_COUNT):
+                    state[f"core.blocks.{index}.attn.relative_position_index"] = index
+                return state
+
+            def load_state_dict(_self, state, strict):
+                test_case.assertTrue(strict)
+                test_case.assertEqual(len(state), ZOEDEPTH_DERIVED_BUFFER_COUNT + 1)
+
+        self.assertEqual(
+            load_zoedepth_checkpoint_compat(
+                LegacyModel(), Path("checkpoint.pt"), FakeTorch()
+            ),
+            [],
+        )
 
     def test_ssr_adapter_offline_flag_uses_transformers_adapter_kwargs(self):
         with tempfile.TemporaryDirectory() as directory:
