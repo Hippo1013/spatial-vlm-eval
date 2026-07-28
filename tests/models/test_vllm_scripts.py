@@ -222,6 +222,12 @@ class ManualTestPreparationTest(unittest.TestCase):
                 encoding="utf-8",
             )
             environment = dict(os.environ)
+            for key in [
+                "MANUAL_TEST_OUTPUT_ROOT",
+                "QWEN_BASE_MODEL",
+                "QWEN_BASE_REVISION",
+            ]:
+                environment.pop(key, None)
             environment["MSMU_SERVER_ENV"] = str(server_env)
             completed = subprocess.run(
                 [
