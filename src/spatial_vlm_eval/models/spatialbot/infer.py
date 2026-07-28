@@ -64,6 +64,20 @@ def load_zoedepth_checkpoint_compat(model: Any, checkpoint: Path, torch_module: 
     return ignored
 
 
+def patch_zoedepth_resize_python_int(resize_class: type[Any]) -> None:
+    """Make ZoeDepth/TIMMs NumPy scalar sizes acceptable to Torch 2.1."""
+
+    if getattr(resize_class, "_msmu_python_int_compat", False):
+        return
+    original = resize_class.constrain_to_multiple_of
+
+    def constrain_to_multiple_of(instance: Any, *args: Any, **kwargs: Any) -> int:
+        return int(original(instance, *args, **kwargs))
+
+    resize_class.constrain_to_multiple_of = constrain_to_multiple_of
+    resize_class._msmu_python_int_compat = True
+
+
 def spatialbot_prompt(profile_key: str, question: str) -> str:
     if profile_key == "spatialbot":
         return f"<image>\n{question}"
@@ -177,6 +191,7 @@ class SpatialBotAdapter(InferenceAdapter):
                 "zoedepth_ignored_derived_buffer_suffix": (
                     ".attn.relative_position_index" if native else None
                 ),
+                "zoedepth_resize_size_cast": "numpy scalar to Python int" if native else None,
             },
             "decoding": {
                 "do_sample": False,
@@ -247,8 +262,10 @@ class SpatialBotAdapter(InferenceAdapter):
         if str(self.zoedepth_root) not in sys.path:
             sys.path.insert(0, str(self.zoedepth_root))
         from zoedepth.models.builder import build_model
+        from zoedepth.models.base_models.midas import Resize
         from zoedepth.utils.config import get_config
 
+        patch_zoedepth_resize_python_int(Resize)
         config = get_config("zoedepth_nk", "infer")
         if hasattr(config, "pretrained_resource"):
             config.pretrained_resource = None

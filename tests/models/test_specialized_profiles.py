@@ -13,6 +13,7 @@ from spatial_vlm_eval.models.spatialbot.infer import (
     encode_spatialbot_depth,
     load_zoedepth_checkpoint_compat,
     meters_to_uint16_millimeters,
+    patch_zoedepth_resize_python_int,
     spatialbot_prompt,
 )
 from spatial_vlm_eval.models.spatialrgpt.infer import spatialrgpt_question
@@ -142,6 +143,17 @@ class ProfileRegistryTest(unittest.TestCase):
 
 
 class SpecializedProfileSwitchTest(unittest.TestCase):
+    def test_spatialbot_zoedepth_resize_casts_numpy_scalar_to_python_int(self):
+        class FakeResize:
+            def constrain_to_multiple_of(self, value):
+                return np.int64(value)
+
+        patch_zoedepth_resize_python_int(FakeResize)
+        self.assertIs(type(FakeResize().constrain_to_multiple_of(384)), int)
+        original = FakeResize.constrain_to_multiple_of
+        patch_zoedepth_resize_python_int(FakeResize)
+        self.assertIs(FakeResize.constrain_to_multiple_of, original)
+
     def test_spatialbot_zoedepth_only_ignores_expected_derived_buffers(self):
         test_case = self
 
