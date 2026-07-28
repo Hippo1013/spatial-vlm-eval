@@ -89,6 +89,14 @@ def _local_pretrained_kwargs(path_or_id: str, revision: str | None) -> dict[str,
     return kwargs
 
 
+def _local_adapter_kwargs(path_or_id: str, revision: str | None) -> dict[str, Any]:
+    """Map offline-loading arguments onto Transformers 4.49's adapter API."""
+
+    pretrained_kwargs = _local_pretrained_kwargs(path_or_id, revision)
+    adapter_kwargs = {"local_files_only": pretrained_kwargs.pop("local_files_only")}
+    return {**pretrained_kwargs, "adapter_kwargs": adapter_kwargs}
+
+
 def _verify_local_hidden_size(
     path_or_id: str,
     *,
@@ -428,7 +436,7 @@ class SSRAdapter(InferenceAdapter):
         )
         self.vlm.load_adapter(
             self.ssr_vlm,
-            **_local_pretrained_kwargs(self.ssr_vlm, self.ssr_vlm_revision),
+            **_local_adapter_kwargs(self.ssr_vlm, self.ssr_vlm_revision),
         )
         self._freeze(self.vlm)
         if self.profile.key == "ssr_native":

@@ -23,6 +23,7 @@ from spatial_vlm_eval.models.ssr.infer import (
     SSR_MIDI_LLM_MODEL_ID,
     SSR_MIDI_LLM_MODEL_REVISION,
     SSR_SIGLIP_MODEL_REVISION,
+    _local_adapter_kwargs,
     _verify_file_sha256,
     _verify_local_hidden_size,
     ssr_component_switches,
@@ -139,6 +140,20 @@ class ProfileRegistryTest(unittest.TestCase):
 
 
 class SpecializedProfileSwitchTest(unittest.TestCase):
+    def test_ssr_adapter_offline_flag_uses_transformers_adapter_kwargs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            self.assertEqual(
+                _local_adapter_kwargs(directory, "local-unspecified"),
+                {"adapter_kwargs": {"local_files_only": True}},
+            )
+        self.assertEqual(
+            _local_adapter_kwargs("locked/remote-id", "abc123"),
+            {
+                "revision": "abc123",
+                "adapter_kwargs": {"local_files_only": True},
+            },
+        )
+
     def test_ssr_autoroot_is_anchored_to_upstream_and_restored(self):
         original = sys.argv[0]
         with tempfile.TemporaryDirectory() as directory:
