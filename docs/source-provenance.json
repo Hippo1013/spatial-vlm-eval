@@ -1,5 +1,5 @@
 {
-  "captured_at": "2026-07-26",
+  "captured_at": "2026-07-29",
   "source_root": "/media/datasets/tangzecong/latent_reasoning",
   "note": "MSMU scorer semantics remain v3; model adapters have independent inference protocol ids.",
   "legacy_files": {
