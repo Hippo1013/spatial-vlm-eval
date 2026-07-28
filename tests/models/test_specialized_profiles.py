@@ -11,6 +11,7 @@ from spatial_vlm_eval.models.profiles import PROFILES
 from spatial_vlm_eval.models.spatialbot.infer import (
     ZOEDEPTH_DERIVED_BUFFER_COUNT,
     encode_spatialbot_depth,
+    install_legacy_timm_layers_alias,
     load_zoedepth_checkpoint_compat,
     meters_to_uint16_millimeters,
     patch_zoedepth_resize_python_int,
@@ -143,6 +144,15 @@ class ProfileRegistryTest(unittest.TestCase):
 
 
 class SpecializedProfileSwitchTest(unittest.TestCase):
+    def test_spatialbot_installs_legacy_timm_alias_without_overwriting(self):
+        existing = object()
+        legacy_layers = object()
+        legacy_norm_act = object()
+        modules = {"timm.layers": existing}
+        install_legacy_timm_layers_alias(modules, legacy_layers, legacy_norm_act)
+        self.assertIs(modules["timm.layers"], existing)
+        self.assertIs(modules["timm.layers.norm_act"], legacy_norm_act)
+
     def test_spatialbot_zoedepth_resize_casts_numpy_scalar_to_python_int(self):
         class FakeResize:
             def constrain_to_multiple_of(self, value):

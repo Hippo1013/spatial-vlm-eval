@@ -78,6 +78,17 @@ def patch_zoedepth_resize_python_int(resize_class: type[Any]) -> None:
     resize_class._msmu_python_int_compat = True
 
 
+def install_legacy_timm_layers_alias(
+    module_registry: dict[str, Any],
+    legacy_layers: Any,
+    legacy_norm_act: Any,
+) -> None:
+    """Expose TIMM 0.6 layer modules under the paths used by newer Bunny code."""
+
+    module_registry.setdefault("timm.layers", legacy_layers)
+    module_registry.setdefault("timm.layers.norm_act", legacy_norm_act)
+
+
 def spatialbot_prompt(profile_key: str, question: str) -> str:
     if profile_key == "spatialbot":
         return f"<image>\n{question}"
@@ -192,6 +203,7 @@ class SpatialBotAdapter(InferenceAdapter):
                     ".attn.relative_position_index" if native else None
                 ),
                 "zoedepth_resize_size_cast": "numpy scalar to Python int" if native else None,
+                "timm_layers_compat": "alias timm.models.layers when timm.layers is absent",
             },
             "decoding": {
                 "do_sample": False,
@@ -223,6 +235,13 @@ class SpatialBotAdapter(InferenceAdapter):
         if str(self.upstream_root) not in sys.path:
             sys.path.insert(0, str(self.upstream_root))
         import torch
+        try:
+            import timm.layers  # noqa: F401
+        except ModuleNotFoundError:
+            from timm.models import layers as legacy_layers
+            from timm.models.layers import norm_act as legacy_norm_act
+
+            install_legacy_timm_layers_alias(sys.modules, legacy_layers, legacy_norm_act)
         from bunny.constants import DEFAULT_IMAGE_TOKEN, IMAGE_TOKEN_INDEX
         from bunny.conversation import SeparatorStyle, conv_templates
         from bunny.model.builder import load_pretrained_model
