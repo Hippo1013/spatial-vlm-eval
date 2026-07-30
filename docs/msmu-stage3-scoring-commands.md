@@ -20,10 +20,19 @@ bash scripts/msmu/run_manual_stage3.sh judge serve
 ## 终端 B：检查并评分
 
 ```bash
+# 只读列出全部结果及其当前状态；不检查 judge，不评分。
 bash scripts/msmu/score_pending_results.sh --list
+
+# 检查目录、dataset、批次锁和 judge readiness；不评分。
 bash scripts/msmu/score_pending_results.sh --check
+
+# 可选：预览本次实际评分顺序和输出目录；不调用 judge/scorer。
 MANUAL_DRY_RUN=1 bash scripts/msmu/score_pending_results.sh
+
+# 正式串行评分；这是唯一会调用 judge/scorer 的命令。
 bash scripts/msmu/score_pending_results.sh
+
+# 只读汇总评分后的各状态数量；确认 pending 为 0。
 bash scripts/msmu/score_pending_results.sh --status
 ```
 
