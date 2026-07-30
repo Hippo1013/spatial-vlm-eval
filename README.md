@@ -123,8 +123,9 @@ INDICES="$INDICES" \
 ```
 
 指定 `INDICES` 或 `LIMIT` 时 pipeline 会启用 validator 的 `--allow-subset`，并拒绝评分。正式运行必须
-先 `unset INDICES LIMIT`，完整生成 `0..986`，validator 通过后才能设置 `RUN_SCORE=1`；此时还必须
-显式提供与推理服务不同的 `JUDGE_BASE_URL`。
+先 `unset INDICES LIMIT`，完整生成 `0..986` 并通过 validator。全部阶段三结果完成后，使用独立
+judge 和 `scripts/msmu/score_pending_results.sh` 串行评分；命令见
+[阶段三串行评分指令](docs/msmu-stage3-scoring-commands.md)。
 
 ## 严格输出合同
 

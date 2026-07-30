@@ -271,11 +271,10 @@ ZOEDEPTH_CHECKPOINT=/local/ZoeD_M12_NK.pt \
 4. 资源允许时清除 subset 参数，完整 inference；
 5. 检查 metadata：987 targets、`publishable_inference=true`、无 missing index；
 6. 正式 validator；
-7. 单独启动 local judge，最后设置 `RUN_SCORE=1`。
+7. 单独启动 local judge，再运行目录驱动的串行评分入口。
 
 人工执行优先使用 `run_manual_stage1.sh`、`run_manual_stage2.sh` 和
-`run_manual_stage3.sh`。阶段三的 `MODEL score` 会自动设置 `SCORE_ONLY=1`，只解析原运行目录、执行
-完整 validator 和 scorer，不重新加载被测模型或再次调用付费 API。
+`run_manual_stage3.sh`。阶段三评分统一使用 `score_pending_results.sh`。
 
 本轮阶段三排除 GPT-5、Gemini、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B。其余 13 条本地轨
 使用串行入口一次完成部署、完整推理、validator 和 GPU 释放：
@@ -292,21 +291,21 @@ bash scripts/msmu/run_stage3_serial_inference.sh --status
 endpoint 都只会导致有界等待/退出，不会被终止。完整参数见
 [阶段三文档](msmu-stage3-full-eval.md)。
 
-评分示例：
+评分命令：
 
 ```bash
-unset INDICES LIMIT
-PIPELINE=scripts/msmu/run_ssr_pipeline.sh  # 换成当前 profile 对应的 family pipeline
-RUN_SCORE=1 \
-SCORE_ONLY=1 \
-JUDGE_BASE_URL=http://127.0.0.1:18080/v1 \
-JUDGE_MODEL_NAME=msmu-judge \
-  bash "$PIPELINE"
+bash scripts/msmu/run_manual_stage3.sh judge serve
+
+# 另一个终端
+bash scripts/msmu/score_pending_results.sh --list
+bash scripts/msmu/score_pending_results.sh --check
+bash scripts/msmu/score_pending_results.sh
+bash scripts/msmu/score_pending_results.sh --status
 ```
 
 正式 summary 必须是 987 条、八类齐全、`publishable=true`、`num_judge_failures=0`。报告表必须同时列
 `inference_protocol` 与 scorer protocol，并区分 official-compatible internal score 与 strict official
-score。
+score。完整命令见[阶段三串行评分指令](msmu-stage3-scoring-commands.md)。
 
 ## 8. 产物与故障恢复
 

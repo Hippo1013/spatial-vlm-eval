@@ -82,6 +82,37 @@ process group 中启动每个模型，使用 fsync journal 的文件活动做停
 process group，并在进入下一条轨前等待相应 GPU 无 compute process。独占锁、同 commit 完成标记和
 活动进程记录防止重复批次、跨代码版本误续跑或意外接管其他服务；judge/scoring 始终留在后续独立阶段。
 
+阶段三评分调度器递归发现结果根中的 `predictions.jsonl`，从 scorer 模块读取当前 protocol，并按完整
+路径稳定排序；脚本中不维护模型名单。只有 prediction 的直接父目录等于当前 scorer protocol 才能进入
+评分。整轨状态为：
+
+- `new`：尚无评分产物；
+- `resume`：已有可复用的部分 judge cache，但没有成功 summary；
+- `retry`：已有损坏、失败或不完整的 canonical 评分产物；
+- `complete`：summary、完整 score validator、987 条 scored rows、空 judge failure 和全部
+  publication gates 均合法；
+- `excluded_protocol`：prediction 不属于当前 scorer protocol。
+
+执行模式在结果根下持有进程级独占锁，锁内冻结候选快照，再逐个调用
+`scripts/msmu/score_predictions.sh`。批次开始前和每轨开始前均核对 `/v1/models` 中的
+`JUDGE_MODEL_NAME`；单轨非零退出或评分后仍非 `complete` 时立即停止。scorer 自身继续负责强制完整
+validator、judge cache key、失败重试、阈值、逐样本得分与 macro-8 聚合，调度器不复制这些逻辑。
+`Ctrl-C` 只中断当前评分批次，不管理另一个终端中的 judge。
+
+批次控制文件为：
+
+```text
+03_full987/_serial_scoring/SCORER_PROTOCOL/
+├── lock
+├── status.tsv
+└── runs/
+    ├── UTC_TIMESTAMP.candidates.jsonl
+    └── UTC_TIMESTAMP.log
+```
+
+候选在启动后冻结；运行期间新出现的 prediction 留到下一批。canonical `summary.json` 是唯一完成
+依据，不创建额外完成标记，也不在日志中记录 API key。
+
 ## 输出布局
 
 未显式设置 `OUTPUT` 时，公共路径函数生成：

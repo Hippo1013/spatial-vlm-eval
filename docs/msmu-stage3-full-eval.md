@@ -116,31 +116,18 @@ MANUAL_JUDGE_CUDA_VISIBLE_DEVICES=1 \
 
 被测 vLLM 固定使用 `18081`；judge 与被测服务不能使用同一个 endpoint。
 
-## 第三步：只评分已有结果
+## 第三步：串行评分已有结果
 
 judge ready 后，在另一个终端执行：
 
 ```bash
-bash scripts/msmu/run_manual_stage3.sh MODEL score
+bash scripts/msmu/score_pending_results.sh --list
+bash scripts/msmu/score_pending_results.sh --check
+bash scripts/msmu/score_pending_results.sh
+bash scripts/msmu/score_pending_results.sh --status
 ```
 
-`score` 会解析同一 `RUN_NAME` 的既有 `predictions.jsonl`，先做正式完整校验，再调用 judge。它不会
-重新加载待测模型，也不会再次请求 GPT/Gemini API。
-
-例如：
-
-```bash
-bash scripts/msmu/run_manual_stage3.sh qwen25_vl_base score
-bash scripts/msmu/run_manual_stage3.sh qwen25_vl_32b score
-```
-
-可用模型名：
-
-```bash
-bash scripts/msmu/run_manual_stage3.sh --list
-```
-
-`qwen25_vl_72b` 和 `internvl3_78b` 会被阶段三脚本拒绝。
+完整命令见[阶段三串行评分指令](msmu-stage3-scoring-commands.md)。
 
 ## 推荐 tmux 名称
 
@@ -151,7 +138,7 @@ bash scripts/msmu/run_manual_stage3.sh --list
 MODEL-srv     # 仅 vLLM 被测模型需要
 MODEL-full    # 987 条推理
 judge-srv     # 本地 judge
-MODEL-score   # 正式评分
+serial-score  # 目录驱动的串行评分
 ```
 
 ## 正式通过标准
