@@ -16,6 +16,7 @@ import hashlib
 import json
 import math
 import re
+import sys
 import time
 import urllib.request
 from collections import defaultdict
@@ -327,7 +328,11 @@ def cache_key(row: dict[str, Any], *, base_url: str, model: str) -> str:
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
 
 
-def extract_json(text: str) -> dict[str, Any]:
+def extract_json(
+    text: str,
+    *,
+    recovery_index: int | None = None,
+) -> dict[str, Any]:
     stripped = re.sub(r"^```(?:json)?\s*|\s*```$", "", text.strip(), flags=re.I)
     try:
         value = json.loads(stripped)
@@ -357,6 +362,26 @@ def extract_json(text: str) -> dict[str, Any]:
                 value = eval(candidate, {"__builtins__": {}}, {})  # noqa: S307 - official scorer uses eval.
                 if isinstance(value, dict):
                     return value
+    # Some local judges emit the requested qualitative mark as the first bare
+    # JSON member, then add prose despite the JSON-only instruction. Recover
+    # only that unambiguous first-line 0/1 mark; never search explanatory text
+    # or accept other keys and values through this fallback.
+    leading_mark = re.match(
+        r'^\s*"your_mark"[ \t]*:[ \t]*(0|1)[ \t]*\r?\n',
+        stripped,
+    )
+    if leading_mark and stripped[leading_mark.end() :].strip():
+        mark = int(leading_mark.group(1))
+        if recovery_index is not None:
+            print(
+                "[msmu-score] judge_parse_recovery "
+                f"index={recovery_index} "
+                "strategy=leading_bare_your_mark "
+                f"your_mark={mark} trailing_text_ignored=true",
+                file=sys.stderr,
+                flush=True,
+            )
+        return {"your_mark": mark}
     # Official evaluate_final.py uses eval(data["answer"]). Support local models
     # that return `"key": value` without surrounding braces, as in the examples.
     bare = "{" + stripped.strip().strip(",") + "}"
@@ -497,7 +522,10 @@ def call_chat(row: dict[str, Any], base_url: str, model: str, api_key: str, retr
             with opener.open(request, timeout=180) as response:
                 result = json.loads(response.read().decode("utf-8"))
             last_content = str(result["choices"][0]["message"]["content"])
-            parsed = extract_json(last_content)
+            parsed = extract_json(
+                last_content,
+                recovery_index=int(row["index"]),
+            )
             schema_error = judge_response_error(row, parsed)
             if schema_error is not None:
                 raise ValueError(schema_error)

@@ -56,6 +56,79 @@ class OfficialTypeRoutingTest(unittest.TestCase):
         self.assertEqual(official_type(row), "scale_estimation")
 
 
+class JudgeJsonExtractionTest(unittest.TestCase):
+    def test_valid_json_object_keeps_priority(self):
+        self.assertEqual(
+            scorer.extract_json('{"your_mark": 1, "reason": "explicit"}'),
+            {"your_mark": 1, "reason": "explicit"},
+        )
+
+    def test_recovers_leading_bare_mark_before_explanation(self):
+        for mark in (0, 1):
+            with self.subTest(mark=mark):
+                response = (
+                    f'"your_mark": {mark}\n\n'
+                    "The response does not match the reference."
+                )
+                self.assertEqual(
+                    scorer.extract_json(response),
+                    {"your_mark": mark},
+                )
+
+    def test_recovery_writes_structured_warning_with_index(self):
+        with patch("builtins.print") as print_mock:
+            result = scorer.extract_json(
+                '"your_mark": 0\n\nAdditional explanation.',
+                recovery_index=58,
+            )
+        self.assertEqual(result, {"your_mark": 0})
+        message = print_mock.call_args.args[0]
+        self.assertIn("judge_parse_recovery", message)
+        self.assertIn("index=58", message)
+        self.assertIn("strategy=leading_bare_your_mark", message)
+        self.assertIn("your_mark=0", message)
+        self.assertIn("trailing_text_ignored=true", message)
+
+    def test_normal_json_does_not_write_recovery_warning(self):
+        with patch("builtins.print") as print_mock:
+            result = scorer.extract_json(
+                '{"your_mark": 1}',
+                recovery_index=7,
+            )
+        self.assertEqual(result, {"your_mark": 1})
+        print_mock.assert_not_called()
+
+    def test_bare_mark_without_explanation_does_not_write_recovery_warning(self):
+        with patch("builtins.print") as print_mock:
+            result = scorer.extract_json(
+                '"your_mark": 1',
+                recovery_index=7,
+            )
+        self.assertEqual(result, {"your_mark": 1})
+        print_mock.assert_not_called()
+
+    def test_does_not_search_for_mark_inside_prose(self):
+        with self.assertRaises((SyntaxError, ValueError)):
+            scorer.extract_json(
+                'The judge result is "your_mark": 0\n'
+                "The response does not match the reference."
+            )
+
+    def test_rejects_invalid_leading_mark_values(self):
+        for value in ("2", "0.5", "null", "true"):
+            with self.subTest(value=value):
+                with self.assertRaises((SyntaxError, ValueError)):
+                    scorer.extract_json(
+                        f'"your_mark": {value}\n\nAdditional explanation.'
+                    )
+
+    def test_does_not_recover_other_bare_keys_with_explanation(self):
+        with self.assertRaises((SyntaxError, ValueError)):
+            scorer.extract_json(
+                '"answer_in_meters": 1.0\n\nAdditional explanation.'
+            )
+
+
 class JudgeCacheReliabilityTest(unittest.TestCase):
     def test_request_failure_never_becomes_a_cache_row(self):
         cached_row, failure = judge_cache_candidate(

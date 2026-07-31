@@ -197,6 +197,13 @@ model 和 endpoint。更换上述任一内容不会复用旧 response。每个�
 `publishable == false` 的诊断 summary 并以非零状态退出。该可靠性修复不改变合法 judge response
 的评分语义，因此保留当前 scorer/cache protocol id。
 
+judge JSON 解析优先接受完整对象。确定性恢复仅额外接受响应开头、带引号且独占第一行的
+`"your_mark": 0` 或 `"your_mark": 1`，允许其后存在解释文字；不得从任意 prose 中搜索 mark，也
+不得通过该分支接受其他 key、`null`、小数或 `0/1` 之外的值。该恢复只读取 judge 已明确给出的
+离散 mark，不改变 judge response、评分阈值或合法响应语义，因此保留当前 scorer/cache protocol id。
+每次触发该恢复都会在 `score.log` 和上层串行批次日志中记录 index、恢复策略、离散 mark 和忽略
+尾随文字的事实；正常 JSON 响应不写恢复 warning，日志也不重复保存完整 judge response。
+
 评分目录输出：
 
 - `prediction_validation.json`
