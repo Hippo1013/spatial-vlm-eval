@@ -57,7 +57,8 @@ manual-three-stage-v1/
 ```
 
 pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol；三个阶段不共用 journal。
-阶段三串行批处理的调度状态另存于 `03_full987/_serial_inference/`，不会混入任何模型的正式结果目录。
+阶段三推理调度状态另存于 `03_full987/_serial_inference/`，评分调度状态另存于
+`03_full987/_serial_scoring/<scorer-protocol>/`，都不会混入任何模型的正式结果目录。
 
 ## 共同约定
 

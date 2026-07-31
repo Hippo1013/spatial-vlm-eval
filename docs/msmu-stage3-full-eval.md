@@ -28,6 +28,9 @@ PEFT。Qwen2.5-VL-72B 与 InternVL3-78B 的阶段三手工入口也会拒绝执�
 
 ## 第一步：串行完成 13 条完整推理
 
+如需释放服务器上由本项目协作者管理的 GPU burn，先按
+[GPU burn 启停手册](server-gpu-burn-runbook.md)停止固定 pane；不要终止其他 GPU 进程。
+
 推荐在 `msmu` tmux session 新建一个窗口，只运行一条命令：
 
 ```bash
@@ -97,6 +100,21 @@ bash scripts/msmu/run_manual_stage3.sh MODEL infer
 ```
 
 `infer` 同样固定 `RUN_SCORE=0` 并在结束时运行完整 validator。
+
+## 可选：正式评分前抽查答案
+
+仅在 13 条完整 validator 均通过、尚未生成评分目录时运行：
+
+```bash
+# 固定抽取同一组 30 条，生成本地 Markdown 与图片
+source scripts/msmu/prepare_manual_test.sh
+python scripts/msmu/build_stage3_answer_audit.py \
+  --stage3-root "$OUTPUT_ROOT/03_full987" \
+  --dataset-root "$DATASET_ROOT" \
+  --output "$REPO_ROOT/outputs/msmu-stage3-answer-audit/msmu-stage3-answer-audit.md"
+```
+
+`outputs/` 不进入 Git；脚本会拒绝覆盖已有抽查文件。
 
 ## 第二步：启动独立 judge
 

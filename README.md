@@ -15,9 +15,8 @@ judge v3 scorer。模型适配与 benchmark 评分分层，任何模型都不能
 - scorer protocol 保持为
   `sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length`。
 - 当前分数性质：official-compatible internal score，不是 GPT-4-Turbo strict official score。
-- adapter、contract/mock 回归、静态 processor/provenance 验证和运行编排已完成；各模型的 live
-  阶段状态以模型矩阵和固定输出目录中的 validator 为准，不能把“adapter available”写成
-  “evaluation completed”。
+- adapter、contract/mock 回归、静态 processor/provenance 验证和运行编排已完成；本轮获准的
+  13 条本地轨已生成完整 987 条结果并通过正式 validator，local judge 评分尚未执行。
 
 完整 profile、权重 revision 和部署状态见 [模型矩阵](docs/model-matrix.md)，命令与服务器验收顺序见
 [MSMU 多模型推理手册](docs/msmu-inference.md)。人工测试从[三阶段入口](docs/msmu-all-model-test-commands.md)
@@ -25,10 +24,10 @@ judge v3 scorer。模型适配与 benchmark 评分分层，任何模型都不能
 [阶段三](docs/msmu-stage3-full-eval.md)。每个阶段均有统一模型入口脚本，会自动加载 `.env.server`；
 无需逐行复制各 adapter 的环境变量和 pipeline 命令。
 
-阶段三可用 `scripts/msmu/run_stage3_serial_inference.sh` 串行完成当前获准的 13 条本地推理轨：逐个
-部署、完整 987 条、正式 validator、释放 GPU 后再进入下一条，并支持 watchdog、失败重试与 journal
-续跑。当前批次明确排除两个 API、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B；评分仍在全部推理
-完成后用独立 judge 执行。
+阶段三已用 `scripts/msmu/run_stage3_serial_inference.sh` 串行完成当前获准的 13 条本地推理轨：
+逐个部署、完整 987 条、正式 validator、释放 GPU 后再进入下一条，并支持 watchdog、失败重试与
+journal 续跑。当前批次明确排除两个 API、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B；下一步是
+用独立 judge 执行目录驱动的串行评分。
 
 ## 仓库结构
 

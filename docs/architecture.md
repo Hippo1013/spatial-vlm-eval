@@ -113,6 +113,9 @@ validator、judge cache key、失败重试、阈值、逐样本得分与 macro-8
 候选在启动后冻结；运行期间新出现的 prediction 留到下一批。canonical `summary.json` 是唯一完成
 依据，不创建额外完成标记，也不在日志中记录 API key。
 
+正式评分前可用 `build_stage3_answer_audit.py` 只读加载获准批次的完整 validator 和 prediction，
+对所有轨抽取同一组 index 并导出人工抽查文档。它不参与评分，产物写入 Git 忽略的 `outputs/`。
+
 ## 输出布局
 
 未显式设置 `OUTPUT` 时，公共路径函数生成：

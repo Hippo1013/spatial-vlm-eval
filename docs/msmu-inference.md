@@ -291,6 +291,9 @@ bash scripts/msmu/run_stage3_serial_inference.sh --status
 endpoint 都只会导致有界等待/退出，不会被终止。完整参数见
 [阶段三文档](msmu-stage3-full-eval.md)。
 
+服务器上由本项目协作者管理的 burn 只按 [GPU burn 启停手册](server-gpu-burn-runbook.md)操作固定
+pane。13 条完整 validator 通过后，可按阶段三文档在正式评分前生成一次固定样本答案抽查。
+
 评分命令：
 
 ```bash
