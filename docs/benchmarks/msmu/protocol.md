@@ -49,22 +49,25 @@ Qwen 必须删除字面 token，并用 structured image content 传图。
 
 ## 当前 Qwen profile
 
-当前登记 `Qwen2.5-VL-7B-Instruct`、`32B-Instruct` 和 `72B-Instruct` 三种参数量；
-`qwen25_vl_base` 手工入口明确指 7B。三者输入和 decoding 设置一致，但 model revision、
-inference protocol 与输出目录独立。
+当前补测登记 `Qwen3-VL-2B-Instruct`、`4B-Instruct`、`8B-Instruct` 和 `32B-Instruct`。四者只用
+Instruct 权重，不使用 Thinking 或量化变体；model revision、inference protocol 与输出目录独立。
 
-| Setting | Value |
-|---|---|
-| Chat template | Qwen2.5-VL native template |
-| Implicit system | `You are a helpful assistant.` |
-| Image pixels | 12544..112896 |
-| Sampling | disabled |
-| Beams | 1 |
-| Max new tokens | 192 |
-| Output order | original index, 0..986 |
+| Setting | Qwen3-VL current supplement | Retained Qwen2.5-VL |
+|---|---|---|
+| Chat template | Qwen3-VL native structured-image template | Qwen2.5-VL native structured-image template |
+| System message | none | native implicit `You are a helpful assistant.` |
+| Image pixels | 16384..147456 | 12544..112896 |
+| Spatial factor | 32 | 28 |
+| Merged visual-token budget | 16..144 | 16..144 |
+| Sampling | disabled | disabled |
+| Beams | 1 | 1 |
+| Max new tokens | 192 | 192 |
+| Output order | original index, 0..986 | original index, 0..986 |
 
-这不是 SD-VLM 官方的 sampling profile（temperature 0.2、1024 new tokens），两者不得在同一
-对比表中混用。
+Qwen3-VL 官方模型卡推荐 sampling 和更大的默认图像范围；本项目为统一横评锁定 greedy/192 tokens，
+并按 Qwen3-VL 的 32-pixel spatial factor 把图像限制为等 visual-token 预算。这不是 Qwen 官方推荐
+generation profile，也不是 SD-VLM 官方的 temperature 0.2/1024-token profile；三者不得混表。
+Qwen2.5-VL 7B/32B/72B adapter 与已有结果只为复现保留，不属于当前四模型补测范围。
 
 ## 多模型 inference protocol
 
@@ -80,6 +83,7 @@ prompt、图像派生组件或 decoding 不同的轨使用独立 inference proto
 | LLaVA-NeXT Yi 34B | one RGB + original question | greedy, 192 | `msmu_llava_next_yi_34b_question_only_v1` |
 | InternVL3 8B / 38B / 78B | one RGB + original question | greedy, 192 | model-size-specific `msmu_internvl3_*_question_only_v1` |
 | Qwen2.5-VL 7B / 32B / 72B | one RGB + original question；structured image content | greedy, 192；72B 双卡 balanced | model-size-specific `msmu_qwen25_vl*_question_only_deterministic_v1` |
+| Qwen3-VL 2B / 4B / 8B / 32B | one RGB + original question；structured image content；no system message | greedy, 192；32B batch size 1 | model-size-specific `msmu_qwen3_vl_*_question_only_deterministic_v1` |
 | SSR fair | one RGB + original question；无 TOR/MIDI/depth | greedy, 192 | `msmu_ssr_rgb_only_v1` |
 | SSR native | one RGB + original question；same-RGB DepthPro + MIDI + 10 TOR | greedy, 192 | `msmu_ssr_native_depthpro_midi_tor10_native_v1` |
 | SpatialRGPT | one RGB + original question；无 region/mask/depth | greedy, 192 | `msmu_spatialrgpt_rgb_only_v1` |
@@ -186,6 +190,14 @@ official_macro8_accuracy = mean(
 上述状态由 `publication_gates` 和 `publication_gate_failures` 以机器可读形式记录。未通过门禁的
 诊断 summary 不含可引用的正式指标，不得进入结果表。
 
+结果表的八类列顺序与官方论文 Table 1 一致，表头使用中文，数值以百分比保留两位小数。展示表仅
+允许一个 scorer protocol；默认当前 canonical v4，多 scorer protocol 请求必须失败，不能把历史与
+当前评分静默混合。表格只显示模型名称、八类指标和平均值，专用模型的公平/原生 inference track
+必须直接写入模型名称。标题下固定用一行注释说明：公平版只使用 MSMU RGB 与原始问题；原生版可
+保留由同一 RGB 派生的官方额外输入、提示或组件，但不使用 GT 深度、reference 或额外标注。精确
+revision、inference protocol、scorer protocol 和结果性质仍由生成前强制校验的 metadata、summary
+与结果目录追溯，不得从展示表反推。
+
 ## Cache 与产物
 
 cache key 包含 protocol、official type、question、reference、prediction、完整 judge prompt、judge
@@ -227,8 +239,9 @@ judge JSON 解析优先接受完整对象。确定性恢复仅额外接受响应
 
 ## 与 strict official 的差异
 
-当前实现与官方至少有以下差异：Qwen 原生 prompt/图像处理、隐式 system prompt、greedy decoding、
-本地 Qwen judge、JSON-only 约束、judge temperature、容错解析和 grounding object prompt/语义评分。
+当前实现与官方至少有以下差异：Qwen 原生 prompt/项目锁定图像范围、greedy decoding、本地 Qwen
+judge、JSON-only 约束、judge temperature、容错解析和 grounding object prompt/语义评分。保留的
+Qwen2.5-VL 轨还有原生隐式 system prompt；Qwen3-VL 轨不添加 system message。
 
 此外，锁定的官方 commit 存在语法错误、缺失 `load_dataset` import，以及 inference 输出 raw type
 但后续脚本按 official type 路由的接口断裂。因此本仓库不包含或包装官方旧脚本，只维护可运行、

@@ -75,12 +75,19 @@ bash scripts/msmu/run_manual_stage1.sh MODEL
 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_base
 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_32b
 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_72b
+bash scripts/msmu/run_manual_stage1.sh qwen3_vl_2b
+bash scripts/msmu/run_manual_stage1.sh qwen3_vl_4b
+bash scripts/msmu/run_manual_stage1.sh qwen3_vl_8b
+bash scripts/msmu/run_manual_stage1.sh qwen3_vl_32b
 bash scripts/msmu/run_manual_stage1.sh ssr_native
 bash scripts/msmu/run_manual_stage1.sh spatialbot_native
 ```
 
 `qwen25_vl_base` 是 7B。32B 默认使用 GPU 0，72B 默认使用 GPU `0,1` 并做 balanced 加载；
 两种大模型固定 batch size 1。直接加载的本地模型自动运行 GPU preflight，并生成 1 条真实结果。
+当前 Qwen3-VL 四条补测轨均默认使用 GPU 0，其中 32B 固定 batch size 1。stage 1 必须同时核对
+`vision_canary.json` 中红/蓝图语义检查通过，以及 metadata 中无 system message、恰好一张 RGB、
+pixel `16384..147456` 和 `num_model_image_tensors: 1`。
 GPT-5/Gemini 默认通过 OpenRouter
 生成 2 条结果，运行前先在当前终端导出 key：
 
@@ -108,7 +115,8 @@ llava-m7b-srv
 llava-m7b-check
 ```
 
-其他模型使用一个窗口；Qwen 固定为 `12-qwen-base`、`21-qwen32b`、`22-qwen72b`。
+其他模型使用一个窗口；旧 Qwen 窗口为 `12-qwen-base`、`21-qwen32b`、`22-qwen72b`，Qwen3
+补测建议用 `23-qwen3-2b`、`24-qwen3-4b`、`25-qwen3-8b`、`26-qwen3-32b`。
 
 ## 通过标准
 
@@ -116,6 +124,7 @@ llava-m7b-check
   `"passed": true`；
 - API/直接加载：深层结果目录中存在 `predictions.jsonl`、metadata 和
   `prediction_validation.json`，validator 为 subset pass；
+- Qwen：同目录 `vision_canary.json` 还必须包含 `"passed": true`；
 - 失败时停止当前模型，不进入阶段二。
 
 完成后继续：[阶段二：八类 8 条小量测试](msmu-stage2-smoke8.md)。

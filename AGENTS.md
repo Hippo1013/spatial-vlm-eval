@@ -1,7 +1,7 @@
 # AGENTS.md
 
-本文件约束本仓库中的人类协作者与自动化 coding agent。开始修改前必须先阅读根 README、对应
-benchmark 的协议文档和相关测试。
+本文件约束本仓库中的人类协作者与自动化 coding agent。开始任务前先阅读根 README 和
+`docs/README.md`，再按下方路由读取对应协议、runbook 与测试；不得只凭 README 的摘要执行。
 
 ## 项目目标
 
@@ -9,7 +9,7 @@ benchmark 的协议文档和相关测试。
 
 1. 被测模型看不到协议禁止的信息；
 2. 每个结果可以追溯到数据 split、模型、prompt、图像处理、decoding、judge 和 scorer；
-3. 不同协议的结果绝不在无 protocol 列的表中混合；
+3. 不同 scorer protocol 的结果绝不在无 protocol 列的表中混合；精简展示表只有在逐行校验 provenance、一次只选择一个 scorer protocol，并在模型名称中区分 input track 时才可省略列；
 4. benchmark 逻辑与模型适配逻辑解耦。
 
 ## Python 环境政策
@@ -31,6 +31,21 @@ benchmark 的协议文档和相关测试。
 - 不要在源码中硬编码单台服务器路径；路径由 CLI 或环境变量提供。
 - 模型、dataset、checkpoint、prediction、judge cache 和论文 PDF 不提交到 Git。
 
+## 文档读取路由
+
+以下材料必须在设计或执行对应动作前阅读；修改中若任务范围变化，立即补读新命中的文档。
+
+| 任务触发条件 | 必须阅读 | 时机 |
+|---|---|---|
+| 修改 benchmark 输入、schema、validator、judge、阈值、cache 或聚合 | 对应 `docs/benchmarks/<name>/` 协议、`docs/architecture.md`、相关 benchmark 测试 | 方案与编辑前 |
+| 修改模型 profile、processor/template、图像输入、decoding 或 revision | `docs/model-matrix.md`、`docs/msmu-inference.md`、对应 benchmark 输入协议和 model 测试 | 设计 adapter 前 |
+| 修改 shell、环境变量、输出路径、服务器部署或 GPU 编排 | `docs/msmu-inference.md`、相关阶段 runbook、`docs/troubleshooting/` 和脚本测试 | 执行服务器命令前 |
+| 运行三阶段人工测试 | `docs/msmu-all-model-test-commands.md` 与当前阶段文档 | 启动模型前 |
+| 启动 judge 或正式评分 | MSMU protocol、`docs/msmu-stage3-scoring-commands.md`、`docs/architecture.md` | readiness 检查与评分前 |
+| 查询当前进度、汇报或发布结果 | `docs/model-matrix.md`，并现场检查服务器 validator/metadata/status/summary | 写结论前 |
+| 追溯行为变化、设计原因或已知故障 | `CHANGELOG.md`、相关 ADR、`docs/troubleshooting/` 与原始运行日志 | 下结论或修复前 |
+| 新增 benchmark | 本文件“新增 benchmark”、`docs/README.md` 和已有 benchmark 的同类文件 | 创建目录或协议前 |
+
 ## MSMU 不变量
 
 当前 canonical 文档是 `docs/benchmarks/msmu/protocol.md`。以下约束不可静默修改：
@@ -39,8 +54,11 @@ benchmark 的协议文档和相关测试。
 - 每条模型输入只有对应图片和第一条 user question。
 - 不向被测模型输入 reference、raw type、task family、其他 QA 或同图历史。
 - 对 Qwen 删除字面 `<image>`，用 structured image content，并使用原生 chat template。
-- 当前 Qwen2.5-VL 7B/32B/72B profile 均为 greedy、`num_beams=1`、`max_new_tokens=192`、
-  图像像素范围 `12544..112896`；不同参数量必须使用独立 model revision、protocol 和输出目录。
+- 当前补测的 Qwen3-VL-Instruct 2B/4B/8B/32B profile 均为 greedy、`num_beams=1`、
+  `max_new_tokens=192`、图像像素范围 `16384..147456`，不添加 system message；不同参数量必须使用
+  独立 model revision、protocol 和输出目录。
+- 保留的 Qwen2.5-VL 7B/32B/72B profile 仍锁定图像像素范围 `12544..112896` 和各自已有 protocol；
+  不得用 Qwen3-VL 设置恢复旧 journal。
 - 正式输出必须覆盖 index `0..986`；前五个元数据字段由 test row 确定，只有 prediction 来自模型。
 - 空 prediction 是 warning，允许进入评分并得到零分或抽取失败；不得把它静默吞掉。
 - scorer 必须在 judge 前强制运行完整校验。不得增加绕过正式校验的 scorer 参数。
@@ -77,10 +95,22 @@ sdvlm_official_compat_local_judge_v4_grounding_split_strict_quant_length_malform
 5. 修改 shell 脚本时运行 `bash -n scripts/**/*.sh`（在 Bash/Ubuntu 环境）。
 6. 修改实际推理协议后，先做 `--limit` smoke test，再跑完整 987 条；subset 不得发布。
 7. 正式评分前检查 `prediction_validation.json`，评分后检查 summary 的样本数和八类完整性。
-8. 阶段三批次固定使用 `run_stage3_serial_inference.sh` 串行运行 13 条获准的本地轨；不得加入两个
-   API、Qwen PEFT、Qwen2.5-VL-72B 或 InternVL3-78B，除非用户重新批准测试范围。
+8. 已完成的阶段三批次固定由 `run_stage3_serial_inference.sh` 表示 13 条历史获准本地轨；不得改写
+   其默认名单或完成标记。Qwen3-VL 2B/4B/8B/32B 四条补测轨使用同一脚本的 `--qwen3` 计划，
+   状态与历史批次隔离。
 9. 阶段三正式评分使用目录驱动的 `score_pending_results.sh`；不得维护模型名单或绕过批次锁、
    judge readiness/model 检查和评分后 publication gates。
+
+## 文档更新触发
+
+- 协议、profile、revision、环境变量、CLI、输出布局或批次范围改变时，必须在同一变更中更新
+  `docs/README.md` 指定的事实源、CHANGELOG、相关 ADR/runbook 和回归测试。
+- 阶段状态只能在对应 validator、metadata、status 或 summary 现场验证后更新；推理完成不得写成
+  评分完成。
+- 可复用故障在根因确认、修复和验证后，与修复代码同一提交写入 `docs/troubleshooting/`；未定位问题
+  只保留在未跟踪运行日志或 issue。
+- 新增、重命名或删除文档时同步更新 `docs/README.md` 和全部相对链接。
+- 任务完成前运行文档一致性测试；详细职责与时机以 `docs/README.md` 为准。
 
 ## 结果与命名
 

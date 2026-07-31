@@ -45,6 +45,27 @@ bash scripts/msmu/score_pending_results.sh
 
 评分完成后，在终端 A 按 `Ctrl-C` 停止本任务启动的 judge。
 
+## 汇总评分结果
+
+```bash
+# 只读列出全部 scorer protocol 下已有 summary 及其可收录状态。
+bash scripts/msmu/build_results_report.sh --list
+
+# 收录当前 canonical scorer protocol 下全部通过 publication gates 的评分结果。
+bash scripts/msmu/build_results_report.sh
+
+# 按模型 profile 精确收录；profile 参数可重复，scorer protocol 只能指定一个。
+bash scripts/msmu/build_results_report.sh \
+  --profile PROFILE \
+  --scorer-protocol SCORER_PROTOCOL
+```
+
+默认写入：
+
+```text
+/media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987/msmu-result.md
+```
+
 ## 使用其他结果根目录
 
 只接受绝对路径：
@@ -52,4 +73,8 @@ bash scripts/msmu/score_pending_results.sh
 ```bash
 bash scripts/msmu/score_pending_results.sh \
   --results-root /其他/绝对路径
+
+bash scripts/msmu/build_results_report.sh \
+  --results-root /其他/绝对路径 \
+  --output /其他/绝对路径/msmu-result.md
 ```

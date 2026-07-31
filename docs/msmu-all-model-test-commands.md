@@ -37,6 +37,7 @@ bash scripts/msmu/run_manual_stage1.sh --help
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_base
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_32b
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_72b
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen3_vl_2b
 ```
 
 `MANUAL_DRY_RUN=1` 只打印将要执行的底层命令，不占 GPU、不调用 API。
@@ -65,6 +66,9 @@ pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol
 - 一次只选择一个模型；模型通过当前阶段后才进入下一阶段。
 - `qwen25_vl_base` 是 7B；另外两个入口是 `qwen25_vl_32b` 和 `qwen25_vl_72b`。32B 默认单卡，
   72B 默认双卡 `0,1` balanced 加载，三者输出目录互不复用。
+- 当前补测使用 `qwen3_vl_2b`、`qwen3_vl_4b`、`qwen3_vl_8b`、`qwen3_vl_32b`。四者默认单卡，
+  32B 固定 batch size 1；每个参数量使用独立 revision、protocol 和输出目录。
+- Qwen stage 1 会先运行红/蓝合成图语义 canary，再生成 1 条 MSMU canary；两者都通过才进入 stage 2。
 - API key 只在当前终端导出，不能写入 Git。
 - `qwen25_vl_peft` 从 `.env.server` 读取 `QWEN_PEFT_CHECKPOINT`；脚本会把 checkpoint 所在目录和
   basename 加入 run slug，避免与其他 PEFT checkpoint 共用输出。
@@ -72,8 +76,9 @@ pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol
 - `internvl3_78b` 只允许阶段一静态检查，阶段二和阶段三由脚本强制拒绝。
 - 本轮阶段三不测两个 API、Qwen PEFT 和两个 70B+ 模型；`qwen25_vl_72b` 的阶段一/二结果保留，
   但阶段三与 `internvl3_78b` 一样由脚本拒绝。
+- 原 13 轨仍是串行脚本默认计划；四款 Qwen3-VL 使用同一脚本的 `--qwen3` 计划。
 
-阶段三 13 条本地轨推荐使用串行入口；它自动管理 vLLM 服务、失败恢复、watchdog 和 GPU 释放：
+阶段三固定获准本地轨使用串行入口；实际名单和排除项以 `--list` 及阶段三 runbook 为准：
 
 ```bash
 bash scripts/msmu/run_stage3_serial_inference.sh --list
@@ -83,10 +88,24 @@ bash scripts/msmu/run_stage3_serial_inference.sh
 bash scripts/msmu/run_stage3_serial_inference.sh --status
 ```
 
-三个阶段共用 tmux session `msmu`。当前 Qwen 窗口固定为：
+四款 Qwen3-VL 补测：
+
+```bash
+bash scripts/msmu/run_stage3_serial_inference.sh --qwen3 --list
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_stage3_serial_inference.sh --qwen3
+bash scripts/msmu/run_stage3_serial_inference.sh --qwen3 --check
+bash scripts/msmu/run_stage3_serial_inference.sh --qwen3
+bash scripts/msmu/run_stage3_serial_inference.sh --qwen3 --status
+```
+
+三个阶段共用 tmux session `msmu`。Qwen 窗口建议命名为：
 
 ```text
 12-qwen-base
 21-qwen32b
 22-qwen72b
+23-qwen3-2b
+24-qwen3-4b
+25-qwen3-8b
+26-qwen3-32b
 ```

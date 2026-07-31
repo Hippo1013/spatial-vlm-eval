@@ -223,7 +223,12 @@ def indexed_rows_error(
     return None
 
 
-def complete_state_errors(predictions: Path, score_dir: Path) -> list[str]:
+def complete_state_errors(
+    predictions: Path,
+    score_dir: Path,
+    *,
+    expected_protocol: str = SCORER_PROTOCOL,
+) -> list[str]:
     errors: list[str] = []
     paths = {name: score_dir / name for name in CANONICAL_SCORE_FILES}
     summary_path = paths["summary.json"]
@@ -261,7 +266,7 @@ def complete_state_errors(predictions: Path, score_dir: Path) -> list[str]:
         == MSMU_OFFICIAL_TEST_SIZE
     )
     summary_checks = {
-        "protocol": summary.get("protocol") == SCORER_PROTOCOL,
+        "protocol": summary.get("protocol") == expected_protocol,
         "publishable": summary.get("publishable") is True,
         "status": summary.get("status") == "complete",
         "result_kind": summary.get("result_kind")
@@ -343,7 +348,7 @@ def complete_state_errors(predictions: Path, score_dir: Path) -> list[str]:
 
     if paths["score.log"].stat().st_size == 0:
         errors.append("score.log is empty")
-    if predictions.parent.name != SCORER_PROTOCOL:
+    if predictions.parent.name != expected_protocol:
         errors.append("prediction parent no longer matches the scorer protocol")
     return errors
 

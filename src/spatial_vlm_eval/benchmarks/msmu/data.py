@@ -204,18 +204,38 @@ class QwenGenerationCollator:
         processor: Any,
         image_min_pixels: int | None = None,
         image_max_pixels: int | None = 112896,
+        pixel_config_style: str = "legacy_attrs",
     ) -> None:
         self.processor = processor
         self.tokenizer = processor.tokenizer
         self.tokenizer.padding_side = "left"
         if self.tokenizer.pad_token_id is None:
             self.tokenizer.pad_token = self.tokenizer.eos_token
-        if image_min_pixels is not None:
-            self.processor.image_processor.min_pixels = int(image_min_pixels)
-        if image_max_pixels is not None:
-            self.processor.image_processor.max_pixels = int(image_max_pixels)
+        if pixel_config_style == "legacy_attrs":
+            if image_min_pixels is not None:
+                self.processor.image_processor.min_pixels = int(image_min_pixels)
+            if image_max_pixels is not None:
+                self.processor.image_processor.max_pixels = int(image_max_pixels)
+        elif pixel_config_style == "size_edges":
+            if image_min_pixels is None or image_max_pixels is None:
+                raise ValueError("size_edges pixel config requires both min and max pixels")
+            self.processor.image_processor.size = {
+                "shortest_edge": int(image_min_pixels),
+                "longest_edge": int(image_max_pixels),
+            }
+        else:
+            raise ValueError(f"Unknown Qwen pixel_config_style: {pixel_config_style!r}")
 
     def __call__(self, features: Sequence[MSMUModelInput]) -> dict[str, Any]:
+        if not features:
+            raise ValueError("Qwen generation batch must contain at least one MSMU input")
+        for feature in features:
+            if "<image>" in feature.question:
+                raise ValueError("Qwen model input still contains the literal <image> placeholder")
+            if feature.question != feature.question.strip():
+                raise ValueError("Qwen model input question is not outer-whitespace cleaned")
+            if getattr(feature.image, "mode", None) != "RGB":
+                raise ValueError("Qwen model input must contain exactly one RGB image")
         texts = [
             self.processor.apply_chat_template(
                 qwen_user_messages(feature),
@@ -230,6 +250,20 @@ class QwenGenerationCollator:
             padding=True,
             return_tensors="pt",
         )
+        pixel_values = encoded.get("pixel_values")
+        if pixel_values is None:
+            raise ValueError("Qwen processor returned no pixel_values")
+        numel = getattr(pixel_values, "numel", None)
+        if callable(numel):
+            if int(numel()) <= 0:
+                raise ValueError("Qwen processor returned empty pixel_values")
+        elif len(pixel_values) <= 0:
+            raise ValueError("Qwen processor returned empty pixel_values")
+        image_grid_thw = encoded.get("image_grid_thw")
+        if image_grid_thw is None or len(image_grid_thw) != len(features):
+            raise ValueError(
+                "Qwen processor must return exactly one image_grid_thw row per MSMU input"
+            )
         return {
             "model_inputs": dict(encoded),
             "indices": [int(feature.index) for feature in features],

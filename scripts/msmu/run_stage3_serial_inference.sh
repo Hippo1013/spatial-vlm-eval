@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Run every approved local MSMU stage-3 inference track sequentially.
+# Run one locked MSMU stage-3 inference plan sequentially.
 #
 # This script deliberately performs inference + full validation only. Scoring is
 # a separate phase because the text-only judge should be loaded after every
@@ -10,7 +10,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 STAGE3_SCRIPT="${SCRIPT_DIR}/run_manual_stage3.sh"
 
-models=(
+legacy_models=(
   llava_next_mistral_7b
   llava_next_yi_34b
   internvl3_8b
@@ -26,27 +26,96 @@ models=(
   spatialbot_native
 )
 
+qwen3_models=(
+  qwen3_vl_2b
+  qwen3_vl_4b
+  qwen3_vl_8b
+  qwen3_vl_32b
+)
+
+plan="legacy13"
+operation="run"
+operation_selected=0
+while (( $# > 0 )); do
+  case "$1" in
+    --qwen3)
+      if [[ "${plan}" != "legacy13" ]]; then
+        echo "[msmu-batch] only one inference plan may be selected" >&2
+        exit 2
+      fi
+      plan="qwen3"
+      ;;
+    --help|-h)
+      if (( operation_selected == 1 )); then
+        echo "[msmu-batch] choose only one of --help, --list, --check, or --status" >&2
+        exit 2
+      fi
+      operation="help"
+      operation_selected=1
+      ;;
+    --list)
+      if (( operation_selected == 1 )); then
+        echo "[msmu-batch] choose only one of --help, --list, --check, or --status" >&2
+        exit 2
+      fi
+      operation="list"
+      operation_selected=1
+      ;;
+    --status)
+      if (( operation_selected == 1 )); then
+        echo "[msmu-batch] choose only one of --help, --list, --check, or --status" >&2
+        exit 2
+      fi
+      operation="status"
+      operation_selected=1
+      ;;
+    --check)
+      if (( operation_selected == 1 )); then
+        echo "[msmu-batch] choose only one of --help, --list, --check, or --status" >&2
+        exit 2
+      fi
+      operation="check"
+      operation_selected=1
+      ;;
+    *)
+      echo "[msmu-batch] unknown argument: $1" >&2
+      exit 2
+      ;;
+  esac
+  shift
+done
+
+case "${plan}" in
+  legacy13) models=("${legacy_models[@]}") ;;
+  qwen3) models=("${qwen3_models[@]}") ;;
+  *) echo "[msmu-batch] internal error: unsupported plan ${plan}" >&2; exit 2 ;;
+esac
+
 print_plan() {
   printf '%s\n' "${models[@]}"
-  cat <<'EOF'
+  if [[ "${plan}" == "legacy13" ]]; then
+    cat <<'EOF'
 excluded	gpt5	API model
 excluded	gemini31pro	API model
 excluded	qwen25_vl_72b	70B+ model
 excluded	internvl3_78b	70B+ model
 excluded	qwen25_vl_peft	not part of the accepted test plan
 EOF
+  fi
 }
 
 usage() {
   cat <<'EOF'
 Usage:
   bash scripts/msmu/run_stage3_serial_inference.sh
+  bash scripts/msmu/run_stage3_serial_inference.sh --qwen3
   bash scripts/msmu/run_stage3_serial_inference.sh --list
   bash scripts/msmu/run_stage3_serial_inference.sh --check
   bash scripts/msmu/run_stage3_serial_inference.sh --status
 
-The default run performs 13 local inference tracks serially. It never calls the
-judge and never runs GPT-5, Gemini, Qwen2.5-VL-72B, InternVL3-78B, or Qwen PEFT.
+The default plan retains the original 13 local tracks. Add --qwen3 to select only
+Qwen3-VL 2B, 4B, 8B, and 32B. The selector can be combined with --list, --check,
+or --status. Neither plan calls the judge or an API model.
 
 Safety and recovery settings:
   MANUAL_DRY_RUN=1                  print the plan without using GPUs
@@ -71,31 +140,28 @@ models are skipped and the current model resumes from its fsync-backed journal.
 EOF
 }
 
-case "${1:-}" in
-  --help|-h)
+case "${operation}" in
+  help)
     usage
     exit 0
     ;;
-  --list)
+  list)
     print_plan
     exit 0
     ;;
-  --status)
+  status)
     status_only=1
     preflight_only=0
     ;;
-  --check)
+  check)
     status_only=0
     preflight_only=1
     ;;
-  "")
+  run)
     status_only=0
     preflight_only=0
     ;;
-  *)
-    usage >&2
-    exit 2
-    ;;
+  *) echo "[msmu-batch] internal error: unsupported operation ${operation}" >&2; exit 2 ;;
 esac
 
 # shellcheck disable=SC1091
@@ -147,10 +213,15 @@ if [[ "${skip_completed}" != "0" && "${skip_completed}" != "1" ]]; then
   exit 2
 fi
 
-batch_root="${OUTPUT_ROOT}/03_full987/_serial_inference"
+serial_root="${OUTPUT_ROOT}/03_full987/_serial_inference"
+if [[ "${plan}" == "legacy13" ]]; then
+  batch_root="${serial_root}"
+else
+  batch_root="${serial_root}/qwen3"
+fi
 completion_dir="${batch_root}/completed"
 log_dir="${batch_root}/logs"
-active_file="${batch_root}/active_process.env"
+active_file="${serial_root}/active_process.env"
 plan_file="${batch_root}/plan.env"
 status_file="${batch_root}/status.tsv"
 mkdir -p "${completion_dir}" "${log_dir}"
@@ -172,8 +243,11 @@ else
   plan_temporary="${plan_file}.tmp.$$"
   {
     printf 'repository_sha=%s\n' "${repository_sha}"
+    printf 'plan=%s\n' "${plan}"
     printf 'models=%s\n' "${model_csv}"
-    printf 'excluded=%s\n' "gpt5,gemini31pro,qwen25_vl_72b,internvl3_78b,qwen25_vl_peft"
+    if [[ "${plan}" == "legacy13" ]]; then
+      printf 'excluded=%s\n' "gpt5,gemini31pro,qwen25_vl_72b,internvl3_78b,qwen25_vl_peft"
+    fi
   } > "${plan_temporary}"
   mv "${plan_temporary}" "${plan_file}"
 fi
@@ -202,6 +276,7 @@ batch_log="${log_dir}/${run_timestamp}.log"
 exec > >(tee -a "${batch_log}") 2>&1
 
 echo "[msmu-batch] repository_sha=${repository_sha}"
+echo "[msmu-batch] plan=${plan}"
 echo "[msmu-batch] state=${batch_root}"
 echo "[msmu-batch] log=${batch_log}"
 echo "[msmu-batch] inference tracks=${#models[@]}; scoring is deliberately disabled"
@@ -251,36 +326,50 @@ if [[ "${manual_dry_run}" != "1" ]]; then
       configuration_errors=$(( configuration_errors + 1 ))
     fi
   done
-  for name in \
-    DATASET_ROOT \
-    LLAVA_MISTRAL_7B_MODEL LLAVA_YI_34B_MODEL \
-    INTERNVL3_8B_MODEL INTERNVL3_38B_MODEL \
-    QWEN_BASE_MODEL QWEN_32B_MODEL \
-    SSR_UPSTREAM_ROOT SSR_DEPTHPRO_ROOT BASE_MODEL SSR_VLM SSR_MIDI \
-    CLIP_MODEL SIGLIP_MODEL MAMBA_MODEL MIDI_LLM_MODEL DEPTHPRO_CHECKPOINT \
-    SPATIALRGPT_UPSTREAM_ROOT SPATIALRGPT_MODEL \
-    THREEDTHINKER_UPSTREAM_ROOT THREEDTHINKER_MODEL \
-    SPATIALBOT_UPSTREAM_ROOT SPATIALBOT_MODEL \
-    ZOEDEPTH_ROOT ZOEDEPTH_CHECKPOINT
-  do
+  required_paths=(DATASET_ROOT)
+  required_revisions=()
+  required_executables=(LATENT_PYTHON)
+  if [[ "${plan}" == "legacy13" ]]; then
+    required_paths+=(
+      LLAVA_MISTRAL_7B_MODEL LLAVA_YI_34B_MODEL
+      INTERNVL3_8B_MODEL INTERNVL3_38B_MODEL
+      QWEN_BASE_MODEL QWEN_32B_MODEL
+      SSR_UPSTREAM_ROOT SSR_DEPTHPRO_ROOT BASE_MODEL SSR_VLM SSR_MIDI
+      CLIP_MODEL SIGLIP_MODEL MAMBA_MODEL MIDI_LLM_MODEL DEPTHPRO_CHECKPOINT
+      SPATIALRGPT_UPSTREAM_ROOT SPATIALRGPT_MODEL
+      THREEDTHINKER_UPSTREAM_ROOT THREEDTHINKER_MODEL
+      SPATIALBOT_UPSTREAM_ROOT SPATIALBOT_MODEL
+      ZOEDEPTH_ROOT ZOEDEPTH_CHECKPOINT
+    )
+    required_revisions+=(QWEN_BASE_REVISION QWEN_32B_REVISION)
+    required_executables+=(
+      VLLM_PYTHON VLLM SSR_PYTHON SPATIALRGPT_PYTHON
+      THREEDTHINKER_PYTHON SPATIALBOT_PYTHON
+    )
+  else
+    required_paths+=(
+      QWEN3_2B_MODEL QWEN3_4B_MODEL QWEN3_8B_MODEL QWEN3_32B_MODEL
+    )
+    required_revisions+=(
+      QWEN3_2B_REVISION QWEN3_4B_REVISION QWEN3_8B_REVISION QWEN3_32B_REVISION
+    )
+  fi
+  for name in "${required_paths[@]}"; do
     check_required_path "${name}"
   done
-  for name in QWEN_BASE_REVISION QWEN_32B_REVISION; do
+  for name in "${required_revisions[@]}"; do
     check_required_value "${name}"
   done
-  for name in \
-    LATENT_PYTHON VLLM_PYTHON VLLM SSR_PYTHON SPATIALRGPT_PYTHON \
-    THREEDTHINKER_PYTHON SPATIALBOT_PYTHON
-  do
+  for name in "${required_executables[@]}"; do
     check_required_executable "${name}"
   done
   if (( configuration_errors > 0 )); then
     echo "[msmu-batch] configuration preflight failed with ${configuration_errors} error(s); no model was started" >&2
     exit 2
   fi
-  exec 9>"${batch_root}/batch.lock"
+  exec 9>"${serial_root}/batch.lock"
   if ! flock -n 9; then
-    echo "[msmu-batch] another serial inference batch already holds ${batch_root}/batch.lock" >&2
+    echo "[msmu-batch] another serial inference batch already holds ${serial_root}/batch.lock" >&2
     exit 4
   fi
 fi
@@ -427,6 +516,10 @@ model_run_slug() {
     internvl3_38b) printf 'internvl3-38b-vllm' ;;
     qwen25_vl_base) printf 'qwen25-vl-base' ;;
     qwen25_vl_32b) printf 'qwen25-vl-32b' ;;
+    qwen3_vl_2b) printf 'qwen3-vl-2b' ;;
+    qwen3_vl_4b) printf 'qwen3-vl-4b' ;;
+    qwen3_vl_8b) printf 'qwen3-vl-8b' ;;
+    qwen3_vl_32b) printf 'qwen3-vl-32b' ;;
     ssr) printf 'ssr-rgb-only' ;;
     ssr_native) printf 'ssr-native' ;;
     spatialrgpt) printf 'spatialrgpt-rgb-only' ;;
@@ -657,12 +750,19 @@ if [[ "${preflight_only}" == "1" ]]; then
     echo "[msmu-batch] preflight failed: port 18081 is already occupied; existing service was left untouched" >&2
     exit 4
   fi
-  preflight_pids="$(gpu_compute_pids "0,1")"
+  required_gpu_devices="0"
+  for model in "${models[@]}"; do
+    if [[ "$(model_devices "${model}")" == "0,1" ]]; then
+      required_gpu_devices="0,1"
+      break
+    fi
+  done
+  preflight_pids="$(gpu_compute_pids "${required_gpu_devices}")"
   if [[ -n "${preflight_pids}" ]]; then
     echo "[msmu-batch] preflight failed: GPU compute processes were left untouched: ${preflight_pids//$'\n'/,}" >&2
     exit 4
   fi
-  echo "[msmu-batch] preflight passed: configuration, executables, lock, port 18081, and GPUs 0,1 are ready"
+  echo "[msmu-batch] preflight passed: plan=${plan}; configuration, executables, lock, port 18081, and GPUs ${required_gpu_devices} are ready"
   exit 0
 fi
 

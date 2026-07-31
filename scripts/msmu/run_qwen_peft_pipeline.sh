@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Qwen/PEFT inference, subset-aware validation, and optional full-split scoring.
+# Qwen-VL inference, subset-aware validation, and optional full-split scoring.
 
 set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

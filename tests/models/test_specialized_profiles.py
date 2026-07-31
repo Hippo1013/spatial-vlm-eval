@@ -48,8 +48,8 @@ from spatial_vlm_eval.models.three_d_thinker.infer import (
 
 
 class ProfileRegistryTest(unittest.TestCase):
-    def test_registry_contains_exactly_seventeen_unique_protocols(self):
-        self.assertEqual(len(PROFILES), 17)
+    def test_registry_contains_exactly_twenty_one_unique_protocols(self):
+        self.assertEqual(len(PROFILES), 21)
         protocols = [profile.inference_protocol for profile in PROFILES.values()]
         self.assertEqual(len(protocols), len(set(protocols)))
         self.assertTrue(all(protocol.startswith("msmu_") for protocol in protocols))
@@ -71,6 +71,8 @@ class ProfileRegistryTest(unittest.TestCase):
         self.assertFalse(PROFILES["internvl3_78b"].deployable_on_two_a800_80gb)
         self.assertEqual(PROFILES["qwen25_vl_32b"].default_tensor_parallel_size, 1)
         self.assertEqual(PROFILES["qwen25_vl_72b"].default_tensor_parallel_size, 2)
+        for key in ["qwen3_vl_2b", "qwen3_vl_4b", "qwen3_vl_8b", "qwen3_vl_32b"]:
+            self.assertEqual(PROFILES[key].default_tensor_parallel_size, 1)
 
     def test_ssr_auxiliary_stack_is_locked_to_the_checkpoint_dimensions(self):
         self.assertEqual(SSR_BASE_MODEL_ID, "Qwen/Qwen2.5-VL-7B-Instruct")

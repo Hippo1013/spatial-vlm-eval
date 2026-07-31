@@ -113,6 +113,17 @@ validator、judge cache key、失败重试、阈值、逐样本得分与 macro-8
 候选在启动后冻结；运行期间新出现的 prediction 留到下一批。canonical `summary.json` 是唯一完成
 依据，不创建额外完成标记，也不在日志中记录 API key。
 
+结果报告生成器递归发现 `scores/<scorer-protocol>/summary.json`，不限定当前 scorer protocol，也不
+维护模型名单。每条候选必须同时通过对应 protocol 的 canonical 完成检查、完整 publication gates、
+推理 metadata 与目录 protocol 一致性，以及八类 accuracy 对 macro-8 的复算；不完整 summary 只在
+`--list` 中报告，不能静默进入表格。报告可按 metadata profile 精确筛选；精简表不显示 protocol
+列，因此一次只允许一个 scorer protocol，未指定时固定使用当前 canonical protocol，拒绝把历史和
+当前评分混入同一张表。诊断 summary 会在终端告警并跳过，筛选后没有合法评分时 fail closed。
+最终 Markdown 固定为 `# MSMU-Bench评测结果`、一行公平/原生输入说明和一张中文表；列为模型名称、
+官方论文顺序的八项指标和平均值。专用模型的公平/原生 inference track 直接标在模型名称中；完整 revision、
+inference protocol、scorer protocol 与 result kind 仍以已经校验的 metadata/summary 和结果目录为
+canonical provenance，不复制到展示表。
+
 正式评分前可用 `build_stage3_answer_audit.py` 只读加载获准批次的完整 validator 和 prediction，
 对所有轨抽取同一组 index 并导出人工抽查文档。它不参与评分，产物写入 Git 忽略的 `outputs/`。
 

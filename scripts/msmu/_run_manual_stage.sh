@@ -25,6 +25,10 @@ qwen25_vl_base
 qwen25_vl_32b
 qwen25_vl_72b
 qwen25_vl_peft
+qwen3_vl_2b
+qwen3_vl_4b
+qwen3_vl_8b
+qwen3_vl_32b
 ssr
 ssr_native
 spatialrgpt
@@ -269,6 +273,40 @@ case "${model}" in
     checkpoint_name="$(basename "${QWEN_PEFT_CHECKPOINT}")"
     run_slug="qwen25-vl-peft-$(slugify "${checkpoint_parent}-${checkpoint_name}")"
     ;;
+  qwen3_vl_2b)
+    model_kind="qwen"
+    profile="qwen3_vl_2b"
+    run_slug="qwen3-vl-2b"
+    qwen_model="${QWEN3_2B_MODEL:-}"
+    qwen_revision="${QWEN3_2B_REVISION:-}"
+    default_devices="0"
+    ;;
+  qwen3_vl_4b)
+    model_kind="qwen"
+    profile="qwen3_vl_4b"
+    run_slug="qwen3-vl-4b"
+    qwen_model="${QWEN3_4B_MODEL:-}"
+    qwen_revision="${QWEN3_4B_REVISION:-}"
+    default_devices="0"
+    ;;
+  qwen3_vl_8b)
+    model_kind="qwen"
+    profile="qwen3_vl_8b"
+    run_slug="qwen3-vl-8b"
+    qwen_model="${QWEN3_8B_MODEL:-}"
+    qwen_revision="${QWEN3_8B_REVISION:-}"
+    default_devices="0"
+    ;;
+  qwen3_vl_32b)
+    model_kind="qwen"
+    profile="qwen3_vl_32b"
+    run_slug="qwen3-vl-32b"
+    qwen_model="${QWEN3_32B_MODEL:-}"
+    qwen_revision="${QWEN3_32B_REVISION:-}"
+    default_devices="0"
+    qwen_batch_size="1"
+    qwen_min_free_gpu_mib="75000"
+    ;;
   ssr)
     model_kind="ssr"
     profile="ssr"
@@ -432,6 +470,9 @@ run_model_pipeline() {
       )
       if [[ "${model_kind}" == "qwen_peft" ]]; then
         qwen_args+=(CHECKPOINT="${QWEN_PEFT_CHECKPOINT}" CHECKPOINT_REVISION="${QWEN_PEFT_REVISION:-}")
+      fi
+      if [[ "${target_mode}" == "canary" ]]; then
+        qwen_args+=(QWEN_VISION_CANARY=1)
       fi
       qwen_args+=(bash "${SCRIPT_DIR}/run_qwen_peft_pipeline.sh")
       run_command "${qwen_args[@]}"

@@ -30,6 +30,14 @@ class ManualStageScriptTest(unittest.TestCase):
             "QWEN_32B_REVISION": "qwen-32b-revision",
             "QWEN_72B_MODEL": temporary / "qwen-72b",
             "QWEN_72B_REVISION": "qwen-72b-revision",
+            "QWEN3_2B_MODEL": temporary / "qwen3-2b",
+            "QWEN3_2B_REVISION": "qwen3-2b-revision",
+            "QWEN3_4B_MODEL": temporary / "qwen3-4b",
+            "QWEN3_4B_REVISION": "qwen3-4b-revision",
+            "QWEN3_8B_MODEL": temporary / "qwen3-8b",
+            "QWEN3_8B_REVISION": "qwen3-8b-revision",
+            "QWEN3_32B_MODEL": temporary / "qwen3-32b",
+            "QWEN3_32B_REVISION": "qwen3-32b-revision",
             "QWEN_PEFT_CHECKPOINT": temporary / "run-a" / "checkpoint-100",
             "LLAVA_MISTRAL_7B_MODEL": temporary / "llava-mistral",
             "LLAVA_YI_34B_MODEL": temporary / "llava-yi",
@@ -124,6 +132,7 @@ class ManualStageScriptTest(unittest.TestCase):
         self.assertIn("LIMIT=1", result.stdout)
         self.assertIn("RUN_SCORE=0", result.stdout)
         self.assertIn("SCORE_ONLY=0", result.stdout)
+        self.assertIn("QWEN_VISION_CANARY=1", result.stdout)
         self.assertIn("01_canary/qwen25-vl-base", result.stdout)
 
     def test_large_qwen_profiles_use_distinct_models_and_device_maps(self):
@@ -141,6 +150,25 @@ class ManualStageScriptTest(unittest.TestCase):
         self.assertIn("qwen-72b", qwen72.stdout)
         self.assertIn("CUDA_VISIBLE_DEVICES=0\\,1", qwen72.stdout)
         self.assertIn("DEVICE_MAP=balanced", qwen72.stdout)
+
+    def test_qwen3_supplement_uses_four_distinct_single_gpu_profiles(self):
+        for size in ("2b", "4b", "8b", "32b"):
+            with self.subTest(size=size):
+                result = self.run_stage(1, f"qwen3_vl_{size}")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"PROFILE=qwen3_vl_{size}", result.stdout)
+                self.assertIn(f"qwen3-{size}", result.stdout)
+                self.assertIn("CUDA_VISIBLE_DEVICES=0", result.stdout)
+                self.assertIn("DEVICE_MAP=single", result.stdout)
+                self.assertIn("run_qwen_peft_pipeline.sh", result.stdout)
+                self.assertIn("QWEN_VISION_CANARY=1", result.stdout)
+                if size == "32b":
+                    self.assertIn("BATCH_SIZE=1", result.stdout)
+
+    def test_qwen_stage2_does_not_repeat_the_stage1_vision_canary(self):
+        result = self.run_stage(2, "qwen3_vl_4b")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("QWEN_VISION_CANARY", result.stdout)
 
     def test_stage1_api_uses_two_samples_and_backend_specific_slug(self):
         result = self.run_stage(
@@ -224,6 +252,10 @@ class ManualStageScriptTest(unittest.TestCase):
             "qwen25_vl_base",
             "qwen25_vl_32b",
             "qwen25_vl_peft",
+            "qwen3_vl_2b",
+            "qwen3_vl_4b",
+            "qwen3_vl_8b",
+            "qwen3_vl_32b",
             "ssr",
             "ssr_native",
             "spatialrgpt",
@@ -266,6 +298,14 @@ class SerialStage3InferenceScriptTest(unittest.TestCase):
             "QWEN_BASE_REVISION": "qwen-revision",
             "QWEN_32B_MODEL": temporary / "qwen-32b",
             "QWEN_32B_REVISION": "qwen-32b-revision",
+            "QWEN3_2B_MODEL": temporary / "qwen3-2b",
+            "QWEN3_2B_REVISION": "qwen3-2b-revision",
+            "QWEN3_4B_MODEL": temporary / "qwen3-4b",
+            "QWEN3_4B_REVISION": "qwen3-4b-revision",
+            "QWEN3_8B_MODEL": temporary / "qwen3-8b",
+            "QWEN3_8B_REVISION": "qwen3-8b-revision",
+            "QWEN3_32B_MODEL": temporary / "qwen3-32b",
+            "QWEN3_32B_REVISION": "qwen3-32b-revision",
             "LLAVA_MISTRAL_7B_MODEL": temporary / "llava-mistral",
             "LLAVA_YI_34B_MODEL": temporary / "llava-yi",
             "INTERNVL3_8B_MODEL": temporary / "internvl-8b",
@@ -357,6 +397,44 @@ class SerialStage3InferenceScriptTest(unittest.TestCase):
         self.assertNotIn("RUN_SCORE=1", result.stdout)
         self.assertIn("no GPU/API/judge action was taken", result.stdout)
 
+    def test_qwen3_selector_dispatches_only_four_supplement_tracks(self):
+        listed = self.run_batch("--qwen3", "--list")
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        self.assertEqual(
+            listed.stdout.splitlines(),
+            [
+                "qwen3_vl_2b",
+                "qwen3_vl_4b",
+                "qwen3_vl_8b",
+                "qwen3_vl_32b",
+            ],
+        )
+
+        result = self.run_batch("--qwen3")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        dispatched = [
+            line.split("model=", 1)[1].split(" ", 1)[0]
+            for line in result.stdout.splitlines()
+            if line.startswith("[msmu-batch] dry-run: model=")
+        ]
+        self.assertEqual(dispatched, listed.stdout.splitlines())
+        self.assertNotIn(" serve", result.stdout)
+        self.assertIn("plan=qwen3", result.stdout)
+        self.assertIn("BATCH_SIZE=1", result.stdout)
+        self.assertIn("no GPU/API/judge action was taken", result.stdout)
+
+    def test_qwen3_status_uses_state_separate_from_default_plan(self):
+        legacy = self.run_batch("--status")
+        qwen3 = self.run_batch("--qwen3", "--status")
+        self.assertEqual(legacy.returncode, 0, legacy.stderr)
+        self.assertEqual(qwen3.returncode, 0, qwen3.stderr)
+        self.assertIn(f"state\t{self.output_root}/03_full987/_serial_inference\n", legacy.stdout)
+        self.assertIn(
+            f"state\t{self.output_root}/03_full987/_serial_inference/qwen3\n",
+            qwen3.stdout,
+        )
+        self.assertEqual(qwen3.stdout.count("pending\tqwen3_vl_"), 4)
+
     def test_invalid_watchdog_timeout_fails_before_dispatch(self):
         result = self.run_batch(
             extra_environment={"BATCH_STALL_TIMEOUT_SECONDS": "0"},
@@ -416,6 +494,84 @@ class ScoreOnlyPathResolutionTest(unittest.TestCase):
             self.assertIn("03_full987/qwen/locked-revision", completed.stdout)
             self.assertIn("predictions.jsonl", completed.stdout)
             self.assertNotIn("msmu-infer", completed.stdout)
+
+    def test_generic_qwen_wrapper_changes_only_profile_model_and_revision(self):
+        script = self.repository / "scripts" / "msmu" / "infer_qwen_peft.sh"
+        profiles = {
+            "qwen3_vl_2b": (
+                "89644892e4d85e24eaac8bacfd4f463576704203",
+                "msmu_qwen3_vl_2b_question_only_deterministic_v1",
+            ),
+            "qwen3_vl_4b": (
+                "ebb281ec70b05090aa6165b016eac8ec08e71b17",
+                "msmu_qwen3_vl_4b_question_only_deterministic_v1",
+            ),
+            "qwen3_vl_8b": (
+                "0c351dd01ed87e9c1b53cbc748cba10e6187ff3b",
+                "msmu_qwen3_vl_8b_question_only_deterministic_v1",
+            ),
+            "qwen3_vl_32b": (
+                "0cfaf48183f594c314753d30a4c4974bc75f3ccb",
+                "msmu_qwen3_vl_32b_question_only_deterministic_v1",
+            ),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            for profile, (revision, protocol) in profiles.items():
+                with self.subTest(profile=profile):
+                    environment = dict(os.environ)
+                    for name in ["CHECKPOINT", "CHECKPOINT_REVISION"]:
+                        environment.pop(name, None)
+                    environment.update(
+                        {
+                            "PROFILE": profile,
+                            "BASE_MODEL": f"/locked/{profile}",
+                            "BASE_MODEL_REVISION": revision,
+                            "DATASET_ROOT": "/locked/msmu",
+                            "OUTPUT_ROOT": directory,
+                            "RUN_NAME": f"03_full987/{profile}",
+                            "RESOLVE_PATHS_ONLY": "1",
+                        }
+                    )
+                    completed = subprocess.run(
+                        [
+                            "bash",
+                            "-c",
+                            'source "$1"; printf "%s\\n" "$OUTPUT"',
+                            "bash",
+                            str(script),
+                        ],
+                        cwd=self.repository,
+                        env=environment,
+                        check=False,
+                        capture_output=True,
+                        text=True,
+                    )
+                    self.assertEqual(completed.returncode, 0, completed.stderr)
+                    self.assertIn(revision, completed.stdout)
+                    self.assertIn(protocol, completed.stdout)
+
+    def test_qwen3_wrapper_rejects_stray_peft_checkpoint(self):
+        environment = dict(os.environ)
+        environment.update(
+            {
+                "PROFILE": "qwen3_vl_2b",
+                "BASE_MODEL": "/locked/qwen3",
+                "BASE_MODEL_REVISION": "89644892e4d85e24eaac8bacfd4f463576704203",
+                "DATASET_ROOT": "/locked/msmu",
+                "CHECKPOINT": "/wrong/peft",
+                "RESOLVE_PATHS_ONLY": "1",
+            }
+        )
+        completed = subprocess.run(
+            ["bash", "scripts/msmu/infer_qwen_peft.sh"],
+            cwd=self.repository,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("does not accept CHECKPOINT", completed.stderr)
 
 
 if __name__ == "__main__":

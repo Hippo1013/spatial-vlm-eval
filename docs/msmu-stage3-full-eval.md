@@ -26,6 +26,18 @@ spatialbot, spatialbot_native
 明确排除 GPT-5、Gemini（API）、Qwen2.5-VL-72B、InternVL3-78B（70B+）和本轮不测的 Qwen
 PEFT。Qwen2.5-VL-72B 与 InternVL3-78B 的阶段三手工入口也会拒绝执行。
 
+以上 13 轨保留为串行脚本默认计划。Qwen3-VL 2B/4B/8B/32B 在 stage 1/2 通过后单独补测：
+
+```bash
+bash scripts/msmu/run_stage3_serial_inference.sh --qwen3 --list
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_stage3_serial_inference.sh --qwen3
+bash scripts/msmu/run_stage3_serial_inference.sh --qwen3 --check
+bash scripts/msmu/run_stage3_serial_inference.sh --qwen3
+bash scripts/msmu/run_stage3_serial_inference.sh --qwen3 --status
+```
+
+`--qwen3` 只串行四条新轨，状态位于 `_serial_inference/qwen3/`，不修改默认 13 轨完成标记。
+
 ## 第一步：串行完成 13 条完整推理
 
 如需释放服务器上由本项目协作者管理的 GPU burn，先按
@@ -146,6 +158,30 @@ bash scripts/msmu/score_pending_results.sh --status
 ```
 
 完整命令见[阶段三串行评分指令](msmu-stage3-scoring-commands.md)。
+
+## 第四步：生成结果表
+
+先只读列出全部 scorer protocol 下已有评分：
+
+```bash
+bash scripts/msmu/build_results_report.sh --list
+```
+
+未指定筛选时收录当前 canonical scorer protocol 下全部通过完整 publication gates 的结果；需要
+指定模型时使用 metadata profile，参数顺序也是输出顺序：
+
+```bash
+bash scripts/msmu/build_results_report.sh \
+  --profile PROFILE_A \
+  --profile PROFILE_B
+```
+
+必要时可传入一个 `--scorer-protocol` 精确选择历史或当前评分；精简表不允许混合多个 scorer
+protocol。默认输出为 `03_full987/msmu-result.md`，文件内容固定只有标题
+`MSMU-Bench评测结果` 和一张中文表，专用模型的公平/原生轨直接标在模型名称中。
+标题与表格之间固定包含一行注释，解释公平版的统一 RGB+原题输入和原生版的同 RGB 派生官方增强。
+不完整、不可发布或 provenance 不一致的诊断 summary 会在终端告警并跳过；筛选后没有任何合法
+评分时 fail closed。
 
 ## 推荐 tmux 名称
 

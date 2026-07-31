@@ -50,7 +50,11 @@ class _Processor:
 
     def __call__(self, *, text, images, **_kwargs):
         self.images = images
-        return {"input_ids": text, "pixel_values": images}
+        return {
+            "input_ids": text,
+            "pixel_values": images,
+            "image_grid_thw": [[1, 1, 1] for _ in images],
+        }
 
 
 class InferenceInputContractTest(unittest.TestCase):
@@ -101,6 +105,44 @@ class InferenceInputContractTest(unittest.TestCase):
         self.assertNotIn("SECRET", str(rendered_messages))
         self.assertNotIn("SECOND", str(rendered_messages))
         self.assertEqual(len(processor.images), 1)
+        self.assertEqual(len(batch["model_inputs"]["image_grid_thw"]), 1)
+
+    def test_qwen3_pixel_budget_uses_official_size_edge_fields(self):
+        processor = _Processor()
+        processor.image_processor.size = {
+            "shortest_edge": 65536,
+            "longest_edge": 16777216,
+        }
+        QwenGenerationCollator(
+            processor,
+            image_min_pixels=16384,
+            image_max_pixels=147456,
+            pixel_config_style="size_edges",
+        )
+        self.assertEqual(
+            processor.image_processor.size,
+            {"shortest_edge": 16384, "longest_edge": 147456},
+        )
+
+    def test_qwen_collator_rejects_missing_image_tensors(self):
+        class MissingImageProcessor(_Processor):
+            def __call__(self, *, text, images, **_kwargs):
+                return {"input_ids": text}
+
+        with self.assertRaisesRegex(ValueError, "no pixel_values"):
+            QwenGenerationCollator(MissingImageProcessor())([self.contract.model_input(0)])
+
+    def test_qwen_collator_rejects_image_grid_count_mismatch(self):
+        class WrongGridProcessor(_Processor):
+            def __call__(self, *, text, images, **_kwargs):
+                return {
+                    "input_ids": text,
+                    "pixel_values": images,
+                    "image_grid_thw": [],
+                }
+
+        with self.assertRaisesRegex(ValueError, "exactly one image_grid_thw"):
+            QwenGenerationCollator(WrongGridProcessor())([self.contract.model_input(0)])
 
     def test_requires_exactly_one_dataset_image_placeholder(self):
         invalid = source_row()

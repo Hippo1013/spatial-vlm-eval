@@ -11,22 +11,11 @@ from PIL import Image
 
 from ...benchmarks.msmu.data import MSMUModelInput
 from ..common.runtime import atomic_write_json
+from ..common.vision_canary import SOLID_COLOR_QUESTION, validate_solid_color_answers
 from ..profiles import get_profile, profile_keys
 from .client import OpenAICompatibleAdapter
 
 PROFILE_KEYS = profile_keys("llava_next", "internvl3")
-
-
-def validate_solid_color_answers(red_answer: str, blue_answer: str) -> None:
-    red = str(red_answer).strip().lower()
-    blue = str(blue_answer).strip().lower()
-    if "red" not in red:
-        raise ValueError(f"Vision canary did not identify the red image: {red_answer!r}")
-    if "blue" not in blue:
-        raise ValueError(f"Vision canary did not identify the blue image: {blue_answer!r}")
-    if red == blue:
-        raise ValueError("Vision canary returned identical responses for red and blue images")
-
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -50,9 +39,12 @@ def main() -> None:
         served_model_name=args.served_model_name,
         timeout=args.timeout,
     )
-    question = "Name the single solid color filling this image. Answer with one English color word."
-    red = adapter.generate(MSMUModelInput(0, Image.new("RGB", (64, 64), "red"), question))
-    blue = adapter.generate(MSMUModelInput(1, Image.new("RGB", (64, 64), "blue"), question))
+    red = adapter.generate(
+        MSMUModelInput(0, Image.new("RGB", (64, 64), "red"), SOLID_COLOR_QUESTION)
+    )
+    blue = adapter.generate(
+        MSMUModelInput(1, Image.new("RGB", (64, 64), "blue"), SOLID_COLOR_QUESTION)
+    )
     validate_solid_color_answers(red.text, blue.text)
     report = {
         "passed": True,

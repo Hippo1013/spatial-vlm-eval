@@ -54,12 +54,19 @@ bash scripts/msmu/run_manual_stage2.sh gpt5
 bash scripts/msmu/run_manual_stage2.sh qwen25_vl_base
 bash scripts/msmu/run_manual_stage2.sh qwen25_vl_32b
 bash scripts/msmu/run_manual_stage2.sh qwen25_vl_72b
+bash scripts/msmu/run_manual_stage2.sh qwen3_vl_2b
+bash scripts/msmu/run_manual_stage2.sh qwen3_vl_4b
+bash scripts/msmu/run_manual_stage2.sh qwen3_vl_8b
+bash scripts/msmu/run_manual_stage2.sh qwen3_vl_32b
 bash scripts/msmu/run_manual_stage2.sh ssr_native
 bash scripts/msmu/run_manual_stage2.sh spatialbot_native
 ```
 
 `qwen25_vl_base` 是 7B；32B/72B 的单卡/双卡设置、API backend、key、PEFT checkpoint 和 GPU
 覆盖方式与阶段一相同。可用模型名：
+
+Qwen3-VL 2B/4B/8B/32B 均须在各自 stage 1 通过后独立运行本阶段；不能复用其他参数量的 smoke
+journal 或输出目录。
 
 ```bash
 bash scripts/msmu/run_manual_stage2.sh --list

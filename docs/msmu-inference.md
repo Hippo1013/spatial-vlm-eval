@@ -177,6 +177,47 @@ tokens。先核对两条 live smoke 的 provider、图片计数、generation met
 
 ## 6. Qwen 与空间专用模型
 
+### Qwen3-VL 2B / 4B / 8B / 32B（当前补测）
+
+四款模型复用现有 Qwen pipeline，只改变 `PROFILE`、锁定模型路径和 revision：
+
+```bash
+PROFILE=qwen3_vl_2b \
+BASE_MODEL="$QWEN3_2B_MODEL" \
+BASE_MODEL_REVISION="$QWEN3_2B_REVISION" \
+LIMIT=1 \
+  bash scripts/msmu/run_qwen_peft_pipeline.sh
+
+PROFILE=qwen3_vl_32b \
+BASE_MODEL="$QWEN3_32B_MODEL" \
+BASE_MODEL_REVISION="$QWEN3_32B_REVISION" \
+BATCH_SIZE=1 \
+  bash scripts/msmu/run_qwen_peft_pipeline.sh
+```
+
+日常三阶段测试优先使用：
+
+```bash
+bash scripts/msmu/run_manual_stage1.sh qwen3_vl_2b
+bash scripts/msmu/run_manual_stage1.sh qwen3_vl_4b
+bash scripts/msmu/run_manual_stage1.sh qwen3_vl_8b
+bash scripts/msmu/run_manual_stage1.sh qwen3_vl_32b
+```
+
+`.env.server` 分别提供 `QWEN3_2B_MODEL`/`QWEN3_2B_REVISION` 到
+`QWEN3_32B_MODEL`/`QWEN3_32B_REVISION`。adapter 使用官方
+`Qwen3VLForConditionalGeneration`、`AutoProcessor`、checkpoint 原生 structured-image chat
+template 和 BF16/SDPA；要求 Transformers 至少包含原生 Qwen3-VL 支持。四条轨不发送 system
+message，只输入一张 MSMU RGB 与清洗后的第一条问题。
+
+stage 1 还会先用同一 processor/model 分别识别纯红图和纯蓝图，并写入 `vision_canary.json`。该
+诊断不读取 MSMU 数据、不进入 prediction/journal，也不参与评分。
+
+本项目固定 greedy、`num_beams=1`、192 tokens 和 pixel `16384..147456`。该像素范围按 Qwen3-VL
+32-pixel spatial factor 保持 16..144 个 merged visual token，与旧 Qwen2.5-VL 的 token budget 对齐；
+不是官方更大默认分辨率或推荐 sampling profile。2B/4B/8B 默认单卡 batch size 8，32B 默认单卡
+batch size 1；真实 batch 上限仍须在 stage 1 后根据 A800 显存验证。
+
 ### Qwen2.5-VL 7B / 32B / 72B
 
 手工测试统一使用：
@@ -191,7 +232,8 @@ bash scripts/msmu/run_manual_stage1.sh qwen25_vl_72b   # 双卡 balanced，batch
 `QWEN_32B_MODEL`/`QWEN_32B_REVISION` 和 `QWEN_72B_MODEL`/`QWEN_72B_REVISION`。
 72B 必须同时通过两张 GPU 的空闲检查，不允许退化成 CPU/disk offload；三种参数量使用相同的
 structured image、原生 chat template、greedy/192-token/pixel 设置，但使用独立 inference protocol
-和输出目录。`qwen25_vl_peft` 只对应 7B base。
+和输出目录。`qwen25_vl_peft` 只对应 7B base。旧 adapter、PEFT 和历史产物继续保留用于复现，
+但不属于当前 Qwen3-VL 四模型补测计划。
 
 ### SSR
 
@@ -276,8 +318,9 @@ ZOEDEPTH_CHECKPOINT=/local/ZoeD_M12_NK.pt \
 人工执行优先使用 `run_manual_stage1.sh`、`run_manual_stage2.sh` 和
 `run_manual_stage3.sh`。阶段三评分统一使用 `score_pending_results.sh`。
 
-本轮阶段三排除 GPT-5、Gemini、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B。其余 13 条本地轨
-使用串行入口一次完成部署、完整推理、validator 和 GPU 释放：
+本轮阶段三排除 GPT-5、Gemini、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B。获准本地轨的唯一
+操作名单由阶段三 runbook 和串行脚本 `--list` 给出，并通过同一入口完成部署、完整推理、validator
+和 GPU 释放：
 
 ```bash
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_stage3_serial_inference.sh
@@ -291,8 +334,11 @@ bash scripts/msmu/run_stage3_serial_inference.sh --status
 endpoint 都只会导致有界等待/退出，不会被终止。完整参数见
 [阶段三文档](msmu-stage3-full-eval.md)。
 
+上述 13 轨是默认历史计划。Qwen3-VL 2B/4B/8B/32B 用同一串行脚本的 `--qwen3` 参数补测；
+评分仍由 `score_pending_results.sh` 从结果目录发现。
+
 服务器上由本项目协作者管理的 burn 只按 [GPU burn 启停手册](server-gpu-burn-runbook.md)操作固定
-pane。13 条完整 validator 通过后，可按阶段三文档在正式评分前生成一次固定样本答案抽查。
+pane。全部获准轨的完整 validator 通过后，可按阶段三文档在正式评分前生成一次固定样本答案抽查。
 
 评分命令：
 
@@ -306,9 +352,16 @@ bash scripts/msmu/score_pending_results.sh
 bash scripts/msmu/score_pending_results.sh --status
 ```
 
-正式 summary 必须是 987 条、八类齐全、`publishable=true`、`num_judge_failures=0`。报告表必须同时列
-`inference_protocol` 与 scorer protocol，并区分 official-compatible internal score 与 strict official
-score。完整命令见[阶段三串行评分指令](msmu-stage3-scoring-commands.md)。
+正式 summary 必须是 987 条、八类齐全、`publishable=true`、`num_judge_failures=0`。metadata、summary
+与结果目录必须同时保存 `inference_protocol` 和 scorer protocol，并区分 official-compatible internal
+score 与 strict official score。精简展示表可在逐行验证这些 provenance、一次只选择一个 scorer
+protocol，并在模型名称中区分公平/原生 track 后省略 protocol 列。完整命令见
+[阶段三串行评分指令](msmu-stage3-scoring-commands.md)。
+
+评分完成后先用 `build_results_report.sh --list` 枚举所有 scorer protocol 下的 summary，再按
+metadata profile 和一个可选 scorer protocol 生成 Markdown 表。无筛选时使用当前 canonical
+scorer protocol 并收录全部通过完整 publication gates 的评分；生成器不维护模型名单，也不会把
+不完整 summary 静默加入结果表。表格使用中文精简列，专用模型公平/原生轨在模型名称中区分。
 
 ## 8. 产物与故障恢复
 
@@ -329,6 +382,8 @@ scores/<scorer-protocol>/
 ## 9. 上游参考
 
 - [vLLM 0.19 multimodal OpenAI chat example](https://docs.vllm.ai/en/v0.19.0/examples/online_serving/openai_chat_completion_client_for_multimodal/)
+- [Qwen3-VL official repository](https://github.com/QwenLM/Qwen3-VL)、
+  [Qwen3-VL-2B-Instruct model card](https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct)
 - [OpenRouter image input](https://openrouter.ai/docs/guides/overview/multimodal/image-understanding)、
   [provider routing](https://openrouter.ai/docs/guides/routing/provider-selection)、
   [generation metadata](https://openrouter.ai/docs/api/api-reference/generations/get-generation)

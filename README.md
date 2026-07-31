@@ -2,49 +2,46 @@
 
 用于可复现地评测通用与空间专用视觉语言模型的多 benchmark 工作区。仓库当前实现
 MSMU-Bench official test 987 条的受限输入合同、统一可恢复推理、严格 prediction validator 和本地
-judge v3 scorer。模型适配与 benchmark 评分分层，任何模型都不能收到 reference、类型标签、其他 QA
+judge v4 scorer。模型适配与 benchmark 评分分层，任何模型都不能收到 reference、类型标签、其他 QA
 或同图历史。
 
-## 当前状态
+## 当前能力
 
 - Benchmark：MSMU-Bench official `test` split（987 条）。
-- Qwen：Qwen2.5-VL 7B base/PEFT、32B、72B deterministic profile；72B 在两张 A800 上均衡加载。
-- 新增适配：GPT-5、Gemini 3.1 Pro、2 个 LLaVA-NeXT、3 个 InternVL3，以及 SSR、
-  SpatialRGPT、3DThinker、SpatialBot；连同 3 个 Qwen 参数量共注册 17 个 inference profile。
-- 主指标：八个 official type accuracy 的非加权平均 `official_macro8_accuracy`。
-- scorer protocol 保持为
-  `sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length`。
-- 当前分数性质：official-compatible internal score，不是 GPT-4-Turbo strict official score。
-- adapter、contract/mock 回归、静态 processor/provenance 验证和运行编排已完成；本轮获准的
-  13 条本地轨已生成完整 987 条结果并通过正式 validator，local judge 评分尚未执行。
+- 推理：多模型 fair/native profile、输入审计、fsync journal、断点恢复和原子输出。
+- 验收：严格六字段 prediction validator，debug subset 与正式 full split 强制分离。
+- 评分：八类非加权 `official_macro8_accuracy`，目录驱动串行评分和 publication gates。
+- 结果性质：official-compatible internal score，不是 GPT-4-Turbo strict official score。
 
-完整 profile、权重 revision 和部署状态见 [模型矩阵](docs/model-matrix.md)，命令与服务器验收顺序见
-[MSMU 多模型推理手册](docs/msmu-inference.md)。人工测试从[三阶段入口](docs/msmu-all-model-test-commands.md)
-开始，依次执行[阶段一](docs/msmu-stage1-canary.md)、[阶段二](docs/msmu-stage2-smoke8.md)和
-[阶段三](docs/msmu-stage3-full-eval.md)。每个阶段均有统一模型入口脚本，会自动加载 `.env.server`；
-无需逐行复制各 adapter 的环境变量和 pipeline 命令。
+profile inventory、锁定 revision 和注明日期的已验证状态只在[模型矩阵](docs/model-matrix.md)维护；服务器
+当前状态以结果目录中的 `status.tsv`、validator、metadata 和 `summary.json` 为准，不从 README 推断。
+完整文档分类与更新规则见[文档地图](docs/README.md)，语义变更见 [CHANGELOG](CHANGELOG.md)。
 
-阶段三已用 `scripts/msmu/run_stage3_serial_inference.sh` 串行完成当前获准的 13 条本地推理轨：
-逐个部署、完整 987 条、正式 validator、释放 GPU 后再进入下一条，并支持 watchdog、失败重试与
-journal 续跑。当前批次明确排除两个 API、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B；下一步是
-用独立 judge 执行目录驱动的串行评分。
+人工测试从[三阶段入口](docs/msmu-all-model-test-commands.md)开始；每个阶段均有统一入口脚本，会自动
+加载 `.env.server`。阶段三默认范围与 Qwen3 补测顺序以
+[`run_stage3_serial_inference.sh`](scripts/msmu/run_stage3_serial_inference.sh)的 `--list` /
+`--qwen3 --list` 及
+[阶段三 runbook](docs/msmu-stage3-full-eval.md)为准。
 
 ## 仓库结构
 
 ```text
 src/spatial_vlm_eval/
-├── benchmarks/msmu/          # 数据所有权、validator、smoke selector、v3 scorer
+├── benchmarks/msmu/          # 数据所有权、validator、smoke selector、v4 scorer
 └── models/
     ├── common/               # 输入审计、journal、resume、原子 finalization
     ├── openai_compatible/    # OpenRouter/OpenAI/Google/vLLM
+    ├── qwen_vl/              # Qwen2.5-VL/Qwen3-VL 共享 Transformers 核心
     ├── qwen25_vl/
+    ├── qwen3_vl/
     ├── ssr/
     ├── spatialrgpt/
     ├── three_d_thinker/
     └── spatialbot/
 scripts/msmu/                 # 环境、GPU preflight、服务与 pipeline 编排
 tests/                        # 协议不变量和 bug 回归
-docs/                         # canonical 协议、模型矩阵、部署说明与来源记录
+docs/                         # 文档地图、canonical 协议、runbook、ADR 与 troubleshooting
+CHANGELOG.md                  # 影响结果、行为或操作方式的语义变化
 ```
 
 模型、dataset、checkpoint、API key、prediction、judge cache、论文 PDF 和服务器环境 manifest 均不
@@ -124,7 +121,10 @@ INDICES="$INDICES" \
 指定 `INDICES` 或 `LIMIT` 时 pipeline 会启用 validator 的 `--allow-subset`，并拒绝评分。正式运行必须
 先 `unset INDICES LIMIT`，完整生成 `0..986` 并通过 validator。全部阶段三结果完成后，使用独立
 judge 和 `scripts/msmu/score_pending_results.sh` 串行评分；命令见
-[阶段三串行评分指令](docs/msmu-stage3-scoring-commands.md)。
+[阶段三串行评分指令](docs/msmu-stage3-scoring-commands.md)。已有评分可由
+`scripts/msmu/build_results_report.sh` 跨 scorer protocol 发现，并在完整 publication gates 与
+metadata 检查后，为单一 scorer protocol 生成一份只含标题、公平/原生说明和中文精简表格的
+Markdown 报告。
 
 ## 严格输出合同
 
@@ -148,4 +148,5 @@ find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n
 ```
 
 协议细节见 [MSMU canonical protocol](docs/benchmarks/msmu/protocol.md)，分层边界见
-[架构说明](docs/architecture.md)。协作者和 coding agent 修改前必须阅读 [AGENTS.md](AGENTS.md)。
+[架构说明](docs/architecture.md)。协作者从[文档地图](docs/README.md)选择任务相关材料；coding agent
+修改前必须阅读 [AGENTS.md](AGENTS.md) 并按其中的触发路由执行。
