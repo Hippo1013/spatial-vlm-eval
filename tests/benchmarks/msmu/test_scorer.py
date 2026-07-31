@@ -141,6 +141,54 @@ class JudgeCacheReliabilityTest(unittest.TestCase):
         self.assertIsNotNone(failure)
         self.assertIn("timed out", failure["error"])
 
+    def test_malformed_output_is_cached_as_zero_for_every_judge_route(self):
+        rows = [
+            judge_row("width"),
+            {
+                **judge_row("position"),
+                "task_family": "grounding",
+                "question": "What are the coordinates of the chair?",
+            },
+            {
+                **judge_row("position"),
+                "task_family": "grounding",
+                "question": "What object is at (0.5, 0.5)?",
+            },
+            judge_row("zero"),
+        ]
+        for row in rows:
+            with self.subTest(question=row["question"]):
+                cached_row, failure = judge_cache_candidate(
+                    row,
+                    {
+                        "__parse_error__": "judge response is malformed",
+                        "__raw_content__": "not valid JSON",
+                    },
+                    base_url="http://127.0.0.1:18080/v1",
+                    model="msmu-judge",
+                )
+                self.assertIsNone(failure)
+                self.assertIsNotNone(cached_row)
+                judge = cached_row["judge"]
+                self.assertEqual(
+                    judge["__score_fallback__"],
+                    scorer.MALFORMED_JUDGE_ZERO_FALLBACK,
+                )
+                self.assertTrue(
+                    cache_entry_is_usable(
+                        row,
+                        cached_row,
+                        expected_cache_key=cached_row["cache_key"],
+                    )
+                )
+                score, details = scorer.score_judge_response(row, judge)
+                self.assertEqual(score, 0.0)
+                self.assertFalse(details["match_success"])
+                self.assertEqual(
+                    details["judge_fallback"],
+                    scorer.MALFORMED_JUDGE_ZERO_FALLBACK,
+                )
+
     def test_schema_valid_response_can_be_cached_and_reused(self):
         row = judge_row()
         cached_row, failure = judge_cache_candidate(

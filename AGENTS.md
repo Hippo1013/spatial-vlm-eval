@@ -55,7 +55,7 @@ benchmark 的协议文档和相关测试。
 当前 scorer protocol id：
 
 ```text
-sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length
+sdvlm_official_compat_local_judge_v4_grounding_split_strict_quant_length_malformed_zero
 ```
 
 改变 prompt、grounding 路由、阈值、列表长度语义、聚合方式或 judge 身份进入 cache key 的规则时，

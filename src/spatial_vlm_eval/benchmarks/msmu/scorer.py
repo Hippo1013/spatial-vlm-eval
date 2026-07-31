@@ -39,11 +39,14 @@ OFFICIAL_QUANT_TYPES = {
     "refer_obj_estimation",
 }
 OFFICIAL_QUAL_TYPES = {"relative_position", "scale_compare", "existence"}
-# The judge prompt/cache protocol is unchanged by deterministic post-processing
-# fixes. Keeping its identifier stable lets an existing judge_cache.jsonl be
-# reused when only the scoring logic is corrected.
-JUDGE_CACHE_PROTOCOL = "sdvlm_official_compat_local_judge_v2_grounding_split"
-SCORER_PROTOCOL = "sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length"
+JUDGE_CACHE_PROTOCOL = (
+    "sdvlm_official_compat_local_judge_v3_grounding_split_malformed_zero"
+)
+SCORER_PROTOCOL = (
+    "sdvlm_official_compat_local_judge_v4_grounding_split_"
+    "strict_quant_length_malformed_zero"
+)
+MALFORMED_JUDGE_ZERO_FALLBACK = "malformed_judge_response_zero"
 MSMU_OFFICIAL_TEST_SIZE = 987
 
 
@@ -408,6 +411,8 @@ def judge_response_error(row: dict[str, Any], response: Any) -> str | None:
 
     if not isinstance(response, dict):
         return "judge response is not a JSON object"
+    if response.get("__score_fallback__") == MALFORMED_JUDGE_ZERO_FALLBACK:
+        return None
     if "__parse_error__" in response:
         return f"judge request/parse failure: {response['__parse_error__']}"
 
@@ -462,19 +467,30 @@ def judge_cache_candidate(
 ) -> tuple[dict[str, Any] | None, dict[str, Any] | None]:
     """Build either a successful cache row or a non-cacheable failure row."""
 
-    error = judge_response_error(row, result)
+    judge_result = result
+    if (
+        isinstance(result, dict)
+        and "__parse_error__" in result
+        and result.get("__raw_content__") is not None
+    ):
+        judge_result = {
+            **result,
+            "__score_fallback__": MALFORMED_JUDGE_ZERO_FALLBACK,
+        }
+
+    error = judge_response_error(row, judge_result)
     if error is not None:
         return None, {
             "index": int(row["index"]),
             "error": error,
-            "judge": result,
+            "judge": judge_result,
         }
     return {
         "index": int(row["index"]),
         "cache_key": cache_key(row, base_url=base_url, model=model),
         "judge_model": model,
         "judge_base_url": base_url,
-        "judge": result,
+        "judge": judge_result,
     }, None
 
 
@@ -721,6 +737,32 @@ def official_qual_score(judge: dict[str, Any]) -> tuple[float, dict[str, Any]]:
         return 0.0, {"match_success": False, "official_mark": "N/A", "error": str(exc)}
 
 
+def score_judge_response(
+    row: dict[str, Any],
+    judge: dict[str, Any],
+) -> tuple[float, dict[str, Any]]:
+    """Score one schema-valid or protocol-approved zero-fallback response."""
+
+    kind = official_type(row)
+    if judge.get("__score_fallback__") == MALFORMED_JUDGE_ZERO_FALLBACK:
+        details: dict[str, Any] = {
+            "match_success": False,
+            "delta": None,
+            "judge_fallback": MALFORMED_JUDGE_ZERO_FALLBACK,
+            "error": str(judge.get("__parse_error__") or "malformed judge response"),
+        }
+        if kind == "grounding":
+            details["grounding_subtype"] = grounding_subtype(row["question"])
+        if kind in OFFICIAL_QUAL_TYPES:
+            details["official_mark"] = "N/A"
+        return 0.0, details
+    if kind in OFFICIAL_QUANT_TYPES:
+        return official_quant_score(kind, judge, row["question"])
+    if kind in OFFICIAL_QUAL_TYPES:
+        return official_qual_score(judge)
+    raise ValueError(f"Unknown official type: {kind}")
+
+
 def main() -> None:
     args = parse_args()
     output_dir = Path(args.output_dir).resolve()
@@ -843,16 +885,15 @@ def main() -> None:
     family_scores: dict[str, list[float]] = defaultdict(list)
     official_type_scores: dict[str, list[float]] = defaultdict(list)
     match_successes = []
+    malformed_judge_zero_indices = []
     for row in predictions:
         kind = official_type(row)
         judge = cached[int(row["index"])]["judge"]
+        score, details = score_judge_response(row, judge)
         if kind in OFFICIAL_QUANT_TYPES:
-            score, details = official_quant_score(kind, judge, row["question"])
             match_successes.append(float(details.get("match_success", False)))
-        elif kind in OFFICIAL_QUAL_TYPES:
-            score, details = official_qual_score(judge)
-        else:
-            raise ValueError(f"Unknown official type: {kind}")
+        if details.get("judge_fallback") == MALFORMED_JUDGE_ZERO_FALLBACK:
+            malformed_judge_zero_indices.append(int(row["index"]))
         family = str(row["task_family"])
         family_scores[family].append(score)
         official_type_scores[kind].append(score)
@@ -904,6 +945,8 @@ def main() -> None:
         "publication_gates": publication_gates,
         "publication_gate_failures": publication_gate_failures,
         "num_judge_failures": 0,
+        "num_malformed_judge_zero_fallbacks": len(malformed_judge_zero_indices),
+        "malformed_judge_zero_fallback_indices": malformed_judge_zero_indices,
         "num_samples": len(scored_rows),
         "micro_accuracy": sum(row["score"] for row in scored_rows) / len(scored_rows),
         "official_macro8_accuracy": official_macro8,
@@ -921,6 +964,7 @@ def main() -> None:
             "Quantitative/qualitative prompts add JSON-only constraints and judge temperature is fixed to zero.",
             "Grounding uses subtype-specific prompts; object-at-coordinate uses judge semantic marking rather than official MiniLM cosine similarity.",
             "For non-grounding numeric lists, a response shorter than the reference is a match failure; extra trailing response values are ignored, matching SD-VLM evaluate_final.py.",
+            "After retries, a returned judge response that remains unparsable or schema-invalid is cached and scored as zero; transport failures with no judge content still block publication.",
             "This protocol must not be described as differing from official evaluation only by judge model.",
         ],
     }

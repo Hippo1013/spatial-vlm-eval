@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Source this file after setting RUN_NAME, MODEL_REVISION_TAG, and INFERENCE_PROTOCOL.
 
-SCORER_PROTOCOL="${SCORER_PROTOCOL:-sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length}"
+SCORER_PROTOCOL="${SCORER_PROTOCOL:-sdvlm_official_compat_local_judge_v4_grounding_split_strict_quant_length_malformed_zero}"
 
 if [[ -z "${OUTPUT:-}" ]]; then
   : "${OUTPUT_ROOT:?Set OUTPUT_ROOT when OUTPUT is not provided}"

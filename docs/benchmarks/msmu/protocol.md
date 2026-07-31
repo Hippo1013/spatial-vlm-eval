@@ -5,12 +5,12 @@
 当前 canonical scorer：
 
 ```text
-sdvlm_official_compat_local_judge_v3_grounding_split_strict_quant_length
+sdvlm_official_compat_local_judge_v4_grounding_split_strict_quant_length_malformed_zero
 ```
 
 准确描述为：
 
-> SD-VLM official-compatible thresholds/macro-8 + local judge + grounding split fix + strict quantitative length
+> SD-VLM official-compatible thresholds/macro-8 + local judge + grounding split fix + strict quantitative length + malformed judge response zero fallback
 
 它用于项目内部消融和横向比较，不是 strict official GPT-4-Turbo score。
 
@@ -191,11 +191,23 @@ official_macro8_accuracy = mean(
 cache key 包含 protocol、official type、question、reference、prediction、完整 judge prompt、judge
 model 和 endpoint。更换上述任一内容不会复用旧 response。每个模型和协议仍必须使用独立目录。
 
-只有能够解析且满足对应任务响应 schema 的 judge 结果才写入 `judge_cache.jsonl`。HTTP/超时、JSON
-解析或响应 schema 失败写入独立的 `judge_failures.jsonl`，不得作为完成项缓存；已有 cache 中的
-失败记录也必须视为 pending 并在下次运行时重试。只要存在未解决 judge 失败，scorer 必须写出
-`publishable == false` 的诊断 summary 并以非零状态退出。该可靠性修复不改变合法 judge response
-的评分语义，因此保留当前 scorer/cache protocol id。
+能够解析且满足对应任务响应 schema 的 judge 结果正常写入 `judge_cache.jsonl`。完成配置的重试后，
+如果 judge endpoint 已经返回文本，但该文本仍无法解析或不满足当前任务的响应 schema，则按服务器
+参考 scorer 的保守逻辑，将它标记为 `malformed_judge_response_zero`、写入 cache，并在所有 judge
+路径中把该样本记为 0 分。该 fallback 覆盖非 grounding 数值、coordinate grounding、
+object-at-coordinate grounding 和定性任务；它不进入 `judge_failures.jsonl`，因此不会阻断后续样本
+或整轨 publication。summary 必须报告 fallback 数量与 index，逐样本记录必须保留解析错误和 judge
+原始文本，便于以后人工复核。
+
+如果所有重试均没有得到任何 judge 文本，例如连接失败或超时，则仍写入
+`judge_failures.jsonl`，不得缓存或记成模型 0 分。未处理的 worker 异常也保持 hard failure。只要
+存在这类未解决基础设施失败，scorer 必须写出 `publishable == false` 的诊断 summary 并以非零状态
+退出。
+
+上述 fallback 改变了 malformed judge response 的评分与 cache 语义，因此 scorer protocol 从 v3
+升级为 v4，judge cache protocol 升级为
+`sdvlm_official_compat_local_judge_v3_grounding_split_malformed_zero`。旧 protocol 的 summary、
+scored rows 和 judge cache 不得作为新 protocol 结果复用。
 
 judge JSON 解析优先接受完整对象。确定性恢复仅额外接受响应开头、带引号且独占第一行的
 `"your_mark": 0` 或 `"your_mark": 1`，允许其后存在解释文字；不得从任意 prose 中搜索 mark，也
