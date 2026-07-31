@@ -53,8 +53,9 @@ v4 scorer protocol 的 publication gates。两个 API profile、Qwen PEFT 和两
 
 Qwen3-VL 四条轨作为后续补测单独依次执行，不追溯改写上述已完成的 13 轨批次或其完成标记。
 四个参数量均已在服务器完成 stage 1/2、full-987 正式 validator 和当前 v4 scorer protocol 的
-publication gates。后续状态仍以 `03_full987/_serial_inference/qwen3/`、串行脚本
-`--qwen3 --status` 与各自 `summary.json` 的现场结果为准。本地 adapter/contract 验证不能写成
+publication gates。运行中的状态仅在 checkout 与 `plan.env` 记录的 `repository_sha` 一致时使用串行脚本
+`--qwen3 --status`；代码升级后保留旧 plan/complete marker 作为历史证据，并以各轨 validator、metadata
+和 `summary.json` 现场核验，不在新 commit 上复用旧完成标记。本地 adapter/contract 验证不能写成
 服务器 stage 1/2、完整推理或评分完成。
 
 ## 专用模型身份说明

@@ -355,13 +355,14 @@ bash scripts/msmu/score_pending_results.sh --status
 正式 summary 必须是 987 条、八类齐全、`publishable=true`、`num_judge_failures=0`。metadata、summary
 与结果目录必须同时保存 `inference_protocol` 和 scorer protocol，并区分 official-compatible internal
 score 与 strict official score。精简展示表可在逐行验证这些 provenance、一次只选择一个 scorer
-protocol，并在模型名称中区分公平/原生 track 后省略 protocol 列。完整命令见
+protocol，并在模型名称中直接标明实际输入或提示配置后省略 protocol 列。完整命令见
 [阶段三串行评分指令](msmu-stage3-scoring-commands.md)。
 
 评分完成后先用 `build_results_report.sh --list` 枚举所有 scorer protocol 下的 summary，再按
 metadata profile 和一个可选 scorer protocol 生成 Markdown 表。无筛选时使用当前 canonical
 scorer protocol 并收录全部通过完整 publication gates 的评分；生成器不维护模型名单，也不会把
-不完整 summary 静默加入结果表。表格使用中文精简列，专用模型公平/原生轨在模型名称中区分。
+不完整 summary 静默加入结果表。表格使用中文精简列，专用模型在模型名称中直接标明 `RGB`、
+`RGB + 深度估计` 或 `RGB + Mental-3D 提示词`；SpatialRGPT 保持模型原名。
 
 ## 8. 产物与故障恢复
 

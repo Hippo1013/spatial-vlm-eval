@@ -121,7 +121,8 @@ class DocumentationConsistencyTest(unittest.TestCase):
         for required in [
             "一次只允许一个 scorer protocol",
             "模型名称",
-            "公平/原生",
+            "RGB + Mental-3D 提示词",
+            "RGB + 深度估计",
             "canonical provenance",
         ]:
             with self.subTest(required=required):
@@ -129,7 +130,11 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn('DEFAULT_OUTPUT_NAME = "msmu-result.md"', helper)
         self.assertIn('"模型名称"', helper)
         self.assertIn("REPORT_NOTE", helper)
-        self.assertIn("公平版仅使用 MSMU 提供的 RGB 图像与原始问题", helper)
+        self.assertIn("RGB + Mental-3D 提示词", helper)
+        self.assertIn("RGB + 深度估计", helper)
+        self.assertNotIn("估计深度", helper)
+        self.assertNotIn("公平版）", helper)
+        self.assertNotIn("原生版）", helper)
         self.assertNotIn('"Model Revision"', helper)
         self.assertNotIn('"Scorer Protocol"', helper)
         self.assertNotIn("llava_next_", helper)

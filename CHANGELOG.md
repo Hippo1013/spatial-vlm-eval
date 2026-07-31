@@ -9,8 +9,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 - 增加跨 scorer protocol 发现的 MSMU Markdown 结果表生成器，支持 publication-gated 全量汇总和
   metadata profile/单 scorer protocol 精确筛选；输出固定为 `msmu-result.md` 中文精简表，专用模型
-  公平/原生轨在模型名称中区分，并在标题下解释两种输入配置；精确 provenance 保留在已校验的
-  metadata、summary 与结果目录。
+  按 profile 直接标注 `RGB`、`RGB + 深度估计` 或 `RGB + Mental-3D 提示词`，SpatialRGPT 不加展示
+  注释，未知双轨 profile 无显式配置时 fail closed；精确 provenance 保留在已校验的 metadata、
+  summary 与结果目录。
 - 将当前 Qwen 横评计划从 Qwen2.5-VL 7B/32B/72B 更新为 Qwen3-VL-Instruct
   2B/4B/8B/32B，锁定四个独立 revision、inference protocol、原生无 system chat template、
   greedy/192-token decoding 和等视觉 token 的 `16384..147456` pixel 范围。

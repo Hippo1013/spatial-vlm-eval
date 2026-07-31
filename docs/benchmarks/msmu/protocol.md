@@ -192,11 +192,13 @@ official_macro8_accuracy = mean(
 
 结果表的八类列顺序与官方论文 Table 1 一致，表头使用中文，数值以百分比保留两位小数。展示表仅
 允许一个 scorer protocol；默认当前 canonical v4，多 scorer protocol 请求必须失败，不能把历史与
-当前评分静默混合。表格只显示模型名称、八类指标和平均值，专用模型的公平/原生 inference track
-必须直接写入模型名称。标题下固定用一行注释说明：公平版只使用 MSMU RGB 与原始问题；原生版可
-保留由同一 RGB 派生的官方额外输入、提示或组件，但不使用 GT 深度、reference 或额外标注。精确
-revision、inference protocol、scorer protocol 和结果性质仍由生成前强制校验的 metadata、summary
-与结果目录追溯，不得从展示表反推。
+当前评分静默混合。表格只显示模型名称、八类指标和平均值，专用模型直接在模型名称中写实际输入或
+提示配置：SSR 为 `RGB` / `RGB + 深度估计`，SpatialRGPT 保持模型原名且不加注释，3DThinker 为
+`RGB` / `RGB + Mental-3D 提示词`，SpatialBot 为 `RGB` / `RGB + 深度估计`。标题下固定用一行注释
+说明括号内容的含义，并声明“RGB + 深度估计”中的深度由当前 MSMU RGB 图像估算，不使用 GT 深度、
+reference 或额外标注。精确 revision、inference protocol、scorer protocol 和结果性质仍由生成前
+强制校验的 metadata、summary 与结果目录追溯，不得从展示表反推。未知双轨 profile 若没有显式展示
+配置必须 fail closed，不能退回含混的“公平版/原生版”。
 
 ## Cache 与产物
 

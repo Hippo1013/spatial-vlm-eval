@@ -178,8 +178,10 @@ bash scripts/msmu/build_results_report.sh \
 
 必要时可传入一个 `--scorer-protocol` 精确选择历史或当前评分；精简表不允许混合多个 scorer
 protocol。默认输出为 `03_full987/msmu-result.md`，文件内容固定只有标题
-`MSMU-Bench评测结果` 和一张中文表，专用模型的公平/原生轨直接标在模型名称中。
-标题与表格之间固定包含一行注释，解释公平版的统一 RGB+原题输入和原生版的同 RGB 派生官方增强。
+`MSMU-Bench评测结果` 和一张中文表。专用模型直接在模型名称中标实际配置：SSR 使用 `RGB` /
+`RGB + 深度估计`，SpatialRGPT 不加注释，3DThinker 使用 `RGB` / `RGB + Mental-3D 提示词`，
+SpatialBot 使用 `RGB` / `RGB + 深度估计`。标题与表格之间固定包含一行注释，说明括号内是实际输入
+或提示配置，并明确深度估计来自当前 RGB 而不是 GT 深度。
 不完整、不可发布或 provenance 不一致的诊断 summary 会在终端告警并跳过；筛选后没有任何合法
 评分时 fail closed。
 

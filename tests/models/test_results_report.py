@@ -277,41 +277,121 @@ class ResultsReportRenderingTest(unittest.TestCase):
         self.assertNotIn("Profile", markdown)
         self.assertEqual(len(lines[6].strip("|").split("|")), 10)
 
-    def test_specialized_tracks_are_labeled_in_the_model_name(self):
+    def test_specialized_tracks_use_explicit_input_configuration_names(self):
         write_result(
             self.root,
-            run_name="fair",
-            profile="specialized",
+            run_name="ssr-fair",
+            profile="ssr",
             scorer_protocol="protocol-v1",
-            model="org/Specialized",
+            model="org/SSR-VLM-7B",
             input_profile="rgb_only",
         )
         write_result(
             self.root,
-            run_name="native",
-            profile="specialized_native",
+            run_name="ssr-native",
+            profile="ssr_native",
             scorer_protocol="protocol-v1",
-            model="org/Specialized",
+            model="org/SSR-VLM-7B + org/SSR-MIDI-7B",
             input_profile="depth_native",
         )
         write_result(
             self.root,
-            run_name="generic",
-            profile="generic",
+            run_name="spatialrgpt",
+            profile="spatialrgpt",
             scorer_protocol="protocol-v1",
-            model="org/Generic",
+            model="org/SpatialRGPT-VILA1.5-8B",
+            input_profile="rgb_only",
+        )
+        write_result(
+            self.root,
+            run_name="3dthinker-fair",
+            profile="3dthinker",
+            scorer_protocol="protocol-v1",
+            model="org/3DThinker-Mindcube (MindCube-trained stage-1 checkpoint)",
+            input_profile="question_only",
+        )
+        write_result(
+            self.root,
+            run_name="3dthinker-native",
+            profile="3dthinker_native",
+            scorer_protocol="protocol-v1",
+            model="org/3DThinker-Mindcube (MindCube-trained stage-1 checkpoint)",
+            input_profile="mental3d_native",
+        )
+        write_result(
+            self.root,
+            run_name="spatialbot-fair",
+            profile="spatialbot",
+            scorer_protocol="protocol-v1",
+            model="org/SpatialBot-3B",
+            input_profile="rgb_only",
+        )
+        write_result(
+            self.root,
+            run_name="spatialbot-native",
+            profile="spatialbot_native",
+            scorer_protocol="protocol-v1",
+            model="org/SpatialBot-3B",
+            input_profile="zoedepth_rgbd_native",
         )
         results = results_report.selected_results(
             results_report.discover_results(self.root),
-            profiles=["specialized", "specialized_native", "generic"],
+            profiles=[
+                "ssr",
+                "ssr_native",
+                "spatialrgpt",
+                "3dthinker",
+                "3dthinker_native",
+                "spatialbot",
+                "spatialbot_native",
+            ],
             scorer_protocols=["protocol-v1"],
         )
 
         markdown = results_report.render_markdown(results)
 
-        self.assertIn("| Specialized（公平版） |", markdown)
-        self.assertIn("| Specialized（原生版） |", markdown)
-        self.assertIn("| Generic |", markdown)
+        self.assertIn("| SSR-VLM-7B（RGB） |", markdown)
+        self.assertIn(
+            "| SSR-VLM-7B + SSR-MIDI-7B（RGB + 深度估计） |",
+            markdown,
+        )
+        self.assertIn("| SpatialRGPT-VILA1.5-8B |", markdown)
+        self.assertIn("| 3DThinker-Mindcube（RGB） |", markdown)
+        self.assertIn(
+            "| 3DThinker-Mindcube（RGB + Mental-3D 提示词） |",
+            markdown,
+        )
+        self.assertIn("| SpatialBot-3B（RGB） |", markdown)
+        self.assertIn(
+            "| SpatialBot-3B（RGB + 深度估计） |",
+            markdown,
+        )
+        self.assertNotIn("公平版", markdown)
+        self.assertNotIn("原生版", markdown)
+        self.assertNotIn("估计深度", markdown)
+
+    def test_unmapped_dual_track_profile_fails_closed(self):
+        write_result(
+            self.root,
+            run_name="fair",
+            profile="future_specialized",
+            scorer_protocol="protocol-v1",
+            model="org/Future-Specialized",
+        )
+        write_result(
+            self.root,
+            run_name="native",
+            profile="future_specialized_native",
+            scorer_protocol="protocol-v1",
+            model="org/Future-Specialized",
+        )
+        results = results_report.discover_results(self.root)
+
+        with self.assertRaisesRegex(
+            results_report.ConfigurationError,
+            "missing an explicit presentation configuration",
+        ):
+            results_report.render_markdown(results)
 
     def test_concise_table_rejects_mixed_scorer_protocols(self):
         write_result(

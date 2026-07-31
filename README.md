@@ -123,8 +123,9 @@ INDICES="$INDICES" \
 judge 和 `scripts/msmu/score_pending_results.sh` 串行评分；命令见
 [阶段三串行评分指令](docs/msmu-stage3-scoring-commands.md)。已有评分可由
 `scripts/msmu/build_results_report.sh` 跨 scorer protocol 发现，并在完整 publication gates 与
-metadata 检查后，为单一 scorer protocol 生成一份只含标题、公平/原生说明和中文精简表格的
-Markdown 报告。
+metadata 检查后，为单一 scorer protocol 生成一份只含标题、输入配置说明和中文精简表格的
+Markdown 报告。专用模型不使用泛化的“公平版/原生版”展示后缀，而是在模型名称中直接标明
+`RGB`、`RGB + 深度估计` 或 `RGB + Mental-3D 提示词`；SpatialRGPT 保持模型原名。
 
 ## 严格输出合同
 

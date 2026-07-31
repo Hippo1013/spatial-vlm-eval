@@ -31,10 +31,23 @@ from _score_pending_results import (  # noqa: E402
 
 REPORT_TITLE = "# MSMU-Bench评测结果"
 REPORT_NOTE = (
-    "注：公平版仅使用 MSMU 提供的 RGB 图像与原始问题；原生版保留模型官方设计中由同一 RGB "
-    "派生的额外输入、提示或组件，且不使用 GT 深度、reference 或额外标注。"
+    "注：括号内标明实际评测输入或提示配置；“RGB + 深度估计”中的深度由当前 MSMU RGB "
+    "图像估算，不使用 GT 深度、reference 或额外标注。"
 )
 DEFAULT_OUTPUT_NAME = "msmu-result.md"
+PROFILE_PRESENTATION_CONFIGS: dict[str, str | None] = {
+    "ssr": "RGB",
+    "ssr_native": "RGB + 深度估计",
+    "spatialrgpt": None,
+    "3dthinker": "RGB",
+    "3dthinker_native": "RGB + Mental-3D 提示词",
+    "spatialbot": "RGB",
+    "spatialbot_native": "RGB + 深度估计",
+}
+PROFILE_PRESENTATION_MODEL_NAMES = {
+    "3dthinker": "3DThinker-Mindcube",
+    "3dthinker_native": "3DThinker-Mindcube",
+}
 OFFICIAL_METRICS = (
     ("existence", "存在性"),
     ("count", "物体计数"),
@@ -530,23 +543,27 @@ def presentation_model_names(results: list[ScoreResult]) -> list[str]:
     selected_profiles = {result.profile for result in results}
     names: list[str] = []
     for result in results:
-        is_native = result.profile.endswith("_native") or (
-            result.input_profile.endswith("_native")
-        )
         has_native_sibling = f"{result.profile}_native" in selected_profiles
-        is_fair_specialized = (
-            not is_native
-            and (
-                has_native_sibling
-                or result.input_profile == "rgb_only"
-            )
-        )
-        if is_native:
-            names.append(f"{result.model}（原生版）")
-        elif is_fair_specialized:
-            names.append(f"{result.model}（公平版）")
-        else:
+        is_native = result.profile.endswith("_native")
+        if result.profile not in PROFILE_PRESENTATION_CONFIGS:
+            if is_native or has_native_sibling:
+                raise ConfigurationError(
+                    "specialized dual-track profile is missing an explicit "
+                    f"presentation configuration: {result.profile}"
+                )
             names.append(result.model)
+            continue
+
+        model_name = PROFILE_PRESENTATION_MODEL_NAMES.get(
+            result.profile,
+            result.model,
+        )
+        configuration = PROFILE_PRESENTATION_CONFIGS[result.profile]
+        names.append(
+            model_name
+            if configuration is None
+            else f"{model_name}（{configuration}）"
+        )
     return names
 
 

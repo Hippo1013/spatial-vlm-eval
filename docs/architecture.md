@@ -119,10 +119,13 @@ validator、judge cache key、失败重试、阈值、逐样本得分与 macro-8
 `--list` 中报告，不能静默进入表格。报告可按 metadata profile 精确筛选；精简表不显示 protocol
 列，因此一次只允许一个 scorer protocol，未指定时固定使用当前 canonical protocol，拒绝把历史和
 当前评分混入同一张表。诊断 summary 会在终端告警并跳过，筛选后没有合法评分时 fail closed。
-最终 Markdown 固定为 `# MSMU-Bench评测结果`、一行公平/原生输入说明和一张中文表；列为模型名称、
-官方论文顺序的八项指标和平均值。专用模型的公平/原生 inference track 直接标在模型名称中；完整 revision、
-inference protocol、scorer protocol 与 result kind 仍以已经校验的 metadata/summary 和结果目录为
-canonical provenance，不复制到展示表。
+最终 Markdown 固定为 `# MSMU-Bench评测结果`、一行输入/提示配置说明和一张中文表；列为模型名称、
+官方论文顺序的八项指标和平均值。当前专用模型使用固定的 profile 级展示规则：SSR 的两轨标为
+`RGB` / `RGB + 深度估计`，SpatialRGPT 保持模型原名且不加注释，3DThinker 的两轨标为 `RGB` /
+`RGB + Mental-3D 提示词`，SpatialBot 的两轨标为 `RGB` / `RGB + 深度估计`。未知双轨 profile 若没有
+显式展示配置必须 fail closed，不能退回含混的“公平版/原生版”。完整 revision、inference protocol、
+scorer protocol 与 result kind 仍以已经校验的 metadata/summary 和结果目录为 canonical provenance，
+不复制到展示表。
 
 正式评分前可用 `build_stage3_answer_audit.py` 只读加载获准批次的完整 validator 和 prediction，
 对所有轨抽取同一组 index 并导出人工抽查文档。它不参与评分，产物写入 Git 忽略的 `outputs/`。
