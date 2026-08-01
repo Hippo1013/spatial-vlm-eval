@@ -22,6 +22,7 @@ venv/
 /checkpoints/
 /outputs/
 /logs/
+/tmp/
 /environment-manifests/
 *.safetensors
 *.ckpt

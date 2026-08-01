@@ -57,6 +57,34 @@ class DocumentationConsistencyTest(unittest.TestCase):
         ]
         self.assertEqual(unlisted, [])
 
+    def test_knowledge_base_stays_layered_and_bounded(self) -> None:
+        agents_path = self.repository / "AGENTS.md"
+        agents = agents_path.read_text(encoding="utf-8")
+        self.assertLessEqual(len(agents.splitlines()), 300)
+        self.assertLessEqual(len(agents.encode("utf-8")), 15 * 1024)
+
+        oversized = [
+            path.relative_to(self.repository).as_posix()
+            for path in sorted(self.docs.rglob("*.md"))
+            if len(path.read_text(encoding="utf-8").splitlines()) > 1500
+        ]
+        self.assertEqual(oversized, [])
+
+        index = (self.docs / "README.md").read_text(encoding="utf-8")
+        for required in [
+            "## 信息层级与按需读取",
+            "Agent 记忆",
+            "## 日志生命周期",
+            "未跟踪运行产物",
+            "不要新建 `DEVLOG.md`",
+        ]:
+            with self.subTest(required=required):
+                self.assertIn(required, index)
+
+        gitignore = (self.repository / ".gitignore").read_text(encoding="utf-8")
+        self.assertIn("/tmp/", gitignore.splitlines())
+        self.assertFalse((self.repository / "DEVLOG.md").exists())
+
     def test_model_matrix_matches_profile_registry(self) -> None:
         matrix = (self.docs / "model-matrix.md").read_text(encoding="utf-8")
         documented = set(re.findall(r"^\| `([^`]+)` \|", matrix, flags=re.MULTILINE))

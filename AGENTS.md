@@ -30,6 +30,7 @@
 - `tests/`：协议不变量和 bug 回归。
 - 不要在源码中硬编码单台服务器路径；路径由 CLI 或环境变量提供。
 - 模型、dataset、checkpoint、prediction、judge cache 和论文 PDF 不提交到 Git。
+- `tmp/` 是用户自用的本地草稿区；agent 不读取、不整理、不提交，也不向服务器同步。
 
 ## 文档读取路由
 

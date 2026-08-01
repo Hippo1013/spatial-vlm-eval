@@ -19,6 +19,20 @@
 机器事实源与文档冲突时先停止执行，核对代码、测试和已验证产物，再在同一变更中修正文档；不得为了
 让文档“看起来一致”而静默改变协议。
 
+## 信息层级与按需读取
+
+| 层级 | 只保存 | 不保存 | 读取方式 |
+|---|---|---|---|
+| `AGENTS.md` | 每次 coding 都必须看到的红线、任务路由和更新门禁 | 历史叙事、完整协议、运行状态 | 每次任务加载 |
+| 根 `README.md` | 稳定能力、最短入口和文档导航 | 完整 profile 表、实时进度、故障流水 | 新人或首次进入仓库时读取 |
+| `docs/` | 按职责拆分的 canonical 协议、架构、状态快照与 runbook | 原始日志全文、个人便条 | 只按 `AGENTS.md` 路由读取任务命中的文件 |
+| Agent 记忆 | 用户偏好、跨项目原则、代码与文档中不易发现的复用提醒 | 可从仓库读取的协议、profile、SHA、分数和实时状态 | 先定位线索，再现场核验 |
+| 未跟踪运行产物 | journal、日志、validator、metadata、status、summary 等原始证据 | 长期规则和人工总结 | 诊断、汇报或发布前现场读取 |
+
+不要为“保险”一次加载全部文档。常规任务先读 `AGENTS.md`、根 `README.md` 和本索引，再只补读路由
+命中的 protocol、runbook、ADR、troubleshooting 与测试。Agent 记忆只能帮助定位事实源，不能覆盖
+仓库文档或服务器产物；易漂移事实必须重新验证。
+
 ## 文档清单
 
 ### 规则、架构与协议
@@ -52,6 +66,19 @@
 - [Inference/scorer protocol 分离决策](decisions/0001-separate-inference-and-scorer-protocols.md)。
 - [Troubleshooting 规则](troubleshooting/README.md)与
   [服务器问题库](troubleshooting/server.md)。
+
+## 日志生命周期
+
+1. 推理、批次和评分先把原始证据写入未跟踪结果目录；日志不得含密钥、私有 endpoint 或图片
+   base64，也不复制进 Git。
+2. 未定位问题只保留在原始日志或 issue。`status.tsv`、validator、metadata 和 `summary.json` 是当前
+   状态事实源，不能用日志最后一行或 Agent 记忆替代。
+3. 根因确认且修复验证后，只把可复用的“症状、原因、处理、验证”提炼到 troubleshooting；不粘贴
+   traceback 或完整运行过程。
+4. 行为或操作语义变化进入 CHANGELOG，长期设计取舍进入 ADR。不要新建 `DEVLOG.md`，也不要在
+   AGENTS、README、CHANGELOG、ADR 和 troubleshooting 之间复制同一段叙述。
+5. `outputs/`、`logs/` 和用户自用的 `tmp/` 均不进入 Git；其中 `tmp/` 不属于项目知识源，agent 不读取
+   或同步。
 
 ## 更新触发条件与时机
 

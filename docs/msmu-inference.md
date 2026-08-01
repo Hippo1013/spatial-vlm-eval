@@ -308,70 +308,28 @@ ZOEDEPTH_CHECKPOINT=/local/ZoeD_M12_NK.pt \
 若 merged checkpoint 不存在，adapter 明确报告 gated 权限并退出。native 轨把 ZoeDepth 米制输出四舍五入、
 截断为 uint16 毫米，再按上游三通道编码传入 RGB-D 两图 token；不使用 GT depth。
 
-## 7. 正式 987 条与评分
+## 7. 正式 987 条、评分与报告
 
-每个 profile 依次执行：
+本手册只保留 inference/deployment 边界，不复制阶段三操作者命令。每个 profile 仍须依次通过：
 
 1. 合成图/processor canary；
-2. 八类 8 条 subset inference；
-3. `prediction_validation.json` 中 `passed=true`、`allow_subset=true`；
-4. 资源允许时清除 subset 参数，完整 inference；
-5. 检查 metadata：987 targets、`publishable_inference=true`、无 missing index；
-6. 正式 validator；
-7. 单独启动 local judge，再运行目录驱动的串行评分入口。
+2. 八类 8 条 subset inference 与 subset validator；
+3. 清除 subset 参数后的 full-987 inference；
+4. metadata 中 987 targets、`publishable_inference=true` 且无 missing index；
+5. 正式 validator；
+6. 独立 local judge 和目录驱动评分；
+7. 完整 publication gates。
 
-人工执行优先使用 `run_manual_stage1.sh`、`run_manual_stage2.sh` 和
-`run_manual_stage3.sh`。阶段三评分统一使用 `score_pending_results.sh`。
+实际名单、串行恢复、GPU 释放、InternVL3-78B 四卡补测和答案抽查只查
+[阶段三 full-987 runbook](msmu-stage3-full-eval.md)；评分命令只查
+[阶段三串行评分指令](msmu-stage3-scoring-commands.md)。服务器 burn 只按
+[GPU burn 启停手册](server-gpu-burn-runbook.md)操作。
 
-已完成的历史阶段三批次排除 GPT-5、Gemini、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B。该批次
-的唯一操作名单仍由阶段三 runbook 和串行脚本 `--list` 给出，并通过同一入口完成部署、完整推理、
-validator 和 GPU 释放：
-
-```bash
-MANUAL_DRY_RUN=1 bash scripts/msmu/run_stage3_serial_inference.sh
-bash scripts/msmu/run_stage3_serial_inference.sh --check
-bash scripts/msmu/run_stage3_serial_inference.sh
-bash scripts/msmu/run_stage3_serial_inference.sh --status
-```
-
-该入口不评分。它使用独占锁、vLLM readiness timeout、逐样本 journal 活动 watchdog、每模型两次
-可恢复尝试、自有进程组信号清理和 GPU 释放门禁。任何非本批次 GPU 进程或已存在的 inference
-endpoint 都只会导致有界等待/退出，不会被终止。完整参数见
-[阶段三文档](msmu-stage3-full-eval.md)。
-
-上述 13 轨是默认历史计划。Qwen3-VL 2B/4B/8B/32B 用同一串行脚本的 `--qwen3` 参数补测；
-评分仍由 `score_pending_results.sh` 从结果目录发现。
-
-InternVL3-78B 使用独立四卡手工补测，不加入上述默认计划。stage 1/2/3 分别使用
-`run_manual_stage1.sh`、`run_manual_stage2.sh` 和 `run_manual_stage3.sh` 的 `internvl3_78b` 入口；
-完整命令见三个阶段 runbook。
-
-服务器上由本项目协作者管理的 burn 只按 [GPU burn 启停手册](server-gpu-burn-runbook.md)操作固定
-pane。全部获准轨的完整 validator 通过后，可按阶段三文档在正式评分前生成一次固定样本答案抽查。
-
-评分命令：
-
-```bash
-bash scripts/msmu/run_manual_stage3.sh judge serve
-
-# 另一个终端
-bash scripts/msmu/score_pending_results.sh --list
-bash scripts/msmu/score_pending_results.sh --check
-bash scripts/msmu/score_pending_results.sh
-bash scripts/msmu/score_pending_results.sh --status
-```
-
-正式 summary 必须是 987 条、八类齐全、`publishable=true`、`num_judge_failures=0`。metadata、summary
-与结果目录必须同时保存 `inference_protocol` 和 scorer protocol，并区分 official-compatible internal
-score 与 strict official score。精简展示表可在逐行验证这些 provenance、一次只选择一个 scorer
-protocol，并在模型名称中直接标明实际输入或提示配置后省略 protocol 列。完整命令见
-[阶段三串行评分指令](msmu-stage3-scoring-commands.md)。
-
-评分完成后先用 `build_results_report.sh --list` 枚举所有 scorer protocol 下的 summary，再按
-metadata profile 和一个可选 scorer protocol 生成 Markdown 表。无筛选时使用当前 canonical
-scorer protocol 并收录全部通过完整 publication gates 的评分；生成器不维护模型名单，也不会把
-不完整 summary 静默加入结果表。表格使用中文精简列，专用模型在模型名称中直接标明 `RGB`、
-`RGB + 深度估计` 或 `RGB + Mental-3D 提示词`；SpatialRGPT 保持模型原名。
+正式完成以 metadata、validator 和 summary 为准：987 条、八类齐全、`publishable=true`、
+`num_judge_failures=0`。结果必须同时保存 inference/scorer protocol，并区分 official-compatible
+internal score 与 strict official score。精简展示表只有在逐行校验 provenance、一次只选择一个 scorer
+protocol，并在模型名称中标明实际输入或提示配置后才可省略 protocol 列；报告发现和筛选规则以
+scorer protocol 与对应评分 runbook 为准。
 
 ## 8. 产物与故障恢复
 
