@@ -98,7 +98,7 @@ print_plan() {
 excluded	gpt5	API model
 excluded	gemini31pro	API model
 excluded	qwen25_vl_72b	70B+ model
-excluded	internvl3_78b	70B+ model
+excluded	internvl3_78b	separate four-GPU manual supplement
 excluded	qwen25_vl_peft	not part of the accepted test plan
 EOF
   fi

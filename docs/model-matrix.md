@@ -19,7 +19,7 @@ profile inventory 的机器事实源是 `src/spatial_vlm_eval/models/profiles.py
 | `llava_next_yi_34b` | `llava-hf/llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | question-only RGB | vLLM 0.19 TP=2 | `msmu_llava_next_yi_34b_question_only_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
 | `internvl3_8b` | `OpenGVLab/InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | question-only RGB | vLLM 0.19 | `msmu_internvl3_8b_question_only_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
 | `internvl3_38b` | `OpenGVLab/InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | question-only RGB | vLLM 0.19 TP=2 | `msmu_internvl3_38b_question_only_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
-| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | question-only RGB | vLLM 0.19 TP=2 config | `msmu_internvl3_78b_question_only_v1` | stage 1 static passed；70B+，stage 2/3 excluded |
+| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | question-only RGB | vLLM 0.19 TP=4，四张 80GB GPU | `msmu_internvl3_78b_question_only_v1` | 四卡 manual stage 1/2/3 adapter + tests；live GPU run pending |
 | `qwen25_vl_7b` | `Qwen/Qwen2.5-VL-7B-Instruct@cc594898137f460bfe9f0759e9844b3ce807cfb5` | question-only RGB | Transformers，单卡 | `msmu_qwen25_vl_question_only_deterministic_v1` | full-987 validator + v4 publication gates passed（2026-07-31）；当前 15 行报告未收录 |
 | `qwen25_vl_32b` | `Qwen/Qwen2.5-VL-32B-Instruct@7cfb30d71a1f4f49a57592323337a4a4727301da` | question-only RGB | Transformers，单卡 | `msmu_qwen25_vl_32b_question_only_deterministic_v1` | full-987 validator + v4 publication gates passed（2026-07-31）；当前 15 行报告未收录 |
 | `qwen25_vl_72b` | `Qwen/Qwen2.5-VL-72B-Instruct@89c86200743eec961a297729e7990e8f2ddbc4c5` | question-only RGB | Transformers，双卡 balanced | `msmu_qwen25_vl_72b_question_only_deterministic_v1` | 权重/revision/two-GPU map verified；stage 1/2 passed；70B+，stage 3 excluded |
@@ -51,12 +51,15 @@ profile 仍锁定原生模板、greedy、192 tokens 和 pixel `12544..112896`；
 v4 scorer protocol 的 publication gates。两个 API profile、Qwen PEFT 和两个 70B+ profile 未进入
 本批次；排除表示测试范围选择，不会删除已完成的 Qwen2.5-VL-72B stage 1/2 结果。
 
-Qwen3-VL 四条轨作为后续补测单独依次执行，不追溯改写上述已完成的 13 轨批次或其完成标记。
-四个参数量均已在服务器完成 stage 1/2、full-987 正式 validator 和当前 v4 scorer protocol 的
+Qwen3-VL 四条轨作为后续补测单独依次执行，不追溯改写上述已完成的 13 轨批次或其完成标记。四个
+参数量均已在服务器完成 stage 1/2、full-987 正式 validator 和当前 v4 scorer protocol 的
 publication gates。运行中的状态仅在 checkout 与 `plan.env` 记录的 `repository_sha` 一致时使用串行脚本
 `--qwen3 --status`；代码升级后保留旧 plan/complete marker 作为历史证据，并以各轨 validator、metadata
 和 `summary.json` 现场核验，不在新 commit 上复用旧完成标记。本地 adapter/contract 验证不能写成
 服务器 stage 1/2、完整推理或评分完成。
+
+InternVL3-78B 后续改为固定 TP=4 的独立四卡手工补测轨；该配置尚未完成 live GPU stage 1/2/3，
+也不追溯加入历史 13 轨。
 
 ## 专用模型身份说明
 

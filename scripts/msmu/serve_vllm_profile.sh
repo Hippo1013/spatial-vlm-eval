@@ -8,6 +8,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 : "${MODEL_PATH:?Set MODEL_PATH to the local checkpoint or cache snapshot}"
 
 trust_remote_code=0
+minimum_gpu_count=1
 case "${PROFILE}" in
   llava_next_mistral_7b)
     locked_revision="2424fdd47412fccc66d91719126b420e9fbd7065"
@@ -42,14 +43,11 @@ case "${PROFILE}" in
   internvl3_78b)
     locked_revision="3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356"
     served="internvl3-78b-msmu"
-    tp=2
-    default_devices="0,1"
+    tp=4
+    default_devices="0,1,2,3"
     min_free=76000
+    minimum_gpu_count=4
     trust_remote_code=1
-    if [[ "${DRY_RUN:-0}" != "1" ]]; then
-      echo "[vllm-serve] InternVL3-78B BF16 is not approved for forced loading on 2x80GB; use DRY_RUN=1 for config validation" >&2
-      exit 4
-    fi
     ;;
   *)
     echo "[vllm-serve] unsupported PROFILE=${PROFILE}" >&2
@@ -62,13 +60,19 @@ if [[ -n "${MODEL_REVISION:-}" && "${MODEL_REVISION}" != "${locked_revision}" ]]
   exit 2
 fi
 
+tensor_parallel_size="${TENSOR_PARALLEL_SIZE:-${tp}}"
+if [[ "${PROFILE}" == "internvl3_78b" && "${tensor_parallel_size}" != "4" ]]; then
+  echo "[vllm-serve] InternVL3-78B requires TENSOR_PARALLEL_SIZE=4" >&2
+  exit 2
+fi
+
 args=(
   serve "${MODEL_PATH}"
   --revision "${locked_revision}"
   --served-model-name "${SERVED_MODEL_NAME:-${served}}"
   --host "${HOST:-127.0.0.1}"
   --port "${PORT:-18081}"
-  --tensor-parallel-size "${TENSOR_PARALLEL_SIZE:-${tp}}"
+  --tensor-parallel-size "${tensor_parallel_size}"
   --dtype "${DTYPE:-bfloat16}"
   --max-model-len "${MAX_MODEL_LEN:-4096}"
   --gpu-memory-utilization "${GPU_MEMORY_UTILIZATION:-0.90}"
@@ -86,5 +90,7 @@ if [[ "${DRY_RUN:-0}" == "1" ]]; then
 fi
 
 export CUDA_VISIBLE_DEVICES="${CUDA_VISIBLE_DEVICES:-${default_devices}}"
-MIN_FREE_GPU_MIB="${MIN_FREE_GPU_MIB:-${min_free}}" "${SCRIPT_DIR}/gpu_preflight.sh"
+MIN_FREE_GPU_MIB="${MIN_FREE_GPU_MIB:-${min_free}}" \
+MIN_GPU_COUNT="${minimum_gpu_count}" \
+  "${SCRIPT_DIR}/gpu_preflight.sh"
 exec "${VLLM:-vllm}" "${args[@]}"

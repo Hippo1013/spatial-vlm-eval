@@ -129,8 +129,9 @@ PROFILES = {
             "3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356",
             "question_only",
             chat_template="checkpoint native processor chat template",
-            tp=2,
+            tp=4,
             served_model_name="internvl3-78b-msmu",
+            # Four 80GB GPUs are supported; two A800 80GB GPUs remain insufficient.
             deployable=False,
         ),
         _profile(

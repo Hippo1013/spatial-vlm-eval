@@ -23,8 +23,9 @@ ssr, ssr_native, spatialrgpt
 spatialbot, spatialbot_native
 ```
 
-明确排除 GPT-5、Gemini（API）、Qwen2.5-VL-72B、InternVL3-78B（70B+）和本轮不测的 Qwen
-PEFT。Qwen2.5-VL-72B 与 InternVL3-78B 的阶段三手工入口也会拒绝执行。
+已完成的历史 13 轨明确排除 GPT-5、Gemini（API）、Qwen2.5-VL-72B、InternVL3-78B（70B+）和
+当时未测的 Qwen PEFT。Qwen2.5-VL-72B 的阶段三手工入口仍会拒绝；InternVL3-78B 后续改为独立
+四卡手工补测，不追溯加入默认 13 轨或改写其完成标记。
 
 以上 13 轨保留为串行脚本默认计划。Qwen3-VL 2B/4B/8B/32B 在 stage 1/2 通过后单独补测：
 
@@ -112,6 +113,20 @@ bash scripts/msmu/run_manual_stage3.sh MODEL infer
 ```
 
 `infer` 同样固定 `RUN_SCORE=0` 并在结束时运行完整 validator。
+
+InternVL3-78B 的独立四卡补测也使用上述手工入口，默认 GPU `0,1,2,3`、固定 TP=4：
+
+```bash
+# 终端 A
+bash scripts/msmu/run_manual_stage3.sh internvl3_78b serve
+
+# 终端 B：服务 ready 后运行 full-987 + 正式 validator
+bash scripts/msmu/run_manual_stage3.sh internvl3_78b infer
+```
+
+serve 会在加载前确认至少四张物理/选中 GPU 且逐卡空闲。中断后重新执行同一条 `infer` 命令会从
+fsync journal 恢复；完整 validator 通过后，在终端 A 停止自有 78B 服务，再进入独立 judge 与目录
+驱动评分流程。
 
 ## 可选：正式评分前抽查答案
 

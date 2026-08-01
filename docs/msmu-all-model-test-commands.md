@@ -38,6 +38,7 @@ MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_base
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_32b
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen25_vl_72b
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh qwen3_vl_2b
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh internvl3_78b serve
 ```
 
 `MANUAL_DRY_RUN=1` 只打印将要执行的底层命令，不占 GPU、不调用 API。
@@ -73,9 +74,10 @@ pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol
 - `qwen25_vl_peft` 从 `.env.server` 读取 `QWEN_PEFT_CHECKPOINT`；脚本会把 checkpoint 所在目录和
   basename 加入 run slug，避免与其他 PEFT checkpoint 共用输出。
 - 如需自定义唯一输出名，可设置 `MANUAL_RUN_SLUG=name`；只允许字母、数字、点、下划线和连字符。
-- `internvl3_78b` 只允许阶段一静态检查，阶段二和阶段三由脚本强制拒绝。
-- 本轮阶段三不测两个 API、Qwen PEFT 和两个 70B+ 模型；`qwen25_vl_72b` 的阶段一/二结果保留，
-  但阶段三与 `internvl3_78b` 一样由脚本拒绝。
+- `internvl3_78b` 是独立四卡手工补测轨，固定 BF16、TP=4，默认 GPU `0,1,2,3`；stage 1/2/3
+  的 serve 都会在加载前确认选中和物理 GPU 均不少于四张，并逐卡执行空闲/显存 preflight。
+- 已完成的历史阶段三批次未测试两个 API、Qwen PEFT 和两个 70B+ 模型；`qwen25_vl_72b` 仍由
+  stage 3 手工入口拒绝，InternVL3-78B 则只通过独立四卡手工入口补测，不加入历史默认名单。
 - 原 13 轨仍是串行脚本默认计划；四款 Qwen3-VL 使用同一脚本的 `--qwen3` 计划。
 
 阶段三固定获准本地轨使用串行入口；实际名单和排除项以 `--list` 及阶段三 runbook 为准：

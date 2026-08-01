@@ -213,16 +213,24 @@ class ManualStageScriptTest(unittest.TestCase):
         self.assertIn("PORT=18080", result.stdout)
         self.assertIn("03_full987/judge/vllm_serve.log", result.stdout)
 
-    def test_internvl78_is_blocked_after_static_stage1(self):
-        static_check = self.run_stage(1, "internvl3_78b", "check")
+    def test_internvl78_uses_four_gpus_across_manual_stages(self):
+        stage1_serve = self.run_stage(1, "internvl3_78b", "serve")
+        stage1_check = self.run_stage(1, "internvl3_78b", "check")
+        stage2_serve = self.run_stage(2, "internvl3_78b", "serve")
         smoke = self.run_stage(2, "internvl3_78b")
+        stage3_serve = self.run_stage(3, "internvl3_78b", "serve")
         full = self.run_stage(3, "internvl3_78b", "infer")
-        self.assertEqual(static_check.returncode, 0, static_check.stderr)
-        self.assertIn("DRY_RUN=1", static_check.stdout)
-        self.assertEqual(smoke.returncode, 4)
-        self.assertEqual(full.returncode, 4)
-        self.assertIn("not approved", smoke.stderr)
-        self.assertIn("70B+", full.stderr)
+
+        stage_results = [stage1_serve, stage1_check, stage2_serve, smoke, stage3_serve, full]
+        for result in stage_results:
+            self.assertEqual(result.returncode, 0, result.stderr)
+        for result in [stage1_serve, stage2_serve, stage3_serve]:
+            self.assertIn("CUDA_VISIBLE_DEVICES=0\\,1\\,2\\,3", result.stdout)
+            self.assertIn("serve_internvl3.sh", result.stdout)
+        self.assertIn("canary_vllm_vision.sh", stage1_check.stdout)
+        self.assertIn("02_smoke8/internvl3-78b-vllm", smoke.stdout)
+        self.assertIn("03_full987/internvl3-78b-vllm", full.stdout)
+        self.assertIn("RUN_SCORE=0", full.stdout)
 
     def test_qwen72_stage3_is_excluded_but_earlier_stages_remain_available(self):
         canary = self.run_stage(1, "qwen25_vl_72b")
@@ -245,6 +253,7 @@ class ManualStageScriptTest(unittest.TestCase):
             "llava_next_yi_34b",
             "internvl3_8b",
             "internvl3_38b",
+            "internvl3_78b",
         }
         direct_models = {
             "gpt5",
@@ -379,6 +388,10 @@ class SerialStage3InferenceScriptTest(unittest.TestCase):
             "qwen25_vl_peft",
         ]:
             self.assertIn(f"excluded\t{excluded}\t", result.stdout)
+        self.assertIn(
+            "excluded\tinternvl3_78b\tseparate four-GPU manual supplement",
+            result.stdout,
+        )
 
     def test_dry_run_dispatches_every_included_track_without_scoring(self):
         result = self.run_batch()

@@ -37,7 +37,18 @@ bash scripts/msmu/run_manual_stage2.sh internvl3_8b serve
 bash scripts/msmu/run_manual_stage2.sh internvl3_8b
 ```
 
-`internvl3_78b` 会被脚本拒绝。
+InternVL3-78B 同样使用两个终端并固定四卡：
+
+```bash
+# 终端 A
+bash scripts/msmu/run_manual_stage2.sh internvl3_78b serve
+
+# 终端 B：服务 ready 后运行 8 条
+bash scripts/msmu/run_manual_stage2.sh internvl3_78b
+```
+
+如果 stage 1 的 78B 服务仍在运行，只执行终端 B 命令。serve 默认使用 GPU `0,1,2,3`，不足四张时
+在模型加载前拒绝。
 
 ## API、Qwen 与空间专用模型
 

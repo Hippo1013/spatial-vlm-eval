@@ -16,13 +16,14 @@ bash scripts/msmu/run_manual_stage1.sh --list
 
 ## LLaVA-NeXT 与 InternVL3
 
-这四个模型需要两个终端：
+这五个模型需要两个终端：
 
 ```text
 llava_next_mistral_7b
 llava_next_yi_34b
 internvl3_8b
 internvl3_38b
+internvl3_78b
 ```
 
 终端 A 启动 processor preflight 和 vLLM 服务：
@@ -47,19 +48,26 @@ bash scripts/msmu/run_manual_stage1.sh llava_next_mistral_7b serve
 bash scripts/msmu/run_manual_stage1.sh llava_next_mistral_7b check
 ```
 
-脚本默认给 7B/8B 使用 GPU `0`，给 34B/38B 使用 GPU `0,1`。只有在已经协调好其他 GPU 时才覆盖：
+脚本默认给 7B/8B 使用 GPU `0`，给 34B/38B 使用 GPU `0,1`，给 InternVL3-78B 使用 GPU
+`0,1,2,3`。只有在已经协调好等量的其他 GPU 时才覆盖：
 
 ```bash
 MANUAL_CUDA_VISIBLE_DEVICES=2,3 bash scripts/msmu/run_manual_stage1.sh internvl3_38b serve
 ```
 
-InternVL3 78B 只执行 processor 与 vLLM 配置静态检查，不会启动服务：
+InternVL3-78B 固定 BF16、TP=4，必须使用四张 80GB GPU：
 
 ```bash
+# 终端 A
+bash scripts/msmu/run_manual_stage1.sh internvl3_78b serve
+
+# 终端 B：服务 ready 后执行
 bash scripts/msmu/run_manual_stage1.sh internvl3_78b check
 ```
 
-脚本禁止对 78B 使用 `serve`。
+serve 会先确认选中的 GPU 和 `nvidia-smi` 枚举的物理 GPU 都不少于四张，再逐卡检查空闲状态和至少
+76000 MiB 可用显存；不足四张、任一卡繁忙或有人为覆盖 `TENSOR_PARALLEL_SIZE!=4` 时均拒绝启动。
+如使用其他四卡，终端 A 传入例如 `MANUAL_CUDA_VISIBLE_DEVICES=4,5,6,7`；终端 B 不需要该变量。
 
 ## API、Qwen 与空间专用模型
 

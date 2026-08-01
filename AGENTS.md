@@ -97,7 +97,7 @@ sdvlm_official_compat_local_judge_v4_grounding_split_strict_quant_length_malform
 7. 正式评分前检查 `prediction_validation.json`，评分后检查 summary 的样本数和八类完整性。
 8. 已完成的阶段三批次固定由 `run_stage3_serial_inference.sh` 表示 13 条历史获准本地轨；不得改写
    其默认名单或完成标记。Qwen3-VL 2B/4B/8B/32B 四条补测轨使用同一脚本的 `--qwen3` 计划，
-   状态与历史批次隔离。
+   状态与历史批次隔离。InternVL3-78B 使用固定 TP=4 的独立四卡手工补测入口，不得并入历史 13 轨。
 9. 阶段三正式评分使用目录驱动的 `score_pending_results.sh`；不得维护模型名单或绕过批次锁、
    judge readiness/model 检查和评分后 publication gates。
 

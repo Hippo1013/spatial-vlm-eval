@@ -111,15 +111,20 @@ MODEL_PATH="$MODEL_ROOT/OpenGVLab--InternVL3-38B-hf/snapshots/b2a05c0c325235f753
   bash scripts/msmu/serve_internvl3.sh
 ```
 
-7B/8B 默认 TP=1/GPU 0；34B/38B 默认 TP=2/GPU `0,1`。服务固定 revision、served name、BF16、
-`--limit-mm-per-prompt.image 1`。InternVL3-78B 只允许：
+7B/8B 默认 TP=1/GPU 0；34B/38B 默认 TP=2/GPU `0,1`；InternVL3-78B 固定 TP=4/GPU
+`0,1,2,3`。服务固定 revision、served name、BF16、`--limit-mm-per-prompt.image 1`。78B 启动前还会
+同时枚举选中的 GPU 与 `nvidia-smi` 物理 GPU，任一数量少于四张即拒绝；四张卡也必须逐卡通过空闲
+和显存 preflight。底层启动命令为：
 
 ```bash
-PROFILE=internvl3_78b MODEL_PATH=/locked/snapshot DRY_RUN=1 \
+PROFILE=internvl3_78b \
+MODEL_PATH="$MODEL_ROOT/InternVL3-78B-hf" \
+CUDA_VISIBLE_DEVICES=0,1,2,3 \
   bash scripts/msmu/serve_internvl3.sh
 ```
 
-本阶段不在 2×80GB 上强行加载其约 147GB BF16 权重。
+日常人工测试优先使用三阶段统一入口，由入口自动设置同样的四卡配置。2×80GB 仍不允许加载其约
+147GB BF16 权重；`TENSOR_PARALLEL_SIZE` 也不能覆盖为 4 以外的值。
 
 服务 ready 后必须先用非 MSMU 红/蓝图确认视觉输入真的被读取：
 
@@ -318,9 +323,9 @@ ZOEDEPTH_CHECKPOINT=/local/ZoeD_M12_NK.pt \
 人工执行优先使用 `run_manual_stage1.sh`、`run_manual_stage2.sh` 和
 `run_manual_stage3.sh`。阶段三评分统一使用 `score_pending_results.sh`。
 
-本轮阶段三排除 GPT-5、Gemini、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B。获准本地轨的唯一
-操作名单由阶段三 runbook 和串行脚本 `--list` 给出，并通过同一入口完成部署、完整推理、validator
-和 GPU 释放：
+已完成的历史阶段三批次排除 GPT-5、Gemini、Qwen PEFT、Qwen2.5-VL-72B 和 InternVL3-78B。该批次
+的唯一操作名单仍由阶段三 runbook 和串行脚本 `--list` 给出，并通过同一入口完成部署、完整推理、
+validator 和 GPU 释放：
 
 ```bash
 MANUAL_DRY_RUN=1 bash scripts/msmu/run_stage3_serial_inference.sh
@@ -336,6 +341,10 @@ endpoint 都只会导致有界等待/退出，不会被终止。完整参数见
 
 上述 13 轨是默认历史计划。Qwen3-VL 2B/4B/8B/32B 用同一串行脚本的 `--qwen3` 参数补测；
 评分仍由 `score_pending_results.sh` 从结果目录发现。
+
+InternVL3-78B 使用独立四卡手工补测，不加入上述默认计划。stage 1/2/3 分别使用
+`run_manual_stage1.sh`、`run_manual_stage2.sh` 和 `run_manual_stage3.sh` 的 `internvl3_78b` 入口；
+完整命令见三个阶段 runbook。
 
 服务器上由本项目协作者管理的 burn 只按 [GPU burn 启停手册](server-gpu-burn-runbook.md)操作固定
 pane。全部获准轨的完整 validator 通过后，可按阶段三文档在正式评分前生成一次固定样本答案抽查。

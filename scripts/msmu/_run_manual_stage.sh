@@ -232,7 +232,7 @@ case "${model}" in
     model_path="${INTERNVL3_78B_MODEL:-}"
     served_model_name="internvl3-78b-msmu"
     serve_script="${SCRIPT_DIR}/serve_internvl3.sh"
-    default_devices="0,1"
+    default_devices="0,1,2,3"
     ;;
   qwen25_vl_base)
     model_kind="qwen"
@@ -404,13 +404,6 @@ check_vllm_canary() {
       bash "${SCRIPT_DIR}/canary_vllm_vision.sh"
 }
 
-dry_run_internvl78_config() {
-  local check_dir="${OUTPUT_ROOT}/${stage_dir}/${run_slug}"
-  run_logged_command "${check_dir}/vllm_config_dry_run.log" \
-    env PROFILE="${profile}" MODEL_PATH="${model_path}" DRY_RUN=1 \
-      bash "${serve_script}"
-}
-
 qwen_gpu_preflight() {
   local devices="${MANUAL_CUDA_VISIBLE_DEVICES:-${default_devices}}"
   run_command env CUDA_VISIBLE_DEVICES="${devices}" MIN_FREE_GPU_MIB="${qwen_min_free_gpu_mib}" \
@@ -540,14 +533,7 @@ serve_judge() {
 case "${stage}" in
   1)
     if [[ "${model_kind}" == "judge" ]]; then fail "judge is not a stage-1 model"; fi
-    if [[ "${model}" == "internvl3_78b" ]]; then
-      action="${action:-check}"
-      if [[ "${action}" != "check" ]]; then
-        blocked "internvl3_78b only allows stage-1 static check; serve/canary are blocked"
-      fi
-      preflight_vllm
-      dry_run_internvl78_config
-    elif [[ "${model_kind}" == "vllm" ]]; then
+    if [[ "${model_kind}" == "vllm" ]]; then
       if [[ -z "${action}" ]]; then
         fail "${model} needs an action: serve in terminal A, check in terminal B"
       fi
@@ -563,9 +549,6 @@ case "${stage}" in
     fi
     ;;
   2)
-    if [[ "${model}" == "internvl3_78b" ]]; then
-      blocked "internvl3_78b is not approved for stage 2"
-    fi
     if [[ "${model_kind}" == "judge" ]]; then fail "judge is not a stage-2 model"; fi
     action="${action:-run}"
     if [[ "${action}" == "serve" ]]; then
@@ -585,7 +568,7 @@ case "${stage}" in
       serve_judge
       exit 0
     fi
-    if [[ "${model}" == "internvl3_78b" || "${model}" == "qwen25_vl_72b" ]]; then
+    if [[ "${model}" == "qwen25_vl_72b" ]]; then
       blocked "${model} is excluded from stage 3 because 70B+ models are outside the accepted test plan"
     fi
     action="${action:-infer}"

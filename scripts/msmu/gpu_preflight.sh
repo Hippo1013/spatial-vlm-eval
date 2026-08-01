@@ -10,12 +10,17 @@ fi
 
 gpu_spec="${CUDA_VISIBLE_DEVICES:-0}"
 minimum="${MIN_FREE_GPU_MIB:-20000}"
+minimum_gpu_count="${MIN_GPU_COUNT:-1}"
 maximum_utilization="${MAX_GPU_UTILIZATION_PERCENT:-10}"
 require_idle="${REQUIRE_IDLE_GPU:-1}"
 IFS=',' read -r -a gpu_ids <<< "${gpu_spec}"
 
 if [[ ! "${minimum}" =~ ^[0-9]+$ ]]; then
   echo "[gpu-preflight] MIN_FREE_GPU_MIB must be a non-negative integer" >&2
+  exit 2
+fi
+if [[ ! "${minimum_gpu_count}" =~ ^[1-9][0-9]*$ ]]; then
+  echo "[gpu-preflight] MIN_GPU_COUNT must be a positive integer" >&2
   exit 2
 fi
 if [[ ! "${maximum_utilization}" =~ ^[0-9]+$ ]] || (( maximum_utilization > 100 )); then
@@ -25,6 +30,26 @@ fi
 if [[ "${require_idle}" != "0" && "${require_idle}" != "1" ]]; then
   echo "[gpu-preflight] REQUIRE_IDLE_GPU must be 0 or 1" >&2
   exit 2
+fi
+
+if (( minimum_gpu_count > 1 )); then
+  selected_gpu_count="$(
+    printf '%s\n' "${gpu_ids[@]}" \
+      | awk '{$1=$1} NF && !seen[$0]++ {count++} END {print count + 0}'
+  )"
+  if (( selected_gpu_count < minimum_gpu_count )); then
+    echo "[gpu-preflight] requires at least ${minimum_gpu_count} selected GPUs; CUDA_VISIBLE_DEVICES provides ${selected_gpu_count}" >&2
+    exit 4
+  fi
+
+  available_gpu_count="$(
+    nvidia-smi --query-gpu=index --format=csv,noheader,nounits \
+      | awk '/^[[:space:]]*[0-9]+[[:space:]]*$/ {count++} END {print count + 0}'
+  )"
+  if (( available_gpu_count < minimum_gpu_count )); then
+    echo "[gpu-preflight] requires at least ${minimum_gpu_count} physical GPUs; nvidia-smi detected ${available_gpu_count}" >&2
+    exit 4
+  fi
 fi
 
 for gpu_id in "${gpu_ids[@]}"; do

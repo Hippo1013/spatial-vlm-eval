@@ -69,6 +69,7 @@ class ProfileRegistryTest(unittest.TestCase):
             "41d3b52c642058dfb087885bec0b8e37e0e67f8d",
         )
         self.assertFalse(PROFILES["internvl3_78b"].deployable_on_two_a800_80gb)
+        self.assertEqual(PROFILES["internvl3_78b"].default_tensor_parallel_size, 4)
         self.assertEqual(PROFILES["qwen25_vl_32b"].default_tensor_parallel_size, 1)
         self.assertEqual(PROFILES["qwen25_vl_72b"].default_tensor_parallel_size, 2)
         for key in ["qwen3_vl_2b", "qwen3_vl_4b", "qwen3_vl_8b", "qwen3_vl_32b"]:

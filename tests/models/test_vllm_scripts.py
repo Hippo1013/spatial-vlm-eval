@@ -32,7 +32,7 @@ class VLLMLaunchConfigTest(unittest.TestCase):
             "llava_next_yi_34b": ("84e4488fffae48f9da316ec31288b7c03f102ec7", "2"),
             "internvl3_8b": ("259a3b64a14623c0ec91a045cb43f7c5af5fa6af", "1"),
             "internvl3_38b": ("b2a05c0c325235f7530d8274c313a1d01082e069", "2"),
-            "internvl3_78b": ("3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356", "2"),
+            "internvl3_78b": ("3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356", "4"),
         }
         for profile, (revision, tensor_parallel) in expected.items():
             with self.subTest(profile=profile):
@@ -42,11 +42,17 @@ class VLLMLaunchConfigTest(unittest.TestCase):
                 self.assertIn("--dtype bfloat16", output)
                 self.assertIn("--limit-mm-per-prompt.image 1", output)
 
-    def test_internvl_78b_cannot_be_forced_without_dry_run(self):
+    def test_internvl_78b_rejects_tensor_parallel_override(self):
         environment = dict(os.environ)
-        for key in ["DRY_RUN", "MODEL_REVISION"]:
-            environment.pop(key, None)
-        environment.update({"PROFILE": "internvl3_78b", "MODEL_PATH": "/locked/snapshot"})
+        environment.pop("MODEL_REVISION", None)
+        environment.update(
+            {
+                "PROFILE": "internvl3_78b",
+                "MODEL_PATH": "/locked/snapshot",
+                "DRY_RUN": "1",
+                "TENSOR_PARALLEL_SIZE": "2",
+            }
+        )
         completed = subprocess.run(
             ["bash", str(self.script)],
             cwd=self.repository,
@@ -55,8 +61,45 @@ class VLLMLaunchConfigTest(unittest.TestCase):
             capture_output=True,
             text=True,
         )
+        self.assertEqual(completed.returncode, 2)
+        self.assertIn("requires TENSOR_PARALLEL_SIZE=4", completed.stderr)
+
+    def test_internvl_78b_serve_rejects_fewer_than_four_selected_gpus(self):
+        with tempfile.TemporaryDirectory() as directory:
+            fake_nvidia_smi = Path(directory) / "nvidia-smi"
+            fake_nvidia_smi.write_text(
+                """#!/usr/bin/env bash
+case "$*" in
+  *--query-gpu=index*) printf '0\\n1\\n2\\n3\\n' ;;
+  *--query-gpu=memory.free*) printf '80000\\n' ;;
+  *--query-gpu=utilization.gpu*) printf '0\\n' ;;
+  *--query-compute-apps=pid*) exit 0 ;;
+  *) exit 2 ;;
+esac
+""",
+                encoding="utf-8",
+            )
+            fake_nvidia_smi.chmod(0o755)
+            environment = dict(os.environ)
+            environment.update(
+                {
+                    "PATH": f"{directory}:{environment['PATH']}",
+                    "PROFILE": "internvl3_78b",
+                    "MODEL_PATH": "/locked/snapshot",
+                    "CUDA_VISIBLE_DEVICES": "0,1",
+                    "VLLM": "/usr/bin/false",
+                }
+            )
+            completed = subprocess.run(
+                ["bash", str(self.script)],
+                cwd=self.repository,
+                env=environment,
+                check=False,
+                capture_output=True,
+                text=True,
+            )
         self.assertEqual(completed.returncode, 4)
-        self.assertIn("not approved", completed.stderr)
+        self.assertIn("requires at least 4 selected GPUs", completed.stderr)
 
     def test_pipeline_uses_a_separate_required_judge_endpoint(self):
         pipeline = (self.repository / "scripts" / "msmu" / "_run_model_pipeline.sh").read_text(
@@ -121,6 +164,7 @@ class GPUPreflightTest(unittest.TestCase):
         free_mib: int,
         utilization: int,
         compute_pids: str,
+        fake_gpu_count: int = 1,
         extra_environment: dict[str, str] | None = None,
     ) -> subprocess.CompletedProcess[str]:
         with tempfile.TemporaryDirectory() as directory:
@@ -128,6 +172,11 @@ class GPUPreflightTest(unittest.TestCase):
             fake.write_text(
                 """#!/usr/bin/env bash
 case "$*" in
+  *--query-gpu=index*)
+    for ((gpu_index=0; gpu_index<FAKE_GPU_COUNT; gpu_index++)); do
+      printf '%s\\n' "${gpu_index}"
+    done
+    ;;
   *--query-gpu=memory.free*) printf '%s\\n' "${FAKE_FREE_MIB}" ;;
   *--query-gpu=utilization.gpu*) printf '%s\\n' "${FAKE_UTILIZATION}" ;;
   *--query-compute-apps=pid*) printf '%s' "${FAKE_COMPUTE_PIDS}" ;;
@@ -144,6 +193,7 @@ esac
                     "CUDA_VISIBLE_DEVICES": "0",
                     "MIN_FREE_GPU_MIB": "30000",
                     "FAKE_FREE_MIB": str(free_mib),
+                    "FAKE_GPU_COUNT": str(fake_gpu_count),
                     "FAKE_UTILIZATION": str(utilization),
                     "FAKE_COMPUTE_PIDS": compute_pids,
                 }
@@ -184,6 +234,46 @@ esac
             extra_environment={"MAX_GPU_UTILIZATION_PERCENT": "100"},
         )
         self.assertEqual(allowed.returncode, 0, allowed.stderr)
+
+    def test_minimum_gpu_count_checks_selection_and_physical_inventory(self):
+        too_few_selected = self.run_preflight(
+            free_mib=80000,
+            utilization=0,
+            compute_pids="",
+            fake_gpu_count=4,
+            extra_environment={
+                "CUDA_VISIBLE_DEVICES": "0,1",
+                "MIN_GPU_COUNT": "4",
+            },
+        )
+        self.assertEqual(too_few_selected.returncode, 4)
+        self.assertIn("requires at least 4 selected GPUs", too_few_selected.stderr)
+
+        too_few_physical = self.run_preflight(
+            free_mib=80000,
+            utilization=0,
+            compute_pids="",
+            fake_gpu_count=3,
+            extra_environment={
+                "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+                "MIN_GPU_COUNT": "4",
+            },
+        )
+        self.assertEqual(too_few_physical.returncode, 4)
+        self.assertIn("requires at least 4 physical GPUs", too_few_physical.stderr)
+
+        four_gpus = self.run_preflight(
+            free_mib=80000,
+            utilization=0,
+            compute_pids="",
+            fake_gpu_count=4,
+            extra_environment={
+                "CUDA_VISIBLE_DEVICES": "0,1,2,3",
+                "MIN_GPU_COUNT": "4",
+            },
+        )
+        self.assertEqual(four_gpus.returncode, 0, four_gpus.stderr)
+        self.assertEqual(four_gpus.stdout.count("[gpu-preflight] gpu="), 4)
 
 
 class ManualTestPreparationTest(unittest.TestCase):
