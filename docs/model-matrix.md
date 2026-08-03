@@ -16,14 +16,14 @@ inference protocol、prompt/template、图像处理、decoding 和 scorer protoc
 
 以下四个模型于 2026-08-03 纳入项目级目标模型范围。其 CV-Bench snapshot revision、上游 commit、
 input track 和 inference protocol 已锁入 CV-Bench registry；服务器 snapshot、license、专用 runner 与
-测试 gate 仍须现场验收。它们不加入 MSMU 的 `CURRENT_TARGET_PROFILE_KEYS`。
+测试 gate 已于 2026-08-03 现场验收。它们不加入 MSMU 的 `CURRENT_TARGET_PROFILE_KEYS`。
 
 | Model identity | Hugging Face weights | 纳入原因与报告输入 | 当前状态 |
 |---|---|---|---|
-| [RoboBrain2.5-8B-NV](https://huggingface.co/BAAI/RoboBrain2.5-8B-NV) | `BAAI/RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | MSMU-Bench 64.17、CV-Bench 94.58 的开源 RGB-only 报告模型 | CV-Bench RGB 轨已注册；服务器未建立 test gate |
-| [RoboBrain2.5-8B-MT](https://huggingface.co/BAAI/RoboBrain2.5-8B-MT) | `BAAI/RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | Q-Spatial Bench 78.31 的开源 RGB-only 公平报告模型；论文表格也写作 MTT | CV-Bench RGB 轨已注册；服务器未建立 test gate |
-| [HiSpatial-3B](https://huggingface.co/lhzzzzzy/HiSpatial-3B) | `lhzzzzzy/HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | Q-Spatial Bench 85.16 的开源报告模型；该值使用 RGB + MoGe-2 估计 XYZ point map，属于原生/非公平输入 | CV-Bench 仅注册架构合法的 RGB + MoGe-2 XYZ 轨；无伪 RGB-only 轨 |
-| [SpatialLadder-3B](https://huggingface.co/hongxingli/SpatialLadder-3B) | `hongxingli/SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | SPBench-SI 70.20 的最高开源 RGB-only 报告模型 | CV-Bench direct/thinking 两轨已注册；服务器未建立 test gate |
+| [RoboBrain2.5-8B-NV](https://huggingface.co/BAAI/RoboBrain2.5-8B-NV) | `BAAI/RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | MSMU-Bench 64.17、CV-Bench 94.58 的开源 RGB-only 报告模型 | CV-Bench RGB test gate passed（2026-08-03） |
+| [RoboBrain2.5-8B-MT](https://huggingface.co/BAAI/RoboBrain2.5-8B-MT) | `BAAI/RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | Q-Spatial Bench 78.31 的开源 RGB-only 公平报告模型；论文表格也写作 MTT | CV-Bench RGB test gate passed（2026-08-03） |
+| [HiSpatial-3B](https://huggingface.co/lhzzzzzy/HiSpatial-3B) | `lhzzzzzy/HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | Q-Spatial Bench 85.16 的开源报告模型；该值使用 RGB + MoGe-2 估计 XYZ point map，属于原生/非公平输入 | CV-Bench RGB + MoGe-2 XYZ test gate passed（2026-08-03）；无伪 RGB-only 轨 |
+| [SpatialLadder-3B](https://huggingface.co/hongxingli/SpatialLadder-3B) | `hongxingli/SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | SPBench-SI 70.20 的最高开源 RGB-only 报告模型 | CV-Bench direct/thinking test gate 均 passed（2026-08-03） |
 
 这些分数是外部公开报告参考，不是本项目结果。RoboBrain 两个权重使用相同架构与训练数据，但分别是
 NVIDIA 与 Moore Threads 训练版本，作为两个独立模型身份保留。HiSpatial 的架构强制需要 XYZ point
@@ -35,35 +35,36 @@ map，因此不建立虚假的 RGB-only 轨。实现 adapter 时分别
 
 ## CV-Bench 当前 23 条目标 inference profile
 
-以下 23 条轨已在 registry、CLI、validator、scorer 和报告发现中注册。状态仅表示本地实现完成；截至
-2026-08-03，本轮没有启动服务器 test stage 或 full-2638，不能把本表解释为已有分数。通用轨先审计
+以下 23 条轨已在 registry、CLI、validator、scorer 和报告发现中注册。截至 2026-08-03，服务器已现场
+审计 22 条 test gate；InternVL3-78B 因当前只有两张 A800 而无法满足四卡门禁。尚未启动 full-2638，
+不能把本表解释为已有分数。通用轨先审计
 官方 Transformers processor/template，再使用 vLLM 0.19；不一致时只能显式回退到锁定 runner。
 
 | Profile | Model / locked revision | Input track | Backend / decoding | 当前状态 |
 |---|---|---|---|---|
-| `llava_next_mistral_7b` | `llava-hf/llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | RGB | vLLM；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `llava_next_yi_34b` | `llava-hf/llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | RGB | vLLM TP=2；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `internvl3_8b` | `OpenGVLab/InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | RGB | vLLM；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `internvl3_38b` | `OpenGVLab/InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | RGB | vLLM TP=2；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | RGB | vLLM TP=4，四张 80GB；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `qwen3_vl_2b` | `Qwen/Qwen3-VL-2B-Instruct@89644892e4d85e24eaac8bacfd4f463576704203` | RGB | vLLM；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `qwen3_vl_4b` | `Qwen/Qwen3-VL-4B-Instruct@ebb281ec70b05090aa6165b016eac8ec08e71b17` | RGB | vLLM；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `qwen3_vl_8b` | `Qwen/Qwen3-VL-8B-Instruct@0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | RGB | vLLM；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `qwen3_vl_32b` | `Qwen/Qwen3-VL-32B-Instruct@0cfaf48183f594c314753d30a4c4974bc75f3ccb` | RGB | vLLM TP=2；greedy/512/seed 42 | 已注册；test gate 未运行 |
-| `gpt5_openrouter_non_zdr` | `openai/gpt-5-2025-08-07` | RGB | OpenRouter first-party non-ZDR；medium/16384 | 已注册；付费 test gate 未运行 |
-| `gemini31pro_openrouter_non_zdr` | `google/gemini-3.1-pro-preview-20260219` | RGB | OpenRouter first-party non-ZDR；temp 0/medium/16384 | 已注册；付费 test gate 未运行 |
-| `ssr_rgb` | `SSR-VLM-7B@7bcb4636f1396325f27f7fbb2f2df121128931bf` | RGB | locked upstream runner；generation manifest 必需 | 已注册；runner 未验收 |
-| `ssr_native` | 上述 VLM + `SSR-MIDI-7B@8ed878fa16e3e440741ed8c1fedfcfe40710258d` | RGB + DepthPro + MIDI + TOR10 | locked upstream runner；generation manifest 必需 | 已注册；runner 未验收 |
-| `spatialrgpt_rgb` | `SpatialRGPT-VILA1.5-8B@64df7902f82b5053f5a53455095805e6de3a1f87` | RGB，无 region/mask/depth | official VILA；greedy/128 | 已注册；runner 未验收 |
-| `3dthinker_rgb` | `3DThinker-Mindcube@69a70411605f86ec69bada0a625bb96ddee995d9` | RGB | locked upstream runner；generation manifest 必需 | 已注册；runner 未验收 |
-| `3dthinker_mental3d` | 同上 | RGB + Mental-3D 提示词 | sampling 0.7/top-p 0.9/2048/seed 42 | 已注册；runner 未验收 |
-| `spatialbot_rgb` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | RGB | official Bunny；greedy/128 | 已注册；runner 未验收 |
-| `spatialbot_zoedepth` | 同上 | RGB + ZoeDepth | official Bunny RGB-D；greedy/128 | 已注册；runner 未验收 |
-| `robobrain25_8b_nv_rgb` | `RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | RGB | official processor；sampling 0.7/top-p 0.8/768/seed 42 | 已注册；runner 未验收 |
-| `robobrain25_8b_mt_rgb` | `RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | RGB | official processor；sampling 0.7/top-p 0.8/768/seed 42 | 已注册；runner 未验收 |
-| `hispatial3b_moge2_xyz` | `HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | RGB + MoGe-2 XYZ | official predictor；greedy/100 | 已注册；完整 2638 轨 runner 未验收 |
-| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB | official Qwen2.5-VL；SDPA；128；generation manifest 必需 | 已注册；runner 未验收 |
-| `spatialladder3b_thinking` | 同上 | RGB + 官方思考提示词 | SDPA；temp 0.01/1024/seed 42；generation manifest 必需 | 已注册；runner 未验收 |
+| `llava_next_mistral_7b` | `llava-hf/llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | RGB | vLLM；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `llava_next_yi_34b` | `llava-hf/llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | RGB | vLLM TP=2；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `internvl3_8b` | `OpenGVLab/InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | RGB | vLLM；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `internvl3_38b` | `OpenGVLab/InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | RGB | vLLM TP=2；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | RGB | vLLM TP=4，四张 80GB；greedy/512/seed 42 | test gate blocked：当前服务器仅 2×A800（2026-08-03） |
+| `qwen3_vl_2b` | `Qwen/Qwen3-VL-2B-Instruct@89644892e4d85e24eaac8bacfd4f463576704203` | RGB | vLLM；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `qwen3_vl_4b` | `Qwen/Qwen3-VL-4B-Instruct@ebb281ec70b05090aa6165b016eac8ec08e71b17` | RGB | vLLM；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `qwen3_vl_8b` | `Qwen/Qwen3-VL-8B-Instruct@0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | RGB | vLLM；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `qwen3_vl_32b` | `Qwen/Qwen3-VL-32B-Instruct@0cfaf48183f594c314753d30a4c4974bc75f3ccb` | RGB | vLLM TP=2；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `gpt5_openrouter_non_zdr` | `openai/gpt-5-2025-08-07` | RGB | OpenRouter first-party non-ZDR；medium/16384 | paid test gate passed（2026-08-03） |
+| `gemini31pro_openrouter_non_zdr` | `google/gemini-3.1-pro-preview-20260219` | RGB | OpenRouter first-party non-ZDR；temp 0/medium/16384 | paid test gate passed（2026-08-03） |
+| `ssr_rgb` | `SSR-VLM-7B@7bcb4636f1396325f27f7fbb2f2df121128931bf` | RGB | locked upstream runner；generation manifest 必需 | test gate passed（2026-08-03） |
+| `ssr_native` | 上述 VLM + `SSR-MIDI-7B@8ed878fa16e3e440741ed8c1fedfcfe40710258d` | RGB + DepthPro + MIDI + TOR10 | locked upstream runner；generation manifest 必需 | test gate passed（2026-08-03） |
+| `spatialrgpt_rgb` | `SpatialRGPT-VILA1.5-8B@64df7902f82b5053f5a53455095805e6de3a1f87` | RGB，无 region/mask/depth | official VILA；greedy/128 | test gate passed（2026-08-03） |
+| `3dthinker_rgb` | `3DThinker-Mindcube@69a70411605f86ec69bada0a625bb96ddee995d9` | RGB | locked upstream runner；generation manifest 必需 | test gate passed（2026-08-03） |
+| `3dthinker_mental3d` | 同上 | RGB + Mental-3D 提示词 | sampling 0.7/top-p 0.9/2048/seed 42 | test gate passed（2026-08-03） |
+| `spatialbot_rgb` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | RGB | official Bunny；greedy/128 | test gate passed（2026-08-03） |
+| `spatialbot_zoedepth` | 同上 | RGB + ZoeDepth | official Bunny RGB-D；greedy/128 | test gate passed（2026-08-03） |
+| `robobrain25_8b_nv_rgb` | `RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | RGB | official processor；sampling 0.7/top-p 0.8/768/seed 42 | test gate passed（2026-08-03） |
+| `robobrain25_8b_mt_rgb` | `RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | RGB | official processor；sampling 0.7/top-p 0.8/768/seed 42 | test gate passed（2026-08-03） |
+| `hispatial3b_moge2_xyz` | `HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | RGB + MoGe-2 XYZ | official predictor；greedy/100 | test gate passed（2026-08-03） |
+| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB | official Qwen2.5-VL；SDPA；128；generation manifest 必需 | test gate passed（2026-08-03） |
+| `spatialladder3b_thinking` | 同上 | RGB + 官方思考提示词 | SDPA；temp 0.01/1024/seed 42；generation manifest 必需 | test gate passed（2026-08-03） |
 
 通用开源轨的其余统一参数为 temperature 0、`top_p=None`、beam 1。sampling 专用轨的 seed、batch 和
 sharding 进入 inference protocol/gate。HiSpatial 上游 CV 脚本只覆盖 2D Relation 和 3D；本项目统一

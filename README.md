@@ -19,7 +19,8 @@ scorer protocol 与发布门禁。模型适配与 benchmark 评分分层，任�
 ## 当前评测范围
 
 项目目标覆盖 MSMU-Bench、CV-Bench、Q-Spatial Bench 和 SPBench-SI。MSMU 的既有 18 条目标 profile
-已完成；CV-Bench 已实现 23 条目标轨的本地链路，但尚未执行服务器 test gate 或正式 2638 条推理。
+已完成；CV-Bench 已实现 23 条目标轨的链路，服务器已完成其中 22 条 test gate；InternVL3-78B 因
+当前服务器只有两张 A800、协议要求四张 80GB GPU 而保持阻塞。正式 2638 条推理尚未启动。
 Q-Spatial Bench 与 SPBench-SI 尚未实现。精确范围、数据准备边界与当前阶段见
 [四 Benchmark 评测范围](docs/evaluation-scope.md)。
 

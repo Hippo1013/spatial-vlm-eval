@@ -59,8 +59,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   组合空间语义 canary 的轨可在严格 artifact 审计后迁移当前 gate，避免重复模型调用；颜色回答只需
   明确包含目标色，允许 `blue-purple`、`red-orange` 等近色措辞。当前 protocol 的 gate 若仅组合
   adapter source digest 改变、其余 binding 完全相同，也可审计迁移而不重复调用模型。
-- CV-Bench 本地实现阶段完成；服务器 test gate 和 full-2638 尚未运行。RoboBrain2.5 NV/MT、HiSpatial
-  和 SpatialLadder 的 CV-Bench revision/input track 已锁定，Q-Spatial Bench 与 SPBench-SI 顺序仍待定。
+- CV-Bench 服务器 test stage 已现场完成 22/23 条轨的红/蓝视觉接收、smoke8 和单图审计 gate；
+  InternVL3-78B 因当前服务器仅有 2×A800、协议要求 4×80GB GPU 而保持阻塞，full-2638 尚未启动。
 - OpenAI-compatible 可恢复 runner 仅对 429/5xx 执行指数退避；非重试型 HTTP 错误不重复请求，成功
   journal 继续保证 resume 不重复付费。CV-Bench 本地模型每次 test/full 另保存只读 GPU inventory 与
   compute-process 审计；InternVL3-78B 强制显式枚举四张 80GB GPU。

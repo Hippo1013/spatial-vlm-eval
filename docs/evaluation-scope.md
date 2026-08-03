@@ -79,5 +79,6 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 5. processor/template、视觉 canary、smoke8 与输入审计形成绑定 gate；只有完整 2638 条和 publication
    gates 通过后才能发布结果。
 
-本轮不自动启动服务器 full-2638。下一执行动作是按 backend/family 各选一条运行 test stage，确认
-锁定资产、GPU 与专用 runner 后再逐轨建立 gate。
+本轮不自动启动服务器 full-2638。截至 2026-08-03，22/23 条轨已通过服务器 test gate；
+InternVL3-78B 因当前服务器只有两张 A800、协议要求四张 80GB GPU 而阻塞。下一执行动作是取得四卡
+资源补齐该 gate；其余轨可在用户确认后进入正式 full 阶段。
