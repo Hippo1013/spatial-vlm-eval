@@ -168,6 +168,39 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertNotIn("llava_next_", helper)
         self.assertNotIn("qwen3_vl_", helper)
 
+    def test_single_model_entry_is_targeted_and_globally_reported(self) -> None:
+        readme = (self.repository / "README.md").read_text(encoding="utf-8")
+        inference = (self.docs / "msmu-inference.md").read_text(encoding="utf-8")
+        stage3 = (self.docs / "msmu-stage3-full-eval.md").read_text(
+            encoding="utf-8"
+        )
+        scoring = (self.docs / "msmu-stage3-scoring-commands.md").read_text(
+            encoding="utf-8"
+        )
+        script = (
+            self.repository / "scripts" / "msmu" / "run_model_evaluation.sh"
+        ).read_text(encoding="utf-8")
+        for document in (readme, inference, stage3):
+            with self.subTest(document=document[:40]):
+                self.assertIn("run_model_evaluation.sh", document)
+                self.assertIn("全局", document)
+        self.assertIn("--predictions", scoring)
+        self.assertIn("--predictions", script)
+        self.assertIn("build_results_report.sh", script)
+
+    def test_generated_outputs_stay_outside_repository(self) -> None:
+        for directory_name in ("output", "outputs"):
+            with self.subTest(directory_name=directory_name):
+                self.assertFalse((self.repository / directory_name).is_dir())
+
+        gitignore = (self.repository / ".gitignore").read_text(encoding="utf-8")
+        stage3 = (self.docs / "msmu-stage3-full-eval.md").read_text(
+            encoding="utf-8"
+        )
+        self.assertNotIn("/outputs/", gitignore)
+        self.assertNotIn("$REPO_ROOT/outputs", stage3)
+        self.assertIn("$OUTPUT_ROOT/_answer_audit", stage3)
+
     def test_agents_routes_document_reading_and_updates(self) -> None:
         agents = (self.repository / "AGENTS.md").read_text(encoding="utf-8")
         for required in [

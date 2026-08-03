@@ -8,8 +8,13 @@ from typing import Any, ClassVar
 
 from ...benchmarks.msmu.data import MSMUModelInput, QwenGenerationCollator
 from ..common.provenance import verify_hf_snapshot_revision
-from ..common.runtime import GenerationResult, InferenceAdapter, atomic_write_json
-from ..common.vision_canary import SOLID_COLOR_QUESTION, validate_solid_color_answers
+from ..common.runtime import GenerationResult, InferenceAdapter, atomic_write_json, pixel_sha256
+from ..common.vision_canary import (
+    VISION_CANARY_PROTOCOL,
+    VISION_CANARY_QUESTION,
+    make_vision_canary_image,
+    validate_vision_canary_answer,
+)
 from ..profiles import get_profile
 
 
@@ -251,36 +256,30 @@ class QwenVLAdapterBase(InferenceAdapter):
         ]
 
     def run_vision_canary(self, output: str | Path) -> dict[str, Any]:
-        """Run two semantic image probes through the same loaded model and processor."""
-
-        from PIL import Image
+        """Run one spatial image probe through the same loaded model and processor."""
 
         # Establish the same processor/runtime metadata as an ordinary MSMU run
         # before model loading adds transient runtime fields such as torch.
         self._ensure_processor()
         runtime_versions_before_canary = dict(self._runtime_versions)
-        answers: dict[str, GenerationResult] = {}
+        image = make_vision_canary_image()
+        answer: GenerationResult | None = None
         try:
-            for color in ("red", "blue"):
-                result = self.generate_batch(
-                    [
-                        MSMUModelInput(
-                            index=-1,
-                            image=Image.new("RGB", (64, 64), color),
-                            question=SOLID_COLOR_QUESTION,
-                        )
-                    ]
-                )
-                if len(result) != 1:
-                    raise ValueError(
-                        f"Qwen vision canary expected one {color} result; got {len(result)}"
+            results = self.generate_batch(
+                [
+                    MSMUModelInput(
+                        index=-1,
+                        image=image,
+                        question=VISION_CANARY_QUESTION,
                     )
-                if result[0].metadata.get("num_model_image_tensors") != 1:
-                    raise ValueError(
-                        f"Qwen vision canary {color} probe did not report exactly one image tensor"
-                    )
-                answers[color] = result[0]
-            validate_solid_color_answers(answers["red"].text, answers["blue"].text)
+                ]
+            )
+            if len(results) != 1:
+                raise ValueError(f"Qwen vision canary expected one result; got {len(results)}")
+            answer = results[0]
+            if answer.metadata.get("num_model_image_tensors") != 1:
+                raise ValueError("Qwen vision canary did not report exactly one image tensor")
+            validate_vision_canary_answer(answer.text)
         finally:
             # Loading the canary model must not change the MSMU journal identity.
             self._runtime_versions = runtime_versions_before_canary
@@ -290,15 +289,15 @@ class QwenVLAdapterBase(InferenceAdapter):
             "model": self.base_model,
             "model_revision": self.base_model_revision,
             "inference_protocol": self.profile.inference_protocol,
-            "question": SOLID_COLOR_QUESTION,
+            "canary_protocol": VISION_CANARY_PROTOCOL,
+            "question": VISION_CANARY_QUESTION,
+            "request_count": 1,
             "request_image_count": 1,
             "image_mode": "RGB",
-            "image_size": [64, 64],
-            "red_answer": answers["red"].text,
-            "blue_answer": answers["blue"].text,
-            "generation": {
-                color: dict(answers[color].metadata) for color in ("red", "blue")
-            },
+            "image_size": list(image.size),
+            "image_pixel_sha256": pixel_sha256(image),
+            "answer": answer.text,
+            "generation": dict(answer.metadata),
         }
         atomic_write_json(Path(output).resolve(), report)
         return report

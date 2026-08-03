@@ -15,7 +15,9 @@ shift
 print_models() {
   cat <<'EOF'
 gpt5
+gpt5_openrouter_non_zdr
 gemini31pro
+gemini31pro_openrouter_non_zdr
 llava_next_mistral_7b
 llava_next_yi_34b
 internvl3_8b
@@ -44,7 +46,7 @@ usage() {
   case "${stage}" in
     1) command="run_manual_stage1.sh MODEL [serve|check|run]" ;;
     2) command="run_manual_stage2.sh MODEL [serve|run]" ;;
-    3) command="run_manual_stage3.sh MODEL [serve|infer|score]" ;;
+    3) command="run_manual_stage3.sh MODEL [serve|infer|resolve|describe|score]" ;;
     *) command="run_manual_stageN.sh MODEL ACTION" ;;
   esac
   cat <<EOF
@@ -166,6 +168,8 @@ qwen_revision=""
 qwen_device_map="single"
 qwen_batch_size="8"
 qwen_min_free_gpu_mib="30000"
+stage3_supported="yes"
+stage3_block_reason=""
 
 api_backend="${MANUAL_API_BACKEND:-openrouter}"
 case "${model}" in
@@ -179,6 +183,15 @@ case "${model}" in
     esac
     run_slug="gpt5-${api_backend}"
     ;;
+  gpt5_openrouter_non_zdr)
+    model_kind="api"
+    profile="gpt5_openrouter_non_zdr"
+    if [[ "${api_backend}" != "openrouter" ]]; then
+      fail "gpt5_openrouter_non_zdr only supports MANUAL_API_BACKEND=openrouter"
+    fi
+    api_key_variable="OPENROUTER_API_KEY"
+    run_slug="gpt5-openrouter-non-zdr-medium-16384-v3"
+    ;;
   gemini31pro)
     model_kind="api"
     profile="gemini31pro"
@@ -188,6 +201,15 @@ case "${model}" in
       *) fail "gemini31pro supports MANUAL_API_BACKEND=openrouter or google" ;;
     esac
     run_slug="gemini31pro-${api_backend}"
+    ;;
+  gemini31pro_openrouter_non_zdr)
+    model_kind="api"
+    profile="gemini31pro_openrouter_non_zdr"
+    if [[ "${api_backend}" != "openrouter" ]]; then
+      fail "gemini31pro_openrouter_non_zdr only supports MANUAL_API_BACKEND=openrouter"
+    fi
+    api_key_variable="OPENROUTER_API_KEY"
+    run_slug="gemini31pro-openrouter-non-zdr-medium-16384-v3"
     ;;
   llava_next_mistral_7b)
     model_kind="vllm"
@@ -262,6 +284,8 @@ case "${model}" in
     qwen_device_map="balanced"
     qwen_batch_size="1"
     qwen_min_free_gpu_mib="75000"
+    stage3_supported="no"
+    stage3_block_reason="70B+ models are outside the accepted stage-3 test plan"
     ;;
   qwen25_vl_peft)
     model_kind="qwen_peft"
@@ -319,6 +343,7 @@ case "${model}" in
     ;;
   spatialrgpt)
     model_kind="spatialrgpt"
+    profile="spatialrgpt"
     run_slug="spatialrgpt-rgb-only"
     model_path="${SPATIALRGPT_MODEL:-}"
     ;;
@@ -404,6 +429,16 @@ check_vllm_canary() {
       bash "${SCRIPT_DIR}/canary_vllm_vision.sh"
 }
 
+check_api_canary() {
+  local check_dir="${OUTPUT_ROOT}/${stage_dir}/${run_slug}"
+  mkdir -p "${check_dir}"
+  require_api_key "${api_key_variable}"
+  run_command env -u INFERENCE_BASE_URL \
+    PROFILE="${profile}" BACKEND="${api_backend}" API_KEY_ENV="${api_key_variable}" \
+    CANARY_REPORT="${check_dir}/vision_canary.json" \
+      bash "${SCRIPT_DIR}/canary_openai_compatible_vision.sh"
+}
+
 qwen_gpu_preflight() {
   local devices="${MANUAL_CUDA_VISIBLE_DEVICES:-${default_devices}}"
   run_command env CUDA_VISIBLE_DEVICES="${devices}" MIN_FREE_GPU_MIB="${qwen_min_free_gpu_mib}" \
@@ -412,8 +447,9 @@ qwen_gpu_preflight() {
 
 run_model_pipeline() {
   local target_mode="$1" score="$2"
+  local resolve_only="${RESOLVE_PATHS_ONLY:-0}"
   local -a unset_args=() target_assignments=()
-  if [[ "${model_kind}" == "api" && "${score}" != "1" ]]; then
+  if [[ "${model_kind}" == "api" && "${score}" != "1" && "${resolve_only}" != "1" ]]; then
     require_api_key "${api_key_variable}"
   fi
   case "${target_mode}" in
@@ -431,6 +467,9 @@ run_model_pipeline() {
       ;;
     *) fail "internal error: unsupported target mode ${target_mode}" ;;
   esac
+  if [[ "${resolve_only}" == "1" ]]; then
+    target_assignments+=(RESOLVE_PATHS_ONLY=1)
+  fi
 
   case "${model_kind}" in
     api)
@@ -452,7 +491,7 @@ run_model_pipeline() {
     qwen|qwen_peft)
       require_value QWEN_MODEL "${qwen_model}"
       require_value QWEN_REVISION "${qwen_revision}"
-      if [[ "${score}" != "1" ]]; then qwen_gpu_preflight; fi
+      if [[ "${score}" != "1" && "${resolve_only}" != "1" ]]; then qwen_gpu_preflight; fi
       local -a qwen_args=(
         env "${unset_args[@]}" ${target_assignments[@]+"${target_assignments[@]}"}
         RUN_NAME="${run_name}" RUN_SCORE="${score}" SCORE_ONLY="${score}"
@@ -530,6 +569,17 @@ serve_judge() {
       bash "${SCRIPT_DIR}/serve_local_judge.sh"
 }
 
+describe_model() {
+  printf 'descriptor\tmodel\t%s\n' "${model}"
+  printf 'descriptor\tmodel_kind\t%s\n' "${model_kind}"
+  printf 'descriptor\tprofile\t%s\n' "${profile}"
+  printf 'descriptor\trun_slug\t%s\n' "${run_slug}"
+  printf 'descriptor\tserved_model_name\t%s\n' "${served_model_name}"
+  printf 'descriptor\tdefault_devices\t%s\n' "${default_devices}"
+  printf 'descriptor\tstage3_supported\t%s\n' "${stage3_supported}"
+  printf 'descriptor\tstage3_block_reason\t%s\n' "${stage3_block_reason}"
+}
+
 case "${stage}" in
   1)
     if [[ "${model_kind}" == "judge" ]]; then fail "judge is not a stage-1 model"; fi
@@ -545,6 +595,7 @@ case "${stage}" in
     else
       action="${action:-run}"
       if [[ "${action}" != "run" ]]; then fail "stage 1 action for ${model} must be run"; fi
+      if [[ "${model_kind}" == "api" ]]; then check_api_canary; fi
       run_model_pipeline canary 0
     fi
     ;;
@@ -568,8 +619,12 @@ case "${stage}" in
       serve_judge
       exit 0
     fi
-    if [[ "${model}" == "qwen25_vl_72b" ]]; then
-      blocked "${model} is excluded from stage 3 because 70B+ models are outside the accepted test plan"
+    if [[ "${action}" == "describe" ]]; then
+      describe_model
+      exit 0
+    fi
+    if [[ "${stage3_supported}" != "yes" ]]; then
+      blocked "${model} is excluded from stage 3 because ${stage3_block_reason}"
     fi
     action="${action:-infer}"
     case "${action}" in
@@ -580,13 +635,19 @@ case "${stage}" in
       infer)
         run_model_pipeline full 0
         ;;
+      resolve)
+        # Path resolution is read-only and must remain available to higher-level
+        # dry-run orchestrators.
+        manual_dry_run=0
+        RESOLVE_PATHS_ONLY=1 run_model_pipeline full 0
+        ;;
       score)
         if [[ "${model_kind}" == "vllm" && "${inference_base_url}" == "${judge_base_url}" ]]; then
           fail "judge and tested-model endpoints must be different"
         fi
         run_model_pipeline full 1
         ;;
-      *) fail "stage 3 action must be serve, infer, or score" ;;
+      *) fail "stage 3 action must be serve, infer, resolve, describe, or score" ;;
     esac
     ;;
 esac

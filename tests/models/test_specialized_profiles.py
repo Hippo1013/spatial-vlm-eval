@@ -48,8 +48,8 @@ from spatial_vlm_eval.models.three_d_thinker.infer import (
 
 
 class ProfileRegistryTest(unittest.TestCase):
-    def test_registry_contains_exactly_twenty_one_unique_protocols(self):
-        self.assertEqual(len(PROFILES), 21)
+    def test_registry_contains_exactly_twenty_three_unique_protocols(self):
+        self.assertEqual(len(PROFILES), 23)
         protocols = [profile.inference_protocol for profile in PROFILES.values()]
         self.assertEqual(len(protocols), len(set(protocols)))
         self.assertTrue(all(protocol.startswith("msmu_") for protocol in protocols))

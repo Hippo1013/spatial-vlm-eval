@@ -77,8 +77,8 @@
    traceback 或完整运行过程。
 4. 行为或操作语义变化进入 CHANGELOG，长期设计取舍进入 ADR。不要新建 `DEVLOG.md`，也不要在
    AGENTS、README、CHANGELOG、ADR 和 troubleshooting 之间复制同一段叙述。
-5. `outputs/`、`logs/` 和用户自用的 `tmp/` 均不进入 Git；其中 `tmp/` 不属于项目知识源，agent 不读取
-   或同步。
+5. 正式结果、人工抽查和派生导出都写入仓库外 `OUTPUT_ROOT`；仓库根不得创建 `output/` 或
+   `outputs/`。`logs/` 不进入 Git；用户自用的 `tmp/` 不属于项目知识源，agent 不读取或同步。
 
 ## 更新触发条件与时机
 

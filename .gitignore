@@ -20,7 +20,6 @@ venv/
 /datasets/
 /models/
 /checkpoints/
-/outputs/
 /logs/
 /tmp/
 /environment-manifests/

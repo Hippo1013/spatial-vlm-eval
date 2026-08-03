@@ -379,6 +379,7 @@ def run_msmu_inference(
     journal_path: str | Path | None = None,
     metadata_path: str | Path | None = None,
     retries: int = 2,
+    retry_missing_passes: int = 0,
     workers: int = 1,
     resume: bool = True,
 ) -> dict[str, Any]:
@@ -406,9 +407,12 @@ def run_msmu_inference(
         raise ValueError("No target indices")
     selected = sorted(selected)
     retry_count = int(retries)
+    missing_retry_pass_count = int(retry_missing_passes)
     worker_count = int(workers)
     if retry_count < 0:
         raise ValueError("retries must be non-negative")
+    if missing_retry_pass_count < 0:
+        raise ValueError("retry_missing_passes must be non-negative")
     if worker_count <= 0:
         raise ValueError("workers must be positive")
 
@@ -437,12 +441,14 @@ def run_msmu_inference(
         raise FileExistsError(
             f"Refusing to overwrite an existing prediction file before the journal is complete: {output_path}"
         )
-    pending_indices = [index for index in selected if index not in successes]
-
-    def run_batch(batch: Sequence[MSMUModelInput]) -> dict[int, GenerationResult]:
+    def run_batch(
+        batch: Sequence[MSMUModelInput],
+        *,
+        attempt_offset: int = 0,
+    ) -> dict[int, GenerationResult]:
         audits = [input_audit(model_input, adapter_metadata) for model_input in batch]
         last_error: Exception | None = None
-        for attempt in range(1, retry_count + 2):
+        for attempt in range(attempt_offset + 1, attempt_offset + retry_count + 2):
             try:
                 generated = adapter.generate_batch(batch)
                 if len(generated) != len(batch):
@@ -488,14 +494,14 @@ def run_msmu_inference(
         assert last_error is not None
         return {}
 
-    try:
+    def run_indices(indices: Sequence[int], *, attempt_offset: int) -> None:
         if worker_count == 1:
-            for start in range(0, len(pending_indices), batch_size):
-                batch = contract.model_inputs(pending_indices[start : start + batch_size])
-                successes.update(run_batch(batch))
+            for start in range(0, len(indices), batch_size):
+                batch = contract.model_inputs(indices[start : start + batch_size])
+                successes.update(run_batch(batch, attempt_offset=attempt_offset))
         else:
             with ThreadPoolExecutor(max_workers=worker_count) as executor:
-                pending_iterator = iter(pending_indices)
+                pending_iterator = iter(indices)
                 futures: dict[Any, int] = {}
 
                 def submit_next() -> bool:
@@ -504,7 +510,13 @@ def run_msmu_inference(
                     except StopIteration:
                         return False
                     model_input = contract.model_input(index)
-                    futures[executor.submit(run_batch, [model_input])] = index
+                    futures[
+                        executor.submit(
+                            run_batch,
+                            [model_input],
+                            attempt_offset=attempt_offset,
+                        )
+                    ] = index
                     return True
 
                 for _ in range(worker_count):
@@ -515,6 +527,16 @@ def run_msmu_inference(
                     futures.pop(future)
                     successes.update(future.result())
                     submit_next()
+
+    try:
+        for pass_index in range(missing_retry_pass_count + 1):
+            pending_indices = [index for index in selected if index not in successes]
+            if not pending_indices:
+                break
+            run_indices(
+                pending_indices,
+                attempt_offset=pass_index * (retry_count + 1),
+            )
     finally:
         adapter.close()
 
@@ -564,6 +586,10 @@ def run_msmu_inference(
             "hostname": socket.gethostname(),
             "packages": runtime_packages,
             "gpus": _gpu_metadata(),
+            "retry_policy": {
+                "retries_per_pass": retry_count,
+                "retry_missing_passes": missing_retry_pass_count,
+            },
         },
     }
     atomic_write_json(resolved_metadata, metadata)

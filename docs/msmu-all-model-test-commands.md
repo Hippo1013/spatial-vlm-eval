@@ -69,7 +69,11 @@ pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol
   72B 默认双卡 `0,1` balanced 加载，三者输出目录互不复用。
 - 当前补测使用 `qwen3_vl_2b`、`qwen3_vl_4b`、`qwen3_vl_8b`、`qwen3_vl_32b`。四者默认单卡，
   32B 固定 batch size 1；每个参数量使用独立 revision、protocol 和输出目录。
-- Qwen stage 1 会先运行红/蓝合成图语义 canary，再生成 1 条 MSMU canary；两者都通过才进入 stage 2。
+- Qwen stage 1 会先用一张“左上红圆、右下蓝方块”的非 MSMU 组合图检查颜色、形状和位置，再生成
+  1 条 MSMU canary；两者都通过才进入 stage 2。
+- GPT-5/Gemini stage 1 同样先运行上述组合视觉 canary（每模型 1 次 generation、无 inference retry），
+  再生成 2 条 MSMU canary；`vision_canary.json`、provider/model/media audit 和 subset validator 都通过
+  才能进入 stage 2。
 - API key 只在当前终端导出，不能写入 Git。
 - `qwen25_vl_peft` 从 `.env.server` 读取 `QWEN_PEFT_CHECKPOINT`；脚本会把 checkpoint 所在目录和
   basename 加入 run slug，避免与其他 PEFT checkpoint 共用输出。

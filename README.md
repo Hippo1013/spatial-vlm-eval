@@ -17,6 +17,10 @@ profile inventory、锁定 revision 和注明日期的已验证状态只在[模�
 当前状态以结果目录中的 `status.tsv`、validator、metadata 和 `summary.json` 为准，不从 README 推断。
 完整文档分类与更新规则见[文档地图](docs/README.md)，语义变更见 [CHANGELOG](CHANGELOG.md)。
 
+正式推理、评分和汇总产物以 `.env.server` 配置的 `MANUAL_TEST_OUTPUT_ROOT` 为准；该路径应位于
+仓库外的 `OUTPUT_ROOT`。仓库根禁止创建 `output/` 或 `outputs/`；可再生成的人工抽查和临时导出
+同样写入仓库外，不能作为 canonical 发布或恢复来源。
+
 人工测试从[三阶段入口](docs/msmu-all-model-test-commands.md)开始；每个阶段均有统一入口脚本，会自动
 加载 `.env.server`。阶段三默认范围与 Qwen3 补测顺序以
 [`run_stage3_serial_inference.sh`](scripts/msmu/run_stage3_serial_inference.sh)的 `--list` /
@@ -95,7 +99,8 @@ INDICES="$(DATASET_ROOT="$DATASET_ROOT" bash scripts/msmu/select_smoke_indices.s
 export INDICES
 ```
 
-以 vLLM LLaVA 7B 为例，先做 processor 静态检查、服务启动和非 MSMU 视觉 canary：
+以 vLLM LLaVA 7B 为例，先做 processor 静态检查、服务启动和非 MSMU 组合视觉 canary（白底图左上
+红圆、右下蓝方块）：
 
 ```bash
 PROFILE=llava_next_mistral_7b MODEL_PATH="$MODEL_ROOT/llava-v1.6-mistral-7b-hf" \
@@ -126,6 +131,18 @@ judge 和 `scripts/msmu/score_pending_results.sh` 串行评分；命令见
 metadata 检查后，为单一 scorer protocol 生成一份只含标题、输入配置说明和中文精简表格的
 Markdown 报告。专用模型不使用泛化的“公平版/原生版”展示后缀，而是在模型名称中直接标明
 `RGB`、`RGB + 深度估计` 或 `RGB + Mental-3D 提示词`；SpatialRGPT 保持模型原名。
+
+已通过 stage 1/2 的单个注册模型可以用一个命令完成正式 stage 3、仅该模型评分和全局汇总：
+
+```bash
+bash scripts/msmu/run_model_evaluation.sh MODEL
+```
+
+该入口从 `run_manual_stage3.sh` 的共享注册信息解析 backend、服务身份和精确输出路径，不另维护模型
+名单；因此适用于所有已注册且获准 stage 3 的 API、vLLM、Qwen 和空间专用模型。它只把本次
+`predictions.jsonl` 交给目录驱动评分器，评分完成后重建全局
+`03_full987/msmu-result.md`。`--check`、`--status`、`--list` 和 `MANUAL_DRY_RUN=1` 用于只读检查；
+未注册模型仍须先实现并登记合法 adapter/profile。
 
 ## 严格输出合同
 

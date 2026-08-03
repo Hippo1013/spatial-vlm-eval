@@ -33,7 +33,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--served-model-name", default=None)
     parser.add_argument("--model-revision", default=None)
     parser.add_argument("--timeout", type=float, default=180.0)
-    parser.add_argument("--metadata-retries", type=int, default=4)
+    parser.add_argument("--metadata-retries", type=int, default=10)
     add_msmu_run_arguments(parser)
     return parser.parse_args()
 

@@ -16,9 +16,17 @@ case "${PROFILE}" in
     MODEL_REVISION_TAG="provider-managed-gpt-5"
     INFERENCE_PROTOCOL="msmu_gpt5_question_only_v1"
     ;;
+  gpt5_openrouter_non_zdr)
+    MODEL_REVISION_TAG="openai-gpt-5-2025-08-07"
+    INFERENCE_PROTOCOL="msmu_gpt5_question_only_openrouter_non_zdr_v3_medium_16384"
+    ;;
   gemini31pro)
     MODEL_REVISION_TAG="provider-managed-gemini-3.1-pro-preview"
     INFERENCE_PROTOCOL="msmu_gemini31pro_question_only_v1"
+    ;;
+  gemini31pro_openrouter_non_zdr)
+    MODEL_REVISION_TAG="google-gemini-3.1-pro-preview-20260219"
+    INFERENCE_PROTOCOL="msmu_gemini31pro_question_only_openrouter_non_zdr_v3_medium_16384"
     ;;
   llava_next_mistral_7b)
     MODEL_REVISION_TAG="2424fdd47412fccc66d91719126b420e9fbd7065"
@@ -56,6 +64,10 @@ fi
 export PYTHONPATH="${REPO_ROOT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 mkdir -p "$(dirname "${OUTPUT}")"
 LOG_PATH="${LOG_PATH:-${OUTPUT%.jsonl}.infer.log}"
+retry_missing_passes=0
+if [[ "${BACKEND}" != "vllm" ]]; then
+  retry_missing_passes=1
+fi
 
 args=(
   --profile "${PROFILE}"
@@ -64,7 +76,9 @@ args=(
   --output "${OUTPUT}"
   --workers "${INFERENCE_WORKERS:-1}"
   --retries "${INFERENCE_RETRIES:-2}"
+  --retry-missing-passes "${retry_missing_passes}"
   --timeout "${API_TIMEOUT:-180}"
+  --metadata-retries "${OPENROUTER_METADATA_RETRIES:-10}"
 )
 if [[ -n "${INFERENCE_BASE_URL:-}" ]]; then args+=(--base-url "${INFERENCE_BASE_URL}"); fi
 if [[ -n "${API_KEY_ENV:-}" ]]; then args+=(--api-key-env "${API_KEY_ENV}"); fi

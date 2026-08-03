@@ -6,22 +6,24 @@ decoding 和 scorer protocol。精简展示表只有在逐行校验这些 proven
 protocol，并在模型名称中区分不同 input track 时才可省略 protocol 列。
 
 profile inventory 的机器事实源是 `src/spatial_vlm_eval/models/profiles.py`。下表运行状态最后核验于
-2026-07-31；服务器实时状态必须读取结果目录中的 validator、metadata、`status.tsv` 和 `summary.json`，
+2026-08-02；服务器实时状态必须读取结果目录中的 validator、metadata、`status.tsv` 和 `summary.json`，
 不能只引用本快照。
 
-## 当前 21 个 inference profile
+## 当前 23 个 inference profile
 
 | Key | Model / locked revision | Input track | Backend | Inference protocol | Status |
 |---|---|---|---|---|---|
-| `gpt5` | `openai/gpt-5`，provider-managed | question-only RGB | OpenRouter / OpenAI | `msmu_gpt5_question_only_v1` | Adapter + mock tests；live key pending |
-| `gemini31pro` | `google/gemini-3.1-pro-preview`，provider-managed | question-only RGB | OpenRouter / Google | `msmu_gemini31pro_question_only_v1` | Adapter + mock tests；live key pending |
+| `gpt5` | `openai/gpt-5`，provider-managed | question-only RGB | OpenRouter ZDR / OpenAI | `msmu_gpt5_question_only_v1` | Adapter + mock tests；OpenRouter live stage 1 被无可用 ZDR endpoint 阻断（2026-08-01） |
+| `gpt5_openrouter_non_zdr` | `openai/gpt-5` alias，canonical `openai/gpt-5-2025-08-07` | question-only RGB；OpenAI only、无 fallback、`data_collection=deny`、不要求 ZDR | OpenRouter only | `msmu_gpt5_question_only_openrouter_non_zdr_v3_medium_16384` | Mac live stage 1/2、full-987 validator 与服务器 v4 publication gates passed；medium reasoning、16384 total completion tokens。既有 low/512 v2 journal 仅作历史诊断，不恢复到 v3（2026-08-02） |
+| `gemini31pro` | `google/gemini-3.1-pro-preview`，provider-managed | question-only RGB | OpenRouter ZDR / Google | `msmu_gemini31pro_question_only_v1` | Adapter + mock tests；OpenRouter live stage 1 被无可用 ZDR endpoint 阻断（2026-08-01） |
+| `gemini31pro_openrouter_non_zdr` | `google/gemini-3.1-pro-preview` alias，canonical `google/gemini-3.1-pro-preview-20260219` | question-only RGB；Google AI Studio only、无 fallback、`data_collection=deny`、不要求 ZDR | OpenRouter only | `msmu_gemini31pro_question_only_openrouter_non_zdr_v3_medium_16384` | Mac live stage 1/2、full-987 validator 与服务器 v4 publication gates passed；medium reasoning、16384 total completion tokens。既有 low/512 v2 结果仅作历史诊断，不恢复到 v3（2026-08-02） |
 | `llava_next_mistral_7b` | `llava-hf/llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | question-only RGB | vLLM 0.19 | `msmu_llava_next_mistral_7b_question_only_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
 | `llava_next_yi_34b` | `llava-hf/llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | question-only RGB | vLLM 0.19 TP=2 | `msmu_llava_next_yi_34b_question_only_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
 | `internvl3_8b` | `OpenGVLab/InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | question-only RGB | vLLM 0.19 | `msmu_internvl3_8b_question_only_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
 | `internvl3_38b` | `OpenGVLab/InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | question-only RGB | vLLM 0.19 TP=2 | `msmu_internvl3_38b_question_only_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
-| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | question-only RGB | vLLM 0.19 TP=4，四张 80GB GPU | `msmu_internvl3_78b_question_only_v1` | 四卡 manual stage 1/2/3 adapter + tests；live GPU run pending |
-| `qwen25_vl_7b` | `Qwen/Qwen2.5-VL-7B-Instruct@cc594898137f460bfe9f0759e9844b3ce807cfb5` | question-only RGB | Transformers，单卡 | `msmu_qwen25_vl_question_only_deterministic_v1` | full-987 validator + v4 publication gates passed（2026-07-31）；当前 15 行报告未收录 |
-| `qwen25_vl_32b` | `Qwen/Qwen2.5-VL-32B-Instruct@7cfb30d71a1f4f49a57592323337a4a4727301da` | question-only RGB | Transformers，单卡 | `msmu_qwen25_vl_32b_question_only_deterministic_v1` | full-987 validator + v4 publication gates passed（2026-07-31）；当前 15 行报告未收录 |
+| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | question-only RGB | vLLM 0.19 TP=4，四张 80GB GPU | `msmu_internvl3_78b_question_only_v1` | 四卡 live stage 1/2、full-987 validator 与 v4 publication gates passed（2026-08-01） |
+| `qwen25_vl_7b` | `Qwen/Qwen2.5-VL-7B-Instruct@cc594898137f460bfe9f0759e9844b3ce807cfb5` | question-only RGB | Transformers，单卡 | `msmu_qwen25_vl_question_only_deterministic_v1` | full-987 validator + v4 publication gates passed（2026-07-31）；当前 18 行报告未收录 |
+| `qwen25_vl_32b` | `Qwen/Qwen2.5-VL-32B-Instruct@7cfb30d71a1f4f49a57592323337a4a4727301da` | question-only RGB | Transformers，单卡 | `msmu_qwen25_vl_32b_question_only_deterministic_v1` | full-987 validator + v4 publication gates passed（2026-07-31）；当前 18 行报告未收录 |
 | `qwen25_vl_72b` | `Qwen/Qwen2.5-VL-72B-Instruct@89c86200743eec961a297729e7990e8f2ddbc4c5` | question-only RGB | Transformers，双卡 balanced | `msmu_qwen25_vl_72b_question_only_deterministic_v1` | 权重/revision/two-GPU map verified；stage 1/2 passed；70B+，stage 3 excluded |
 | `qwen3_vl_2b` | `Qwen/Qwen3-VL-2B-Instruct@89644892e4d85e24eaac8bacfd4f463576704203` | question-only RGB | Transformers，单卡 | `msmu_qwen3_vl_2b_question_only_deterministic_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
 | `qwen3_vl_4b` | `Qwen/Qwen3-VL-4B-Instruct@ebb281ec70b05090aa6165b016eac8ec08e71b17` | question-only RGB | Transformers，单卡 | `msmu_qwen3_vl_4b_question_only_deterministic_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
@@ -35,21 +37,21 @@ profile inventory 的机器事实源是 `src/spatial_vlm_eval/models/profiles.py
 | `spatialbot` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | fair RGB-only | official Bunny | `msmu_spatialbot_rgb_only_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
 | `spatialbot_native` | 同上 | same-RGB ZoeDepth RGB-D | official Bunny | `msmu_spatialbot_native_zoedepth_rgbd_native_v1` | full-987 validator + v4 publication gates passed（2026-07-31） |
 
-当前 15 行结果报告的 Qwen 横评选择以 Qwen3-VL-Instruct 2B/4B/8B/32B 替换 Qwen2.5-VL
+当前 18 行结果报告的 Qwen 横评选择以 Qwen3-VL-Instruct 2B/4B/8B/32B 替换 Qwen2.5-VL
 7B/32B；Qwen2.5-VL-72B 未运行阶段三。四条新轨均使用原生 structured image content/chat template、无额外 system message、
 greedy、192 tokens 和 pixel `16384..147456`；该范围按 Qwen3-VL 的 32-pixel spatial factor 保持
 16..144 个 merged visual token 的预算。四个参数量的 model revision、inference protocol 和输出目录
 互相独立，32B 固定 batch size 1。
 
 Qwen2.5-VL adapter、PEFT 入口和已有结果继续保留以支持复现，但不属于当前四模型补测范围。结果
-报告生成器本身不硬编码上述 15 行选择；无 profile 筛选时仍收录当前 scorer protocol 下全部合法
+报告生成器本身不硬编码上述 18 行选择；无 profile 筛选时仍收录当前 scorer protocol 下全部合法
 summary。旧三条
 profile 仍锁定原生模板、greedy、192 tokens 和 pixel `12544..112896`；不得用 Qwen3-VL 的像素范围
 恢复旧 journal。
 
 本轮阶段三串行批次的 13 条本地轨均已生成完整 987 条 prediction，通过正式 validator，并完成当前
-v4 scorer protocol 的 publication gates。两个 API profile、Qwen PEFT 和两个 70B+ profile 未进入
-本批次；排除表示测试范围选择，不会删除已完成的 Qwen2.5-VL-72B stage 1/2 结果。
+v4 scorer protocol 的 publication gates。两个 API 模型及其 provider-policy profile、Qwen PEFT 和两个
+70B+ profile 未进入本批次；排除表示测试范围选择，不会删除已完成的 Qwen2.5-VL-72B stage 1/2 结果。
 
 Qwen3-VL 四条轨作为后续补测单独依次执行，不追溯改写上述已完成的 13 轨批次或其完成标记。四个
 参数量均已在服务器完成 stage 1/2、full-987 正式 validator 和当前 v4 scorer protocol 的
@@ -58,8 +60,10 @@ publication gates。运行中的状态仅在 checkout 与 `plan.env` 记录的 `
 和 `summary.json` 现场核验，不在新 commit 上复用旧完成标记。本地 adapter/contract 验证不能写成
 服务器 stage 1/2、完整推理或评分完成。
 
-InternVL3-78B 后续改为固定 TP=4 的独立四卡手工补测轨；该配置尚未完成 live GPU stage 1/2/3，
-也不追溯加入历史 13 轨。
+InternVL3-78B 以固定 TP=4 的独立四卡手工补测轨完成 stage 1/2、full-987 和 v4 评分；该结果不追溯
+加入历史 13 轨或改写其完成标记。两个 non-ZDR API v3 轨同样在历史批次之外独立完成。2026-08-02
+现场检查活动结果根为 `complete=18`、`pending=0`，默认报告含 18 行；标准 ZDR API 轨、
+Qwen2.5-VL-72B 与 Qwen PEFT 仍不属于这 18 行正式结果。
 
 ## 专用模型身份说明
 

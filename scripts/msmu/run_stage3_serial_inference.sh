@@ -9,6 +9,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 STAGE3_SCRIPT="${SCRIPT_DIR}/run_manual_stage3.sh"
+MODEL_PROBE="${SCRIPT_DIR}/_probe_openai_models.py"
 
 legacy_models=(
   llava_next_mistral_7b
@@ -320,7 +321,7 @@ check_required_executable() {
 }
 
 if [[ "${manual_dry_run}" != "1" ]]; then
-  for command in git nvidia-smi setsid curl flock ps; do
+  for command in git nvidia-smi setsid flock ps; do
     if ! command -v "${command}" >/dev/null 2>&1; then
       echo "[msmu-batch] required command is unavailable: ${command}" >&2
       configuration_errors=$(( configuration_errors + 1 ))
@@ -635,7 +636,7 @@ start_vllm_service() {
   write_active_state
 
   local deadline=$(( $(date +%s) + service_timeout ))
-  local last_report=0 response now
+  local last_report=0 now
   while true; do
     if ! group_alive "${active_service_pid}"; then
       wait "${active_service_pid}" 2>/dev/null || true
@@ -644,11 +645,10 @@ start_vllm_service() {
       write_active_state
       return 1
     fi
-    response="$(
-      curl --silent --fail --max-time 5 \
-        "http://127.0.0.1:18081/v1/models" 2>/dev/null || true
-    )"
-    if [[ "${response}" == *"${expected}"* ]]; then
+    if "${LATENT_PYTHON}" "${MODEL_PROBE}" \
+      --base-url "http://127.0.0.1:18081/v1" \
+      --expected-model "${expected}" \
+      --timeout 5; then
       echo "[msmu-batch] vLLM service ready for ${model}: ${expected}"
       return 0
     fi

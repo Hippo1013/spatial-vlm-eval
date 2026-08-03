@@ -62,14 +62,14 @@ tmux send-keys -t 1:0.0 \
 
 ```bash
 tmux send-keys -t monitor:0.0 \
-  "cd /media/damoxing/tangzecong && GPU_LIST='0 1' CHECK_INTERVAL=1800 bash ./llamafactory_monitor_H200_2.sh" C-m
+  "cd /media/damoxing/tangzecong && bash ./llamafactory_monitor_A800_my.sh" C-m
 ```
 
 恢复最外层 watchdog：
 
 ```bash
 tmux send-keys -t watch_dog:0.0 \
-  "cd /media/damoxing/tangzecong && source ./monitor_watch_dog.sh && run_watchdog llamafactory_monitor_H200_2.sh" C-m
+  "cd /media/damoxing/tangzecong && source ./monitor_watch_dog.sh && run_watchdog llamafactory_monitor_A800_my.sh" C-m
 ```
 
 最后检查进程和 GPU：

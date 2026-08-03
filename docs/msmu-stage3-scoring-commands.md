@@ -45,6 +45,18 @@ bash scripts/msmu/score_pending_results.sh
 
 评分完成后，在终端 A 按 `Ctrl-C` 停止本任务启动的 judge。
 
+单模型一键入口内部会把刚解析出的绝对 prediction 路径传给同一个目录驱动评分器：
+
+```bash
+bash scripts/msmu/score_pending_results.sh \
+  --results-root /阶段三/绝对结果根 \
+  --predictions /该模型/协议目录/predictions.jsonl
+```
+
+`--predictions` 不按模型名称筛选，也不绕过批次锁、judge identity、完整 validator 或 publication
+gates；它只把冻结候选从结果根中的全部 prediction 收窄为这个精确文件。日常批量评分仍省略该参数，
+继续发现结果根下全部待评分轨。
+
 ## 汇总评分结果
 
 ```bash

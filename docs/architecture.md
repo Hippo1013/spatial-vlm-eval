@@ -113,6 +113,15 @@ validator、judge cache key、失败重试、阈值、逐样本得分与 macro-8
 候选在启动后冻结；运行期间新出现的 prediction 留到下一批。canonical `summary.json` 是唯一完成
 依据，不创建额外完成标记，也不在日志中记录 API key。
 
+单模型一键入口 `run_model_evaluation.sh` 仍保持上述阶段边界，只在一个受控进程中顺序编排它们：
+从共享 manual-stage 注册表只读解析模型类型与输出路径，必要时启动并停止被测 vLLM，运行 full-987
+与正式 validator，释放模型 GPU 后启动独立 judge，再用 `score_pending_results.sh --predictions` 精确
+冻结本次一个结果，最后重建全局报告。一键入口不维护第二份模型名单，不复制 adapter/scorer/report
+语义，也不把 inference 和 scorer protocol 合并。信号处理只终止入口自己创建的进程组；已有端口、
+GPU 进程或批次锁均 fail closed 并保持原状。每次控制器运行日志写到
+`03_full987/_single_model_evaluation/logs/UTC_TIMESTAMP-MODEL.log`；模型、validator、score 和报告产物
+仍使用下述 canonical 目录，不复制到控制器状态目录。
+
 结果报告生成器递归发现 `scores/<scorer-protocol>/summary.json`，不限定当前 scorer protocol，也不
 维护模型名单。每条候选必须同时通过对应 protocol 的 canonical 完成检查、完整 publication gates、
 推理 metadata 与目录 protocol 一致性，以及八类 accuracy 对 macro-8 的复算；不完整 summary 只在
@@ -128,11 +137,12 @@ scorer protocol 与 result kind 仍以已经校验的 metadata/summary 和结果
 不复制到展示表。
 
 正式评分前可用 `build_stage3_answer_audit.py` 只读加载获准批次的完整 validator 和 prediction，
-对所有轨抽取同一组 index 并导出人工抽查文档。它不参与评分，产物写入 Git 忽略的 `outputs/`。
+对所有轨抽取同一组 index 并导出人工抽查文档。它不参与评分，产物写入仓库外
+`MANUAL_TEST_OUTPUT_ROOT/_answer_audit/`。仓库根不得创建 `output/` 或 `outputs/`。
 
 ## 输出布局
 
-未显式设置 `OUTPUT` 时，公共路径函数生成：
+未显式设置 `OUTPUT` 时，公共路径函数在 `OUTPUT_ROOT` 下生成：
 
 ```text
 OUTPUT_ROOT/

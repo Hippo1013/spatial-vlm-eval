@@ -1,5 +1,6 @@
 import base64
 import io
+import subprocess
 import unittest
 from unittest.mock import patch
 
@@ -10,8 +11,9 @@ from spatial_vlm_eval.models.openai_compatible.client import (
     APIRequestError,
     HTTPJSONResponse,
     OpenAICompatibleAdapter,
+    _CURL_STATUS_MARKER,
+    _curl_http_request,
 )
-from spatial_vlm_eval.models.openai_compatible.vision_canary import validate_solid_color_answers
 
 
 def model_input() -> MSMUModelInput:
@@ -45,6 +47,13 @@ class OpenAICompatibleContractTest(unittest.TestCase):
         self.assertNotIn("reference", rendered.lower())
         self.assertNotIn("system", rendered.lower())
 
+    def test_http_headers_request_json_and_openrouter_metadata(self):
+        adapter = self.adapter("gpt5_openrouter_non_zdr", "openrouter")
+        headers = adapter._headers()
+        self.assertEqual(headers["Content-Type"], "application/json")
+        self.assertEqual(headers["X-OpenRouter-Metadata"], "enabled")
+        self.assertEqual(headers["Authorization"], "Bearer test-key")
+
     def test_gpt5_omits_temperature_and_openrouter_fails_closed(self):
         adapter = self.adapter("gpt5", "openrouter")
         payload = adapter.request_payload(model_input())
@@ -62,6 +71,63 @@ class OpenAICompatibleContractTest(unittest.TestCase):
         )
         self.assertEqual(payload["max_tokens"], 192)
 
+    def test_openrouter_non_zdr_profiles_are_explicit_and_backend_locked(self):
+        cases = [
+            (
+                "gpt5_openrouter_non_zdr",
+                "openai",
+                "msmu_gpt5_question_only_openrouter_non_zdr_v3_medium_16384",
+                "medium",
+                16384,
+            ),
+            (
+                "gemini31pro_openrouter_non_zdr",
+                "google-ai-studio",
+                "msmu_gemini31pro_question_only_openrouter_non_zdr_v3_medium_16384",
+                "medium",
+                16384,
+            ),
+        ]
+        for profile, provider, protocol, reasoning_effort, max_tokens in cases:
+            with self.subTest(profile=profile):
+                adapter = self.adapter(profile, "openrouter")
+                payload = adapter.request_payload(model_input())
+                self.assertEqual(
+                    payload["provider"],
+                    {
+                        "only": [provider],
+                        "allow_fallbacks": False,
+                        "require_parameters": True,
+                        "data_collection": "deny",
+                        "zdr": False,
+                    },
+                )
+                self.assertEqual(adapter.metadata()["inference_protocol"], protocol)
+                self.assertEqual(adapter.metadata()["provider_policy"]["zdr"], False)
+                self.assertEqual(
+                    payload["reasoning"],
+                    {"effort": reasoning_effort, "exclude": True},
+                )
+                self.assertEqual(payload["max_tokens"], max_tokens)
+
+        self.assertEqual(
+            self.adapter("gpt5_openrouter_non_zdr", "openrouter").metadata()[
+                "model_revision"
+            ],
+            "openrouter-canonical:openai/gpt-5-2025-08-07",
+        )
+        self.assertEqual(
+            self.adapter("gemini31pro_openrouter_non_zdr", "openrouter").metadata()[
+                "model_revision"
+            ],
+            "openrouter-canonical:google/gemini-3.1-pro-preview-20260219",
+        )
+
+        with self.assertRaisesRegex(ValueError, "incompatible"):
+            self.adapter("gpt5_openrouter_non_zdr", "openai")
+        with self.assertRaisesRegex(ValueError, "incompatible"):
+            self.adapter("gemini31pro_openrouter_non_zdr", "google")
+
     def test_gemini_uses_locked_temperature_and_reasoning(self):
         direct = self.adapter("gemini31pro", "google")
         payload = direct.request_payload(model_input())
@@ -76,7 +142,7 @@ class OpenAICompatibleContractTest(unittest.TestCase):
         chat = HTTPJSONResponse(
             data={
                 "id": "gen-123",
-                "model": "openai/gpt-5",
+                "model": "openai/gpt-5-2025-08-07",
                 "choices": [{"message": {"content": "left"}, "finish_reason": "stop"}],
             },
             headers={"x-generation-id": "gen-123"},
@@ -85,7 +151,7 @@ class OpenAICompatibleContractTest(unittest.TestCase):
             data={
                 "data": {
                     "id": "gen-123",
-                    "model": "openai/gpt-5",
+                    "model": "openai/gpt-5-2025-08-07",
                     "provider_name": "OpenAI",
                     "upstream_id": "chatcmpl-1",
                     "finish_reason": "stop",
@@ -103,9 +169,110 @@ class OpenAICompatibleContractTest(unittest.TestCase):
             result = adapter.generate(model_input())
         self.assertEqual(result.text, "left")
         self.assertEqual(result.metadata["generation_id"], "gen-123")
+        self.assertEqual(result.metadata["canonical_model"], "openai/gpt-5-2025-08-07")
         self.assertEqual(result.metadata["provider"], "OpenAI")
         self.assertEqual(result.metadata["reasoning_tokens"], 2)
         self.assertEqual(request.call_count, 2)
+
+    def test_openrouter_retries_eventually_consistent_generation_metadata(self):
+        adapter = OpenAICompatibleAdapter(
+            profile="gpt5_openrouter_non_zdr",
+            backend="openrouter",
+            base_url="https://openrouter.ai/api/v1",
+            api_key="test-key",
+            metadata_retries=1,
+        )
+        chat = HTTPJSONResponse(
+            data={
+                "id": "gen-delayed",
+                "model": "openai/gpt-5-2025-08-07",
+                "choices": [{"message": {"content": "left"}, "finish_reason": "stop"}],
+            },
+            headers={"x-generation-id": "gen-delayed"},
+        )
+        delayed = APIRequestError("Generation gen-delayed not found", status_code=404)
+        generation = HTTPJSONResponse(
+            data={
+                "data": {
+                    "id": "gen-delayed",
+                    "model": "openai/gpt-5-2025-08-07",
+                    "provider_name": "OpenAI",
+                    "num_media_prompt": 1,
+                }
+            },
+            headers={},
+        )
+        with (
+            patch.object(adapter, "_request_json", side_effect=[chat, delayed, generation]) as request,
+            patch("spatial_vlm_eval.models.openai_compatible.client.time.sleep") as sleep,
+        ):
+            result = adapter.generate(model_input())
+        self.assertEqual(result.text, "left")
+        self.assertEqual(result.metadata["generation_id"], "gen-delayed")
+        self.assertEqual(request.call_count, 3)
+        self.assertEqual(request.call_args_list[0].kwargs["method"], "POST")
+        self.assertEqual(request.call_args_list[1].kwargs["method"], "GET")
+        self.assertEqual(request.call_args_list[2].kwargs["method"], "GET")
+        sleep.assert_called_once_with(0.25)
+
+    def test_http_error_preserves_typed_router_diagnostics_without_secrets(self):
+        adapter = self.adapter("gpt5_openrouter_non_zdr", "openrouter")
+        response_body = (
+                b'{"error":{"code":502,"message":"Provider unavailable",'
+                b'"metadata":{"error_type":"provider_unavailable"}},'
+                b'"openrouter_metadata":{"attempt":1,"summary":"selected=OpenAI"}}'
+        )
+        response_headers = {
+                "X-Request-Id": "req-123",
+                "X-Generation-Id": "gen-123",
+                "CF-Ray": "ray-123",
+                "Set-Cookie": "must-not-be-recorded",
+        }
+        with (
+            patch(
+                "spatial_vlm_eval.models.openai_compatible.client._curl_http_request",
+                return_value=(response_body, response_headers, 502),
+            ),
+            self.assertRaisesRegex(APIRequestError, "Provider unavailable") as raised,
+        ):
+            adapter.generate(model_input())
+        diagnostics = raised.exception.diagnostics()
+        self.assertEqual(diagnostics["status_code"], 502)
+        self.assertEqual(diagnostics["error_type"], "provider_unavailable")
+        self.assertEqual(diagnostics["response_headers"]["x-request-id"], "req-123")
+        self.assertEqual(diagnostics["response_headers"]["x-generation-id"], "gen-123")
+        self.assertNotIn("set-cookie", diagnostics["response_headers"])
+        self.assertEqual(diagnostics["router_metadata"]["attempt"], 1)
+
+    def test_curl_transport_keeps_authorization_out_of_process_arguments(self):
+        captured: dict[str, object] = {}
+
+        def fake_run(command, **kwargs):
+            captured["command"] = command
+            captured["body_input"] = kwargs["input"]
+            captured["header_input"] = kwargs["env"]["SPATIAL_VLM_CURL_HEADERS"]
+            return subprocess.CompletedProcess(
+                command,
+                0,
+                stdout=b'{"ok":true}' + _CURL_STATUS_MARKER + b"200",
+                stderr=b"",
+            )
+
+        with patch("subprocess.run", side_effect=fake_run):
+            body, headers, status = _curl_http_request(
+                method="POST",
+                url="https://example.test/v1/chat/completions",
+                body=b'{"hello":"world"}',
+                headers={"Authorization": "Bearer test-key", "Content-Type": "application/json"},
+                timeout=30.0,
+            )
+        self.assertEqual(body, b'{"ok":true}')
+        self.assertEqual(status, 200)
+        self.assertEqual(headers, {})
+        self.assertNotIn("test-key", " ".join(captured["command"]))
+        self.assertIn("request_body=$(cat)", captured["command"][2])
+        self.assertEqual(captured["body_input"], b'{"hello":"world"}')
+        self.assertIn("Authorization: Bearer test-key", captured["header_input"])
 
     def test_provider_or_image_count_mismatch_is_not_a_prediction(self):
         adapter = self.adapter("gpt5", "openrouter")
@@ -116,7 +283,7 @@ class OpenAICompatibleContractTest(unittest.TestCase):
         bad_generation = HTTPJSONResponse(
             data={
                 "data": {
-                    "model": "openai/gpt-5",
+                    "model": "openai/gpt-5-2025-08-07",
                     "provider_name": "Azure",
                     "num_media_prompt": 0,
                 }
@@ -126,6 +293,28 @@ class OpenAICompatibleContractTest(unittest.TestCase):
         with (
             patch.object(adapter, "_request_json", side_effect=[chat, bad_generation]),
             self.assertRaises(APIRequestError),
+        ):
+            adapter.generate(model_input())
+
+    def test_openrouter_alias_or_unpinned_revision_is_not_a_prediction(self):
+        adapter = self.adapter("gpt5", "openrouter")
+        chat = HTTPJSONResponse(
+            data={"id": "gen", "choices": [{"message": {"content": "x"}}]},
+            headers={},
+        )
+        alias_generation = HTTPJSONResponse(
+            data={
+                "data": {
+                    "model": "openai/gpt-5",
+                    "provider_name": "OpenAI",
+                    "num_media_prompt": 1,
+                }
+            },
+            headers={},
+        )
+        with (
+            patch.object(adapter, "_request_json", side_effect=[chat, alias_generation]),
+            self.assertRaisesRegex(APIRequestError, "model mismatch"),
         ):
             adapter.generate(model_input())
 
@@ -160,12 +349,6 @@ class OpenAICompatibleContractTest(unittest.TestCase):
             self.assertRaisesRegex(APIRequestError, "served-model mismatch"),
         ):
             adapter.generate(model_input())
-
-    def test_synthetic_vision_canary_requires_both_colors(self):
-        validate_solid_color_answers("red", "BLUE.")
-        with self.assertRaisesRegex(ValueError, "red image"):
-            validate_solid_color_answers("unknown", "blue")
-
 
 if __name__ == "__main__":
     unittest.main()

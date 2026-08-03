@@ -126,7 +126,9 @@ CUDA_VISIBLE_DEVICES=0,1,2,3 \
 日常人工测试优先使用三阶段统一入口，由入口自动设置同样的四卡配置。2×80GB 仍不允许加载其约
 147GB BF16 权重；`TENSOR_PARALLEL_SIZE` 也不能覆盖为 4 以外的值。
 
-服务 ready 后必须先用非 MSMU 红/蓝图确认视觉输入真的被读取：
+服务 ready 后必须先用非 MSMU 组合图确认视觉输入真的被读取：固定 512×512 抗锯齿白底图的左上角
+为红圆、右下角为蓝方块；图像由 4× 超采样后 LANCZOS 缩小确定性生成，模型必须同时答对颜色、
+形状和位置：
 
 ```bash
 PROFILE=internvl3_38b \
@@ -149,6 +151,17 @@ INDICES="$INDICES" \
 
 ## 5. GPT-5 与 Gemini 3.1 Pro
 
+三阶段入口的 stage 1 会在两个真实 MSMU 样本前自动运行同一组合视觉 canary，写入当前模型
+`01_canary/RUN_SLUG/vision_canary.json`。该 canary 只做 1 次 generation，不使用 MSMU 数据、不进入
+journal 或评分；语义答案、OpenRouter 首方 provider/model 或 `num_media_prompt==1` 任一不合法都会
+fail closed，且不会继续真实样本。单独只跑 canary 时使用：
+
+```bash
+PROFILE=gpt5_openrouter_non_zdr BACKEND=openrouter \
+API_KEY_ENV=OPENROUTER_API_KEY CANARY_REPORT=/absolute/path/to/vision_canary.json \
+  bash scripts/msmu/canary_openai_compatible_vision.sh
+```
+
 OpenRouter：
 
 ```bash
@@ -165,7 +178,33 @@ PROFILE=gemini31pro BACKEND=openrouter LIMIT=2 \
 
 OpenRouter 请求固定首方 provider 并 fail-closed；每条成功 journal 包含 generation id、canonical model、
 provider、upstream id、finish reason、reasoning/output tokens、cost 和 latency。metadata 查询失败不会写
-prediction success。
+prediction success。请求 alias `openai/gpt-5` / `google/gemini-3.1-pro-preview` 分别锁定返回的
+catalog canonical revision `openai/gpt-5-2025-08-07` /
+`google/gemini-3.1-pro-preview-20260219`；其他 revision 会被拒绝。
+OpenRouter 的 generation metadata 可能在 completion 返回后短暂 404；client 默认只重试同一个
+generation id 10 次（指数退避、单次最多 2 秒，累计约 16 秒），不会因此重发付费 completion。
+必要时可用 `OPENROUTER_METADATA_RETRIES` 同时覆盖 canary 和 inference wrapper。
+API inference 首轮遍历全部目标后，若仍有网络失败留下的缺失 index，wrapper 会固定只对这些缺失项
+再执行一轮；已经成功并写入 journal 的样本不会重复请求。补跑后仍缺失时保持 incomplete、拒绝生成
+正式 prediction，之后重跑同一命令仍只会从 journal 续跑缺失项。
+
+标准 `gpt5` / `gemini31pro` OpenRouter profile 还要求请求级 ZDR。若首方 endpoint 没有可用 ZDR
+路由，只有在用户明确同意数据策略例外后才能改用独立 non-ZDR profile：
+
+```bash
+PROFILE=gpt5_openrouter_non_zdr BACKEND=openrouter LIMIT=2 \
+  bash scripts/msmu/run_openai_compatible_pipeline.sh
+
+PROFILE=gemini31pro_openrouter_non_zdr BACKEND=openrouter LIMIT=2 \
+  bash scripts/msmu/run_openai_compatible_pipeline.sh
+```
+
+两条例外轨仍固定 OpenAI / Google AI Studio 首方 provider、`allow_fallbacks=false`、
+`require_parameters=true` 和 `data_collection=deny`，只把 `zdr` 设为 false。它们使用独立 protocol、
+run slug 和输出目录；三阶段统一入口分别是 `gpt5_openrouter_non_zdr` 与
+`gemini31pro_openrouter_non_zdr`。两条 v3 run slug 分别是
+`gpt5-openrouter-non-zdr-medium-16384-v3` 与
+`gemini31pro-openrouter-non-zdr-medium-16384-v3`，不得与原 ZDR 或 low/512 v2 journal 混用。
 
 首方 API：
 
@@ -177,8 +216,12 @@ export GEMINI_API_KEY='provided-out-of-band'
 PROFILE=gemini31pro BACKEND=google LIMIT=2 bash scripts/msmu/run_openai_compatible_pipeline.sh
 ```
 
-GPT-5 不发送 temperature；Gemini 轨按本项目锁定为 temperature 0；两者 low reasoning、192 completion
-tokens。先核对两条 live smoke 的 provider、图片计数、generation metadata 与费用，再批准全量。
+GPT-5 不发送 temperature；Gemini 轨按本项目锁定为 temperature 0。标准 ZDR/direct profile 保持 low
+reasoning、192 completion tokens。non-ZDR live 结果确认 completion 上限同时计算 hidden reasoning：
+GPT-5 v1 的 192 和 v2 的 512 都出现过 hidden reasoning 耗尽预算的空文本，v2 还出现可见回答截断。
+因此当前两条 non-ZDR v3 能力轨均锁定 medium reasoning 和 16384 total completion tokens；GPT-5
+配置对齐 EASI 使用相同 `gpt-5-2025-08-07` revision 的正式空间能力评测设置。先核对两条 live smoke
+的 provider、图片计数、generation metadata、可见输出与费用，再批准全量。
 
 ## 6. Qwen 与空间专用模型
 
@@ -319,6 +362,21 @@ ZOEDEPTH_CHECKPOINT=/local/ZoeD_M12_NK.pt \
 5. 正式 validator；
 6. 独立 local judge 和目录驱动评分；
 7. 完整 publication gates。
+
+已经通过 stage 1/2 的任一注册且获准 stage 3 模型，可用统一入口完成后三步：
+
+```bash
+bash scripts/msmu/run_model_evaluation.sh MODEL
+```
+
+该命令默认只运行 stage 3；不会重新运行 canary/smoke。它按共享注册信息自动区分 API、直接加载和
+vLLM 模型，必要时管理被测模型服务，推理完成后释放 GPU、启动独立 judge，只评分刚解析出的精确
+`predictions.jsonl`，随后重建全局 `03_full987/msmu-result.md`。新模型仍须先实现合法 adapter/profile
+并接入 `run_manual_stage3.sh`；一键入口本身不猜 processor、chat template 或 revision。
+
+执行前可用 `MODEL --check`，查看产物可用 `MODEL --status`，完整支持范围用 `--list`；
+`MANUAL_DRY_RUN=1` 只解析命令和路径，不启动 GPU/API/service/scorer 或写报告。中断后重跑同一命令会
+复用相同 journal/cache。入口只清理自己创建的进程组，绝不终止已有 GPU 进程或占用端口的服务。
 
 实际名单、串行恢复、GPU 释放、InternVL3-78B 四卡补测和答案抽查只查
 [阶段三 full-987 runbook](msmu-stage3-full-eval.md)；评分命令只查

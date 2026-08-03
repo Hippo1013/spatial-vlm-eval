@@ -23,6 +23,7 @@ def add_msmu_run_arguments(parser: argparse.ArgumentParser) -> None:
     parser.add_argument("--limit", type=int, default=None, help="Debug-only prefix of selected indices.")
     parser.add_argument("--workers", type=int, default=1)
     parser.add_argument("--retries", type=int, default=2)
+    parser.add_argument("--retry-missing-passes", type=int, default=0)
     parser.add_argument("--no-resume", action="store_true")
 
 
@@ -37,6 +38,7 @@ def execute_msmu_cli(args: Any, adapter: InferenceAdapter) -> dict[str, Any]:
         journal_path=args.journal,
         metadata_path=args.metadata,
         retries=args.retries,
+        retry_missing_passes=args.retry_missing_passes,
         workers=args.workers,
         resume=not args.no_resume,
     )

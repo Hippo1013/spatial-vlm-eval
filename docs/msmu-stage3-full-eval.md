@@ -94,8 +94,51 @@ bash scripts/msmu/run_stage3_serial_inference.sh --status
 - 同一输出根使用 `flock` 防止两个批次同时运行；
 - 已占用 GPU、已有 `18081` 服务或遗留活动进程只报告并退出，绝不终止非本脚本进程。
 
+服务 readiness 通过 `.env.server` 中的 `LATENT_PYTHON` 和 Python 标准库直接查询本地精确
+`/v1/models` ID；运行镜像不需要另行安装 `curl`，也不会让本地探活请求经过代理。
+
 这些值可以用脚本 `--help` 中列出的 `BATCH_*` 环境变量调整。默认失败两次后停止整个批次，比静默
 跳过模型更安全；修复原因后重跑即可恢复。
+
+### 单模型一键正式评测
+
+已经通过 stage 1/2、但需要单独完成正式结果的任一注册模型，统一运行：
+
+```bash
+bash scripts/msmu/run_model_evaluation.sh MODEL
+```
+
+例如四卡 InternVL3-78B：
+
+```bash
+bash scripts/msmu/run_model_evaluation.sh internvl3_78b
+```
+
+入口自动完成“必要时启动被测服务 → full-987 + validator → 停止被测服务并释放 GPU → 启动 judge →
+只评分本次模型的精确 `predictions.jsonl` → 停止 judge → 重建全局报告”。它从
+`run_manual_stage3.sh` 的共享注册信息解析 backend、served model、GPU 和输出路径，不维护另一份
+模型名单；API、vLLM、Qwen 和空间专用模型使用同一条命令。明确未获准 stage 3 的 profile 仍会
+fail closed。
+
+```bash
+# 查看可用 MODEL 名称
+bash scripts/msmu/run_model_evaluation.sh --list
+
+# 只检查注册、路径、锁和端口
+bash scripts/msmu/run_model_evaluation.sh MODEL --check
+
+# 查看该模型精确结果的状态
+bash scripts/msmu/run_model_evaluation.sh MODEL --status
+
+# 只预览完整编排
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_model_evaluation.sh MODEL
+```
+
+中断后重跑同一条默认命令即可复用 journal/judge cache。若完整 inference 产物已经重新校验通过，入口
+不会重新加载被测模型；若 summary 已通过全部 publication gates，则直接跳到全局报告。已有端口、
+GPU 进程和批次锁均保持原状，脚本只终止自己创建的进程组。控制器日志写入
+`03_full987/_single_model_evaluation/logs/UTC_TIMESTAMP-MODEL.log`。
+被测服务和 judge 的 readiness 同样由 `LATENT_PYTHON` 标准库探测，不依赖系统 `curl`。
 
 ### 单模型手工备用入口
 
@@ -114,7 +157,8 @@ bash scripts/msmu/run_manual_stage3.sh MODEL infer
 
 `infer` 同样固定 `RUN_SCORE=0` 并在结束时运行完整 validator。
 
-InternVL3-78B 的独立四卡补测也使用上述手工入口，默认 GPU `0,1,2,3`、固定 TP=4：
+InternVL3-78B 的独立四卡补测日常使用上方一键入口；只有诊断服务或推理时才拆成以下手工命令。
+默认 GPU `0,1,2,3`、固定 TP=4：
 
 ```bash
 # 终端 A
@@ -138,10 +182,10 @@ source scripts/msmu/prepare_manual_test.sh
 python scripts/msmu/build_stage3_answer_audit.py \
   --stage3-root "$OUTPUT_ROOT/03_full987" \
   --dataset-root "$DATASET_ROOT" \
-  --output "$REPO_ROOT/outputs/msmu-stage3-answer-audit/msmu-stage3-answer-audit.md"
+  --output "$OUTPUT_ROOT/_answer_audit/msmu-stage3-answer-audit.md"
 ```
 
-`outputs/` 不进入 Git；脚本会拒绝覆盖已有抽查文件。
+仓库根不得创建 `output/` 或 `outputs/`；抽查文档及图片资产保存在仓库外，脚本会拒绝覆盖已有文件。
 
 ## 第二步：启动独立 judge
 

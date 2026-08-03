@@ -145,6 +145,13 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         "--results-root",
         help="Absolute stage-three result root; defaults to .env.server configuration.",
     )
+    parser.add_argument(
+        "--predictions",
+        help=(
+            "score only this absolute predictions.jsonl inside the results root; "
+            "the candidate is still validated and executed under the canonical batch lock"
+        ),
+    )
     return parser.parse_args(argv)
 
 
@@ -171,6 +178,28 @@ def resolve_dataset_root() -> Path:
     if not path.is_dir():
         raise ConfigurationError(f"DATASET_ROOT is not a directory: {path}")
     return path
+
+
+def resolve_selected_predictions(argument: str | None, results_root: Path) -> Path | None:
+    if argument is None:
+        return None
+    path = Path(argument).expanduser()
+    if not path.is_absolute():
+        raise ConfigurationError(f"predictions path must be absolute: {argument}")
+    resolved = path.resolve()
+    if resolved.name != "predictions.jsonl":
+        raise ConfigurationError(
+            f"selected predictions must be named predictions.jsonl: {resolved}"
+        )
+    if not resolved.is_file():
+        raise ConfigurationError(f"selected predictions does not exist: {resolved}")
+    try:
+        resolved.relative_to(results_root)
+    except ValueError as exc:
+        raise ConfigurationError(
+            f"selected predictions is outside results root {results_root}: {resolved}"
+        ) from exc
+    return resolved
 
 
 def batch_directory(results_root: Path) -> Path:
@@ -434,15 +463,21 @@ def classify_prediction(predictions: Path) -> ResultState:
     )
 
 
-def discover_results(results_root: Path) -> list[ResultState]:
-    predictions = sorted(
-        (
-            path.resolve()
-            for path in results_root.rglob("predictions.jsonl")
-            if path.is_file()
-        ),
-        key=lambda path: str(path),
-    )
+def discover_results(
+    results_root: Path,
+    selected_predictions: Path | None = None,
+) -> list[ResultState]:
+    if selected_predictions is not None:
+        predictions = [selected_predictions]
+    else:
+        predictions = sorted(
+            (
+                path.resolve()
+                for path in results_root.rglob("predictions.jsonl")
+                if path.is_file()
+            ),
+            key=lambda path: str(path),
+        )
     return [classify_prediction(path) for path in predictions]
 
 
@@ -664,6 +699,7 @@ def dry_run(states: list[ResultState], results_root: Path) -> int:
 def execute_batch(
     *,
     results_root: Path,
+    selected_predictions: Path | None,
     repository: Path,
     score_script: Path,
 ) -> int:
@@ -673,7 +709,7 @@ def execute_batch(
     lock = BatchLock(control_dir / "lock")
 
     with lock:
-        frozen = discover_results(results_root)
+        frozen = discover_results(results_root, selected_predictions)
         run_id = run_id_now()
         candidates_path = runs_dir / f"{run_id}.candidates.jsonl"
         log_path = runs_dir / f"{run_id}.log"
@@ -858,7 +894,11 @@ def main(
     try:
         args = parse_args(argv)
         results_root = resolve_results_root(args.results_root)
-        states = discover_results(results_root)
+        selected_predictions = resolve_selected_predictions(
+            args.predictions,
+            results_root,
+        )
+        states = discover_results(results_root, selected_predictions)
         if args.list_results:
             print_listing(states)
             return 0
@@ -886,6 +926,7 @@ def main(
             )
         return execute_batch(
             results_root=results_root,
+            selected_predictions=selected_predictions,
             repository=resolved_repository,
             score_script=resolved_score_script,
         )

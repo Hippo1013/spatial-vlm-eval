@@ -26,6 +26,27 @@
 
 <!-- 按模板在此处下方插入条目，最新条目在最上方。 -->
 
+### 2026-08-01 · [MSMU/deployment] 单模型评测镜像缺少 curl
+- 场景：远程任务运行 `run_model_evaluation.sh internvl3_78b`，准备启动 stage 3。
+- 报错：`[msmu-eval] required command is unavailable: curl`。
+- 原因：控制器只为本地 `/v1/models` readiness 查询而把外部 `curl` 错列为硬依赖。
+- 处理：单模型和串行控制器统一改用 `LATENT_PYTHON` 标准库探针，并严格匹配返回的 model ID。
+- 验证：探针覆盖 ready、相似 ID、malformed、HTTP error 和非本地 endpoint；shell 与相关 unittest 通过。
+
+### 2026-08-01 · [MSMU/OpenRouter] completion 成功后 generation metadata 短暂 404
+- 场景：Mac 端运行 Gemini 3.1 Pro OpenRouter non-ZDR stage 1 组合视觉 canary。
+- 报错：completion 已生成 generation id，但紧随其后的 `/generation?id=...` 在原约 4 秒窗口内持续返回 404。
+- 原因：OpenRouter generation metadata 最终一致；同一 generation id 稍后返回 200，并确认 Google AI Studio、锁定 revision 和 `num_media_prompt=1`。
+- 处理：metadata-only 重试默认增至 10 次（累计约 16 秒），canary 与 inference wrapper 共用 `OPENROUTER_METADATA_RETRIES`；不重发付费 completion。
+- 验证：eventual-consistency 回归测试确认只调用一次 completion，404 后仅重试 metadata GET。
+
+### 2026-08-01 · [MSMU/API canary] 极小平面 PNG 触发空 502
+- 场景：OpenRouter non-ZDR 首方 GPT-5/Gemini stage 1 组合视觉 canary。
+- 报错：多模态请求约 3 秒返回 `HTTP 502 ... empty response body`，无 generation/router metadata；同路由纯文本 200。
+- 原因：任意采用的 256×256、约 1.1 KB 硬边 PNG 触发 OpenRouter→首方 provider 图像适配异常。
+- 处理：canary v2 改为 512×512、4× 超采样后 LANCZOS 缩小的确定性抗锯齿 PNG；保持首方 provider only、无 fallback。
+- 验证：同一 Gemini 路由用新图返回 200，并正确识别左上红圆与右下蓝方；canonical 双模型报告见 stage 1 输出目录。
+
 ### 2026-07-26 · [MSMU/deployment] macOS archive caused dubious ownership
 - 场景：从 macOS 同步工作树到 `msmu-a800` 后执行服务器 Git 检查。
 - 报错：`fatal: detected dubious ownership in repository`，并出现 `._*` AppleDouble 文件。

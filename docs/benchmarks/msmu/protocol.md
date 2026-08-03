@@ -78,7 +78,9 @@ prompt、图像派生组件或 decoding 不同的轨使用独立 inference proto
 | Profile | Legal model input | Decoding | Inference protocol |
 |---|---|---|---|
 | GPT-5 | one RGB + original question | low reasoning, no temperature, 192 completion tokens | `msmu_gpt5_question_only_v1` |
+| GPT-5 OpenRouter non-ZDR | one RGB + original question；OpenAI only、无 fallback、`data_collection=deny`、不要求 ZDR | medium reasoning, no temperature, 16384 total completion tokens | `msmu_gpt5_question_only_openrouter_non_zdr_v3_medium_16384` |
 | Gemini 3.1 Pro preview | one RGB + original question | low reasoning, temperature 0, 192 completion tokens | `msmu_gemini31pro_question_only_v1` |
+| Gemini 3.1 Pro preview OpenRouter non-ZDR | one RGB + original question；Google AI Studio only、无 fallback、`data_collection=deny`、不要求 ZDR | medium reasoning, temperature 0, 16384 total completion tokens | `msmu_gemini31pro_question_only_openrouter_non_zdr_v3_medium_16384` |
 | LLaVA-NeXT Mistral 7B | one RGB + original question | greedy, 192 | `msmu_llava_next_mistral_7b_question_only_v1` |
 | LLaVA-NeXT Yi 34B | one RGB + original question | greedy, 192 | `msmu_llava_next_yi_34b_question_only_v1` |
 | InternVL3 8B / 38B / 78B | one RGB + original question | greedy, 192 | model-size-specific `msmu_internvl3_*_question_only_v1` |
@@ -103,11 +105,33 @@ ZoeDepth 的 `save_raw_16bit` helper 使用 `depth * 256`，所以本项目的�
 OpenAI-compatible 请求严格只有一个 user message，其中一个 question text part 和一个 PNG data URI；
 不发送 system、history、reference 或答案格式提示。OpenRouter 路由同时设置首方 provider only、
 `allow_fallbacks=false`、`require_parameters=true`、`data_collection=deny` 和 `zdr=true`，并在成功写
-journal 前校验 generation metadata 的 canonical model、provider 和 `num_media_prompt==1`。
+journal 前校验 generation metadata 的 canonical model、provider 和 `num_media_prompt==1`。请求使用
+OpenRouter model alias，但返回身份精确锁定 catalog canonical revision：GPT-5 为
+`openai/gpt-5-2025-08-07`，Gemini 3.1 Pro preview 为
+`google/gemini-3.1-pro-preview-20260219`；别名本身或其他 revision 均不得通过校验。
+
+当目标首方 endpoint 没有 ZDR 路由时，只能在用户明确同意后使用独立的
+`gpt5_openrouter_non_zdr` / `gemini31pro_openrouter_non_zdr` profile。两条例外轨仅把请求级
+`zdr` 设为 false；首方 provider、无 fallback、参数完整和 `data_collection=deny` 保持不变。live canary
+确认 reasoning model 的 completion 上限同时包含 hidden reasoning：v1 的 192 tokens 被 GPT-5 全部用作
+reasoning 并产生空文本。non-ZDR v2 曾保留 low reasoning、将总 completion budget 提升到 512，但正式
+运行仍出现 hidden reasoning 耗尽预算的空 prediction 和被截断回答。当前两条 non-ZDR v3 能力轨均按
+用户确认锁定为 medium reasoning、16384 total completion tokens；GPT-5 的选择同时与 EASI 对同一
+`gpt-5-2025-08-07` revision 的正式空间评测设置一致。原 ZDR/v1 decoding 保持不变。各轨使用独立
+inference protocol、run slug、journal 和输出目录，不得恢复或覆盖其他 decoding 轨的 journal。
+
+阶段一的非 MSMU 组合视觉 canary 固定使用一张 512×512 抗锯齿白底 RGB：左上红圆、右下蓝方块；
+图像由 4× 超采样后 LANCZOS 缩小确定性生成。问题只要求描述每个彩色形状及位置，不包含正确答案。
+回答必须同时建立 red-circle/top-left 与
+blue-square/bottom-right 两个语义对应，否则 fail closed。该诊断对每个模型只做一次 generation，不写入
+MSMU prediction journal、不参与评分，也不改变 inference/scorer protocol。
 
 vLLM 0.19 服务必须设置 `--limit-mm-per-prompt.image 1`、锁定 revision/served name/TP/dtype。静态
 preflight 分别检查 LLaVA prompt 中恰有一个 `<image>`、InternVL prompt 中恰有一个
-`<IMG_CONTEXT>`，且 processor 返回非空 `pixel_values`；服务启动后还必须通过红/蓝合成图 canary。
+`<IMG_CONTEXT>`，且 processor 返回非空 `pixel_values`；服务启动后还必须通过上述组合视觉 canary。
+Qwen stage 1 通过同一个已加载模型和 processor 执行该检查并要求恰好一个 image tensor。GPT-5/Gemini
+stage 1 则通过同一个 OpenAI-compatible adapter 执行，并继续应用 OpenRouter 的首方 provider、精确
+canonical model 和 `num_media_prompt==1` 门禁。
 
 ## Prediction JSONL
 

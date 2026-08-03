@@ -13,6 +13,9 @@ class ManualStageScriptTest(unittest.TestCase):
             stage: cls.repository / "scripts" / "msmu" / f"run_manual_stage{stage}.sh"
             for stage in (1, 2, 3)
         }
+        cls.one_click_script = (
+            cls.repository / "scripts" / "msmu" / "run_model_evaluation.sh"
+        )
 
     def setUp(self):
         self.temporary_directory = tempfile.TemporaryDirectory()
@@ -39,15 +42,31 @@ class ManualStageScriptTest(unittest.TestCase):
             "QWEN3_32B_MODEL": temporary / "qwen3-32b",
             "QWEN3_32B_REVISION": "qwen3-32b-revision",
             "QWEN_PEFT_CHECKPOINT": temporary / "run-a" / "checkpoint-100",
+            "BASE_MODEL": temporary / "qwen",
             "LLAVA_MISTRAL_7B_MODEL": temporary / "llava-mistral",
             "LLAVA_YI_34B_MODEL": temporary / "llava-yi",
             "INTERNVL3_8B_MODEL": temporary / "internvl-8b",
             "INTERNVL3_38B_MODEL": temporary / "internvl-38b",
             "INTERNVL3_78B_MODEL": temporary / "internvl-78b",
+            "SSR_UPSTREAM_ROOT": temporary / "ssr-upstream",
+            "SSR_DEPTHPRO_ROOT": temporary / "ssr-depthpro",
+            "SSR_VLM": temporary / "ssr-vlm",
+            "SSR_MIDI": temporary / "ssr-midi",
+            "CLIP_MODEL": temporary / "clip",
+            "SIGLIP_MODEL": temporary / "siglip",
+            "MAMBA_MODEL": temporary / "mamba",
+            "MIDI_LLM_MODEL": temporary / "midi-llm",
+            "DEPTHPRO_CHECKPOINT": temporary / "depthpro.pt",
+            "SPATIALRGPT_UPSTREAM_ROOT": temporary / "spatialrgpt-upstream",
             "SPATIALRGPT_MODEL": temporary / "spatialrgpt",
+            "THREEDTHINKER_UPSTREAM_ROOT": temporary / "3dthinker-upstream",
             "THREEDTHINKER_MODEL": temporary / "3dthinker",
+            "SPATIALBOT_UPSTREAM_ROOT": temporary / "spatialbot-upstream",
             "SPATIALBOT_MODEL": temporary / "spatialbot",
+            "ZOEDEPTH_ROOT": temporary / "zoedepth",
+            "ZOEDEPTH_CHECKPOINT": temporary / "zoedepth.pt",
             "JUDGE_MODEL": temporary / "judge",
+            "JUDGE_MODEL_NAME": "expected-judge",
         }
         self.server_env.write_text(
             "".join(f'{key}="{value}"\n' for key, value in values.items()),
@@ -89,6 +108,37 @@ class ManualStageScriptTest(unittest.TestCase):
             text=True,
         )
 
+    def run_one_click(self, *arguments, extra_environment=None):
+        environment = dict(os.environ)
+        for key in [
+            "INDICES",
+            "LIMIT",
+            "MANUAL_API_BACKEND",
+            "MANUAL_CUDA_VISIBLE_DEVICES",
+            "MANUAL_INFERENCE_BASE_URL",
+            "MANUAL_RUN_SLUG",
+            "MSMU_SMOKE_INDICES",
+            "RESOLVE_PATHS_ONLY",
+            "SCORE_ONLY",
+        ]:
+            environment.pop(key, None)
+        environment.update(
+            {
+                "MSMU_SERVER_ENV": str(self.server_env),
+                "MANUAL_DRY_RUN": "1",
+            }
+        )
+        if extra_environment:
+            environment.update(extra_environment)
+        return subprocess.run(
+            ["bash", str(self.one_click_script), *arguments],
+            cwd=self.repository,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+
     def test_help_and_model_list_do_not_require_server_env(self):
         environment = dict(os.environ)
         environment["MSMU_SERVER_ENV"] = "/missing/server.env"
@@ -113,6 +163,28 @@ class ManualStageScriptTest(unittest.TestCase):
         self.assertIn("MANUAL_DRY_RUN=1", help_result.stdout)
         self.assertIn("internvl3_78b", list_result.stdout)
         self.assertIn("judge", list_result.stdout)
+
+        one_click_help = subprocess.run(
+            ["bash", str(self.one_click_script), "--help"],
+            cwd=self.repository,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        one_click_list = subprocess.run(
+            ["bash", str(self.one_click_script), "--list"],
+            cwd=self.repository,
+            env=environment,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(one_click_help.returncode, 0, one_click_help.stderr)
+        self.assertEqual(one_click_list.returncode, 0, one_click_list.stderr)
+        self.assertIn("run_model_evaluation.sh MODEL", one_click_help.stdout)
+        self.assertIn("internvl3_78b", one_click_list.stdout)
+        self.assertNotIn("judge", one_click_list.stdout.splitlines())
 
     def test_stage1_vllm_has_separate_serve_and_canary_actions(self):
         serve = self.run_stage(1, "llava_next_mistral_7b", "serve")
@@ -180,6 +252,57 @@ class ManualStageScriptTest(unittest.TestCase):
         self.assertIn("LIMIT=2", result.stdout)
         self.assertIn("BACKEND=openai", result.stdout)
         self.assertIn("01_canary/gpt5-openai", result.stdout)
+        self.assertIn("canary_openai_compatible_vision.sh", result.stdout)
+        self.assertIn("vision_canary.json", result.stdout)
+        self.assertLess(
+            result.stdout.index("canary_openai_compatible_vision.sh"),
+            result.stdout.index("run_openai_compatible_pipeline.sh"),
+        )
+
+    def test_stage1_non_zdr_api_tracks_use_distinct_profiles_and_slugs(self):
+        cases = [
+            (
+                "gpt5_openrouter_non_zdr",
+                "PROFILE=gpt5_openrouter_non_zdr",
+                "01_canary/gpt5-openrouter-non-zdr-medium-16384-v3",
+            ),
+            (
+                "gemini31pro_openrouter_non_zdr",
+                "PROFILE=gemini31pro_openrouter_non_zdr",
+                "01_canary/gemini31pro-openrouter-non-zdr-medium-16384-v3",
+            ),
+        ]
+        for model, profile, slug in cases:
+            with self.subTest(model=model):
+                result = self.run_stage(1, model)
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn("LIMIT=2", result.stdout)
+                self.assertIn("BACKEND=openrouter", result.stdout)
+                self.assertIn(profile, result.stdout)
+                self.assertIn(slug, result.stdout)
+                self.assertIn("canary_openai_compatible_vision.sh", result.stdout)
+                self.assertIn("vision_canary.json", result.stdout)
+
+                rejected = self.run_stage(
+                    1,
+                    model,
+                    extra_environment={"MANUAL_API_BACKEND": "openai"},
+                )
+                self.assertEqual(rejected.returncode, 2)
+                self.assertIn("only supports", rejected.stderr)
+
+    def test_api_stage2_does_not_repeat_the_stage1_vision_canary(self):
+        result = self.run_stage(2, "gpt5_openrouter_non_zdr")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("canary_openai_compatible_vision.sh", result.stdout)
+        self.assertNotIn("vision_canary.json", result.stdout)
+
+    def test_openai_compatible_wrapper_runs_one_missing_retry_pass(self):
+        wrapper = (
+            self.repository / "scripts" / "msmu" / "infer_openai_compatible.sh"
+        ).read_text(encoding="utf-8")
+        self.assertIn('if [[ "${BACKEND}" != "vllm" ]]', wrapper)
+        self.assertIn('--retry-missing-passes "${retry_missing_passes}"', wrapper)
 
     def test_stage2_selects_benchmark_owned_indices_and_cannot_score(self):
         result = self.run_stage(2, "ssr_native")
@@ -204,6 +327,59 @@ class ManualStageScriptTest(unittest.TestCase):
         self.assertIn("03_full987/qwen25-vl-base", score.stdout)
         self.assertNotIn("LIMIT=", score.stdout)
         self.assertNotIn("INDICES=", score.stdout)
+
+    def test_stage3_describe_and_resolve_are_read_only_machine_interfaces(self):
+        described = self.run_stage(3, "internvl3_78b", "describe")
+        resolved = self.run_stage(3, "qwen3_vl_4b", "resolve")
+        self.assertEqual(described.returncode, 0, described.stderr)
+        self.assertEqual(resolved.returncode, 0, resolved.stderr)
+        self.assertIn("descriptor\tmodel_kind\tvllm", described.stdout)
+        self.assertIn("descriptor\tprofile\tinternvl3_78b", described.stdout)
+        self.assertIn("descriptor\tserved_model_name\tinternvl3-78b-msmu", described.stdout)
+        self.assertIn("descriptor\tdefault_devices\t0,1,2,3", described.stdout)
+        self.assertIn("resolved\toutput\t", resolved.stdout)
+        self.assertIn("03_full987/qwen3-vl-4b", resolved.stdout)
+        self.assertIn("resolved\tscore_output_dir\t", resolved.stdout)
+        self.assertNotIn("gpu_preflight.sh", resolved.stdout)
+
+    def test_one_click_dry_run_supports_every_registered_stage3_model(self):
+        listed = self.run_stage(3, "--list")
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        models = [line for line in listed.stdout.splitlines() if line != "judge"]
+        self.assertIn("internvl3_78b", models)
+        for model in models:
+            with self.subTest(model=model):
+                result = self.run_one_click(model)
+                if model == "qwen25_vl_72b":
+                    self.assertEqual(result.returncode, 4)
+                    self.assertIn("not approved for stage 3", result.stderr)
+                    continue
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertIn(f"model={model}", result.stdout)
+                self.assertIn("--predictions", result.stdout)
+                self.assertIn("build_results_report.sh", result.stdout)
+                self.assertIn("no GPU/API/service/scorer/report action was taken", result.stdout)
+
+    def test_one_click_uses_registry_without_a_second_model_list(self):
+        source = self.one_click_script.read_text(encoding="utf-8")
+        for model_name in self.run_stage(3, "--list").stdout.splitlines():
+            if model_name == "judge":
+                continue
+            with self.subTest(model=model_name):
+                self.assertNotIn(model_name, source)
+        self.assertIn('"${STAGE3_SCRIPT}" "${model}" describe', source)
+        self.assertIn("--predictions", source)
+        self.assertIn("setsid", source)
+        self.assertIn("kill -TERM", source)
+        self.assertIn("kill -KILL", source)
+        self.assertNotIn("curl", source)
+        self.assertIn("_probe_openai_models.py", source)
+
+        serial_source = (
+            self.repository / "scripts" / "msmu" / "run_stage3_serial_inference.sh"
+        ).read_text(encoding="utf-8")
+        self.assertNotIn("curl", serial_source)
+        self.assertIn("_probe_openai_models.py", serial_source)
 
     def test_stage3_judge_runs_preflight_then_separate_port(self):
         result = self.run_stage(3, "judge", "serve")
@@ -257,7 +433,9 @@ class ManualStageScriptTest(unittest.TestCase):
         }
         direct_models = {
             "gpt5",
+            "gpt5_openrouter_non_zdr",
             "gemini31pro",
+            "gemini31pro_openrouter_non_zdr",
             "qwen25_vl_base",
             "qwen25_vl_32b",
             "qwen25_vl_peft",

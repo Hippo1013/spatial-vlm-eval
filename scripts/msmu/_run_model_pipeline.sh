@@ -11,7 +11,18 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # Source the family wrapper so its derived OUTPUT/RUN_DIR values remain visible
 # for validation and scoring. Every inference wrapper also remains directly
 # executable and returns here instead of exiting when sourced.
-if [[ "${SCORE_ONLY:-0}" == "1" ]]; then
+if [[ "${RESOLVE_PATHS_ONLY:-0}" == "1" ]]; then
+  RESOLVE_PATHS_ONLY=1 source "${INFER_SCRIPT}"
+  : "${OUTPUT:?Inference wrapper did not resolve OUTPUT}"
+  : "${RUN_DIR:?Inference wrapper did not resolve RUN_DIR}"
+  : "${VALIDATION_REPORT:?Inference wrapper did not resolve VALIDATION_REPORT}"
+  : "${SCORE_OUTPUT_DIR:?Inference wrapper did not resolve SCORE_OUTPUT_DIR}"
+  printf 'resolved\toutput\t%s\n' "${OUTPUT}"
+  printf 'resolved\trun_dir\t%s\n' "${RUN_DIR}"
+  printf 'resolved\tvalidation_report\t%s\n' "${VALIDATION_REPORT}"
+  printf 'resolved\tscore_output_dir\t%s\n' "${SCORE_OUTPUT_DIR}"
+  exit 0
+elif [[ "${SCORE_ONLY:-0}" == "1" ]]; then
   if [[ "${RUN_SCORE:-0}" != "1" ]]; then
     echo "[msmu-pipeline] SCORE_ONLY=1 requires RUN_SCORE=1" >&2
     exit 2

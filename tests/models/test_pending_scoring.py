@@ -207,6 +207,25 @@ class PendingScoringStateTest(unittest.TestCase):
         self.assertEqual(state.state, "retry")
         self.assertIn("missing canonical artifact", state.reason)
 
+    def test_exact_prediction_selector_must_be_inside_results_root(self):
+        selected = prediction_path(self.root, "selected")
+        resolved = pending_scoring.resolve_selected_predictions(
+            str(selected),
+            self.root.resolve(),
+        )
+        self.assertEqual(resolved, selected.resolve())
+
+        outside_root = self.root.parent / "outside"
+        outside = prediction_path(outside_root, "outside")
+        with self.assertRaisesRegex(
+            pending_scoring.ConfigurationError,
+            "outside results root",
+        ):
+            pending_scoring.resolve_selected_predictions(
+                str(outside),
+                self.root.resolve(),
+            )
+
 
 class JudgeReadinessTest(unittest.TestCase):
     def test_accepts_expected_model(self):
@@ -306,13 +325,13 @@ printf 'end\\t%s\\n' "$PREDICTIONS" >> "$CALL_LOG"
             "RETRIES": "4",
         }
 
-    def run_main(self, base_url: str, extra_environment=None) -> int:
+    def run_main(self, base_url: str, extra_environment=None, arguments=None) -> int:
         environment = self.environment(base_url)
         if extra_environment:
             environment.update(extra_environment)
         with patch.dict(os.environ, environment, clear=False):
             return pending_scoring.main(
-                [],
+                arguments or [],
                 repository=REPOSITORY,
                 score_script=self.fake_scorer,
             )
@@ -353,6 +372,24 @@ printf 'end\\t%s\\n' "$PREDICTIONS" >> "$CALL_LOG"
                     "secret-for-test",
                     path.read_text(encoding="utf-8"),
                 )
+
+    def test_exact_prediction_selector_scores_only_that_result(self):
+        selected = prediction_path(self.root, "selected")
+        prediction_path(self.root, "other-pending")
+        payload = json.dumps({"data": [{"id": "expected-judge"}]}).encode()
+        with models_server(payload) as base_url:
+            return_code = self.run_main(
+                base_url,
+                arguments=["--predictions", str(selected.resolve())],
+            )
+        self.assertEqual(return_code, 0)
+        self.assertEqual(
+            self.call_log.read_text(encoding="utf-8").splitlines(),
+            [
+                f"start\t{selected.resolve()}",
+                f"end\t{selected.resolve()}",
+            ],
+        )
 
     def test_first_scorer_failure_stops_later_results(self):
         first = prediction_path(self.root, "a-fail")
@@ -529,6 +566,18 @@ class PublicScoringEntryTest(unittest.TestCase):
         self.assertIn("dry-run order=1", dry_run.stdout)
         self.assertIn("no judge/scorer action was taken", dry_run.stdout)
 
+    def test_predictions_filter_lists_only_the_exact_selected_result(self):
+        selected = prediction_path(self.results_root, "selected-run")
+        prediction_path(self.results_root, "other-run")
+        listed = self.run_script(
+            "--list",
+            "--predictions",
+            str(selected.resolve()),
+        )
+        self.assertEqual(listed.returncode, 0, listed.stderr)
+        self.assertIn("selected-run", listed.stdout)
+        self.assertNotIn("other-run", listed.stdout)
+
     def test_results_root_override_must_be_absolute(self):
         result = self.run_script("--list", "--results-root", "relative/path")
         self.assertEqual(result.returncode, 2)
@@ -541,6 +590,7 @@ class PublicScoringEntryTest(unittest.TestCase):
         )
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("--results-root", result.stdout)
+        self.assertIn("--predictions", result.stdout)
 
     def test_new_scoring_sources_do_not_contain_current_model_names(self):
         source = self.script.read_text(encoding="utf-8") + HELPER_PATH.read_text(

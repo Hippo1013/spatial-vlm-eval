@@ -1,10 +1,13 @@
-"""Dependency-free OpenAI-compatible multimodal HTTP client."""
+"""OpenAI-compatible multimodal HTTP client."""
 
 from __future__ import annotations
 
 import base64
 import io
 import json
+import os
+import shutil
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -18,7 +21,9 @@ from ..profiles import InferenceProfile, get_profile
 
 SUPPORTED_PROFILE_KEYS = {
     "gpt5",
+    "gpt5_openrouter_non_zdr",
     "gemini31pro",
+    "gemini31pro_openrouter_non_zdr",
     "llava_next_mistral_7b",
     "llava_next_yi_34b",
     "internvl3_8b",
@@ -26,9 +31,58 @@ SUPPORTED_PROFILE_KEYS = {
     "internvl3_78b",
 }
 
+OPENROUTER_PROFILE_POLICIES = {
+    "gpt5": ("openai", "OpenAI", True),
+    "gpt5_openrouter_non_zdr": ("openai", "OpenAI", False),
+    "gemini31pro": ("google-ai-studio", "Google AI Studio", True),
+    "gemini31pro_openrouter_non_zdr": (
+        "google-ai-studio",
+        "Google AI Studio",
+        False,
+    ),
+}
+
+OPENROUTER_CANONICAL_MODELS = {
+    "gpt5": "openai/gpt-5-2025-08-07",
+    "gpt5_openrouter_non_zdr": "openai/gpt-5-2025-08-07",
+    "gemini31pro": "google/gemini-3.1-pro-preview-20260219",
+    "gemini31pro_openrouter_non_zdr": "google/gemini-3.1-pro-preview-20260219",
+}
 
 class APIRequestError(RuntimeError):
     """A retryable or terminal API contract failure."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        status_code: int | None = None,
+        error_type: str | None = None,
+        response_headers: dict[str, str] | None = None,
+        router_metadata: dict[str, Any] | None = None,
+        elapsed_ms: float | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.status_code = status_code
+        self.error_type = error_type
+        self.response_headers = dict(response_headers or {})
+        self.router_metadata = dict(router_metadata or {})
+        self.elapsed_ms = elapsed_ms
+
+    def diagnostics(self) -> dict[str, Any]:
+        """Return only non-secret failure fields suitable for run artifacts."""
+
+        return {
+            key: value
+            for key, value in {
+                "status_code": self.status_code,
+                "error_type": self.error_type,
+                "response_headers": self.response_headers or None,
+                "router_metadata": self.router_metadata or None,
+                "elapsed_ms": self.elapsed_ms,
+            }.items()
+            if value is not None
+        }
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,6 +128,119 @@ def _safe_api_error_body(raw: bytes) -> str:
     return raw.decode("utf-8", errors="replace")[:500]
 
 
+def _structured_api_error(raw: bytes) -> tuple[str, str | None, dict[str, Any] | None]:
+    """Extract a concise message plus typed/router metadata from an error body."""
+
+    error_type: str | None = None
+    router_metadata: dict[str, Any] | None = None
+    try:
+        value = json.loads(raw.decode("utf-8", errors="replace"))
+    except json.JSONDecodeError:
+        return _safe_api_error_body(raw) or "empty response body", None, None
+    if not isinstance(value, dict):
+        return _safe_api_error_body(raw) or "empty response body", None, None
+    error = value.get("error")
+    if isinstance(error, dict):
+        metadata = error.get("metadata")
+        if isinstance(metadata, dict) and metadata.get("error_type") is not None:
+            error_type = str(metadata["error_type"])
+        elif value.get("error_type") is not None:
+            error_type = str(value["error_type"])
+    if isinstance(value.get("openrouter_metadata"), dict):
+        router_metadata = value["openrouter_metadata"]
+    return _safe_api_error_body(raw) or "empty response body", error_type, router_metadata
+
+
+def _diagnostic_response_headers(headers: Any) -> dict[str, str]:
+    allowed = {"cf-ray", "retry-after", "x-generation-id", "x-request-id"}
+    return {
+        str(key).lower(): str(value)
+        for key, value in headers.items()
+        if str(key).lower() in allowed
+    }
+
+
+_CURL_STATUS_MARKER = b"\n__SPATIAL_VLM_HTTP_STATUS__:"
+
+_CURL_SHELL_PROGRAM = r'''
+set -euo pipefail
+curl_bin="$1"
+method="$2"
+url="$3"
+max_time="$4"
+if [[ "${SPATIAL_VLM_CURL_HAS_BODY:-0}" == "1" ]]; then
+  request_body=$(cat)
+  printf "%s" "${request_body}" | "${curl_bin}" \
+    --silent --show-error --max-time "${max_time}" --request "${method}" \
+    --header @<(printf "%s" "${SPATIAL_VLM_CURL_HEADERS}") \
+    --data-binary @- \
+    --write-out '\n__SPATIAL_VLM_HTTP_STATUS__:%{http_code}' \
+    "${url}"
+else
+  "${curl_bin}" \
+    --silent --show-error --max-time "${max_time}" --request "${method}" \
+    --header @<(printf "%s" "${SPATIAL_VLM_CURL_HEADERS}") \
+    --write-out '\n__SPATIAL_VLM_HTTP_STATUS__:%{http_code}' \
+    "${url}"
+fi
+'''.strip()
+
+
+def _curl_http_request(
+    *,
+    method: str,
+    url: str,
+    body: bytes | None,
+    headers: dict[str, str],
+    timeout: float,
+) -> tuple[bytes, dict[str, str], int]:
+    """Use curl without exposing authorization headers in the process arguments."""
+
+    executable = shutil.which("curl")
+    if executable is None:
+        raise APIRequestError("Remote API backends require curl on PATH")
+    header_input = "".join(f"{key}: {value}\n" for key, value in headers.items())
+    child_environment = os.environ.copy()
+    child_environment["SPATIAL_VLM_CURL_HEADERS"] = header_input
+    child_environment["SPATIAL_VLM_CURL_HAS_BODY"] = "1" if body is not None else "0"
+    command = [
+        "/bin/bash",
+        "-c",
+        _CURL_SHELL_PROGRAM,
+        "spatial-vlm-curl",
+        executable,
+        method,
+        url,
+        str(timeout),
+    ]
+    try:
+        completed = subprocess.run(
+            command,
+            input=body,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            check=False,
+            env=child_environment,
+            timeout=timeout + 5.0,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise APIRequestError(f"Network error from curl: timed out after {timeout}s") from exc
+    if completed.returncode != 0:
+        detail = completed.stderr.decode("utf-8", errors="replace").strip()[:500]
+        raise APIRequestError(
+            f"Network error from curl (exit {completed.returncode}): {detail or 'no detail'}"
+        )
+    marker_position = completed.stdout.rfind(_CURL_STATUS_MARKER)
+    if marker_position < 0:
+        raise APIRequestError("curl response did not include an HTTP status marker")
+    raw_status = completed.stdout[marker_position + len(_CURL_STATUS_MARKER) :].strip()
+    try:
+        status_code = int(raw_status)
+    except ValueError as exc:
+        raise APIRequestError(f"curl returned invalid HTTP status {raw_status!r}") from exc
+    return completed.stdout[:marker_position], {}, status_code
+
+
 class OpenAICompatibleAdapter(InferenceAdapter):
     """One-image chat-completions adapter with strict backend policies."""
 
@@ -89,7 +256,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
         api_key: str,
         served_model_name: str | None = None,
         timeout: float = 180.0,
-        metadata_retries: int = 4,
+        metadata_retries: int = 10,
     ) -> None:
         self.profile = get_profile(profile) if isinstance(profile, str) else profile
         if self.profile.key not in SUPPORTED_PROFILE_KEYS:
@@ -111,7 +278,9 @@ class OpenAICompatibleAdapter(InferenceAdapter):
     def _validate_backend(self) -> None:
         allowed = {
             "gpt5": {"openrouter", "openai"},
+            "gpt5_openrouter_non_zdr": {"openrouter"},
             "gemini31pro": {"openrouter", "google"},
+            "gemini31pro_openrouter_non_zdr": {"openrouter"},
         }.get(self.profile.key, {"vllm"})
         if self.backend not in allowed:
             raise ValueError(
@@ -169,13 +338,20 @@ class OpenAICompatibleAdapter(InferenceAdapter):
         }
 
     def _openrouter_provider_policy(self) -> dict[str, Any]:
-        only = "openai" if self.profile.key == "gpt5" else "google-ai-studio"
+        try:
+            only, _expected_provider, require_zdr = OPENROUTER_PROFILE_POLICIES[
+                self.profile.key
+            ]
+        except KeyError as exc:
+            raise ValueError(
+                f"Profile {self.profile.key!r} has no locked OpenRouter provider policy"
+            ) from exc
         return {
             "only": [only],
             "allow_fallbacks": False,
             "require_parameters": True,
             "data_collection": "deny",
-            "zdr": True,
+            "zdr": require_zdr,
         }
 
     def request_payload(self, model_input: MSMUModelInput) -> dict[str, Any]:
@@ -222,22 +398,55 @@ class OpenAICompatibleAdapter(InferenceAdapter):
         payload: dict[str, Any] | None = None,
     ) -> HTTPJSONResponse:
         body = None if payload is None else json.dumps(payload, ensure_ascii=False).encode("utf-8")
-        request = urllib.request.Request(
-            url,
-            data=body,
-            headers=self._headers(),
-            method=method,
-        )
         started = time.monotonic()
-        try:
-            with urllib.request.urlopen(request, timeout=self.timeout) as response:
-                raw = response.read()
-                headers = {str(key).lower(): str(value) for key, value in response.headers.items()}
-        except urllib.error.HTTPError as exc:
-            detail = _safe_api_error_body(exc.read())
-            raise APIRequestError(f"HTTP {exc.code} from {self.backend}: {detail}") from exc
-        except urllib.error.URLError as exc:
-            raise APIRequestError(f"Network error from {self.backend}: {exc.reason}") from exc
+        if self.backend == "vllm":
+            request = urllib.request.Request(
+                url,
+                data=body,
+                headers=self._headers(),
+                method=method,
+            )
+            try:
+                with urllib.request.urlopen(request, timeout=self.timeout) as response:
+                    raw = response.read()
+                    headers = {
+                        str(key).lower(): str(value) for key, value in response.headers.items()
+                    }
+                    status_code = int(response.status)
+            except urllib.error.HTTPError as exc:
+                raw = exc.read()
+                headers = {str(key).lower(): str(value) for key, value in exc.headers.items()}
+                status_code = int(exc.code)
+            except urllib.error.URLError as exc:
+                elapsed_ms = round((time.monotonic() - started) * 1000.0, 3)
+                raise APIRequestError(
+                    f"Network error from {self.backend}: {exc.reason}",
+                    elapsed_ms=elapsed_ms,
+                ) from exc
+        else:
+            try:
+                raw, headers, status_code = _curl_http_request(
+                    method=method,
+                    url=url,
+                    body=body,
+                    headers=self._headers(),
+                    timeout=self.timeout,
+                )
+            except APIRequestError as exc:
+                if exc.elapsed_ms is None:
+                    exc.elapsed_ms = round((time.monotonic() - started) * 1000.0, 3)
+                raise
+        if status_code >= 400:
+            detail, error_type, router_metadata = _structured_api_error(raw)
+            elapsed_ms = round((time.monotonic() - started) * 1000.0, 3)
+            raise APIRequestError(
+                f"HTTP {status_code} from {self.backend}: {detail}",
+                status_code=status_code,
+                error_type=error_type,
+                response_headers=_diagnostic_response_headers(headers),
+                router_metadata=router_metadata,
+                elapsed_ms=elapsed_ms,
+            )
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError as exc:
@@ -304,16 +513,30 @@ class OpenAICompatibleAdapter(InferenceAdapter):
                 f"generation {generation_id}: {last_error}"
             )
 
-        expected_provider = "OpenAI" if self.profile.key == "gpt5" else "Google AI Studio"
+        try:
+            _only, expected_provider, _require_zdr = OPENROUTER_PROFILE_POLICIES[
+                self.profile.key
+            ]
+        except KeyError as exc:
+            raise APIRequestError(
+                f"Profile {self.profile.key!r} has no locked OpenRouter provider identity"
+            ) from exc
         provider = str(generation.get("provider_name") or response.data.get("provider") or "")
         if provider != expected_provider:
             raise APIRequestError(
                 f"OpenRouter provider mismatch: got {provider!r}, expected {expected_provider!r}"
             )
         canonical_model = str(generation.get("model") or response.data.get("model") or "")
-        if canonical_model != self.profile.model:
+        try:
+            expected_canonical_model = OPENROUTER_CANONICAL_MODELS[self.profile.key]
+        except KeyError as exc:
             raise APIRequestError(
-                f"OpenRouter model mismatch: got {canonical_model!r}, expected {self.profile.model!r}"
+                f"Profile {self.profile.key!r} has no locked OpenRouter canonical model"
+            ) from exc
+        if canonical_model != expected_canonical_model:
+            raise APIRequestError(
+                "OpenRouter model mismatch: "
+                f"got {canonical_model!r}, expected {expected_canonical_model!r}"
             )
         media_count = generation.get("num_media_prompt")
         if media_count is None or int(media_count) != 1:

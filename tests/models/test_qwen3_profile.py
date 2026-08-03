@@ -94,7 +94,7 @@ class Qwen3ProtocolLockTest(unittest.TestCase):
         self.assertFalse(Qwen3VLAdapter.TRUST_REMOTE_CODE)
         self.assertEqual(Qwen3VLAdapter.PIXEL_CONFIG_STYLE, "size_edges")
 
-    def test_semantic_vision_canary_distinguishes_red_and_blue_images(self):
+    def test_semantic_vision_canary_checks_two_spatial_shapes_in_one_image(self):
         adapter = self.adapter()
         adapter._ensure_processor = lambda: adapter._runtime_versions.update(
             {"transformers": "test"}
@@ -104,11 +104,13 @@ class Qwen3ProtocolLockTest(unittest.TestCase):
             self.assertEqual(len(model_inputs), 1)
             model_input = model_inputs[0]
             self.assertEqual(model_input.image.mode, "RGB")
+            self.assertEqual(model_input.image.size, (512, 512))
+            self.assertEqual(model_input.image.getpixel((128, 128)), (255, 0, 0))
+            self.assertEqual(model_input.image.getpixel((384, 384)), (0, 0, 255))
             adapter._runtime_versions["torch"] = "test"
-            color = "red" if model_input.image.getpixel((0, 0))[0] else "blue"
             return [
                 GenerationResult(
-                    text=color,
+                    text="A red circle is at top-left and a blue square is at bottom-right.",
                     metadata={"num_model_image_tensors": 1},
                 )
             ]
@@ -118,8 +120,9 @@ class Qwen3ProtocolLockTest(unittest.TestCase):
             report_path = Path(directory) / "vision_canary.json"
             report = adapter.run_vision_canary(report_path)
             self.assertTrue(report["passed"])
-            self.assertEqual(report["red_answer"], "red")
-            self.assertEqual(report["blue_answer"], "blue")
+            self.assertEqual(report["request_count"], 1)
+            self.assertIn("red circle", report["answer"])
+            self.assertIn("blue square", report["answer"])
             self.assertTrue(report_path.is_file())
             self.assertEqual(adapter._runtime_versions, {"transformers": "test"})
 

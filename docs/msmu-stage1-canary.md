@@ -32,7 +32,9 @@ internvl3_78b
 bash scripts/msmu/run_manual_stage1.sh MODEL serve
 ```
 
-看到服务 ready 后，终端 B 运行红/蓝合成图 canary：
+看到服务 ready 后，终端 B 运行组合视觉 canary：固定 512×512 抗锯齿白底图中左上角是红色圆形、
+右下角是蓝色正方形；图像由 4× 超采样后 LANCZOS 缩小生成，问题只要求描述颜色、形状与位置，
+不包含上述答案：
 
 ```bash
 bash scripts/msmu/run_manual_stage1.sh MODEL check
@@ -94,16 +96,28 @@ bash scripts/msmu/run_manual_stage1.sh spatialbot_native
 `qwen25_vl_base` 是 7B。32B 默认使用 GPU 0，72B 默认使用 GPU `0,1` 并做 balanced 加载；
 两种大模型固定 batch size 1。直接加载的本地模型自动运行 GPU preflight，并生成 1 条真实结果。
 当前 Qwen3-VL 四条补测轨均默认使用 GPU 0，其中 32B 固定 batch size 1。stage 1 必须同时核对
-`vision_canary.json` 中红/蓝图语义检查通过，以及 metadata 中无 system message、恰好一张 RGB、
+`vision_canary.json` 中组合图的颜色/形状/位置语义检查通过，以及 metadata 中无 system message、恰好一张 RGB、
 pixel `16384..147456` 和 `num_model_image_tensors: 1`。
-GPT-5/Gemini 默认通过 OpenRouter
-生成 2 条结果，运行前先在当前终端导出 key：
+GPT-5/Gemini 默认通过 OpenRouter。stage 1 会先各发 1 次非 MSMU 组合视觉请求；只有回答同时把红圆
+定位到左上、把蓝方块定位到右下，并且 OpenRouter generation metadata 确认恰好一张图片及锁定的首方
+provider/model 后，才继续生成 2 条 MSMU 结果。组合视觉调用没有 inference retry，每个模型最多增加
+1 次付费 generation；运行前先在当前终端导出 key：
 
 ```bash
 export OPENROUTER_API_KEY='provided-out-of-band'
 bash scripts/msmu/run_manual_stage1.sh gpt5
 bash scripts/msmu/run_manual_stage1.sh gemini31pro
 ```
+
+上述标准轨要求 ZDR。只有用户明确同意 non-ZDR 例外时才使用以下独立入口；它们仍锁定首方 provider、
+禁止 fallback、要求完整参数并设置 `data_collection=deny`：
+
+```bash
+bash scripts/msmu/run_manual_stage1.sh gpt5_openrouter_non_zdr
+bash scripts/msmu/run_manual_stage1.sh gemini31pro_openrouter_non_zdr
+```
+
+non-ZDR 轨使用独立 protocol/run slug/journal，不恢复标准 ZDR 轨的失败 journal。
 
 如改用首方 API：
 
@@ -130,7 +144,9 @@ llava-m7b-check
 
 - LLaVA/InternVL：当前模型目录中的 `processor_preflight.json` 与 `vision_canary.json` 都包含
   `"passed": true`；
-- API/直接加载：深层结果目录中存在 `predictions.jsonl`、metadata 和
+- API：当前模型的顶层 `vision_canary.json` 包含 `"passed": true`，且深层结果目录中存在
+  `predictions.jsonl`、metadata 和 `prediction_validation.json`，validator 为 subset pass；
+- 其他直接加载模型：深层结果目录中存在 `predictions.jsonl`、metadata 和
   `prediction_validation.json`，validator 为 subset pass；
 - Qwen：同目录 `vision_canary.json` 还必须包含 `"passed": true`；
 - 失败时停止当前模型，不进入阶段二。

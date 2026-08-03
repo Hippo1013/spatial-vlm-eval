@@ -142,6 +142,35 @@ class RuntimeTest(unittest.TestCase):
             self.assertEqual(row["prediction"], "answer 0")
             self.assertEqual(adapter.calls, [0, 0])
 
+    def test_retry_missing_pass_only_retries_unresolved_indices(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = FakeAdapter(failures={1: 2})
+            output = Path(directory) / "predictions.jsonl"
+            metadata = run_msmu_inference(
+                contract=self.contract,
+                adapter=adapter,
+                output=output,
+                target_indices=[0, 1, 2],
+                retries=1,
+                retry_missing_passes=1,
+            )
+
+            self.assertEqual(adapter.calls, [0, 1, 1, 2, 1])
+            self.assertEqual(metadata["num_predictions"], 3)
+            self.assertEqual(
+                metadata["runtime"]["retry_policy"],
+                {"retries_per_pass": 1, "retry_missing_passes": 1},
+            )
+            events = [
+                json.loads(line)
+                for line in Path(metadata["journal"]).read_text(encoding="utf-8").splitlines()
+            ]
+            index_one_events = [event for event in events if event["index"] == 1]
+            self.assertEqual(
+                [(event["status"], event["attempt"]) for event in index_one_events],
+                [("failure", 1), ("failure", 2), ("success", 3)],
+            )
+
     def test_duplicate_success_in_journal_is_a_hard_error(self):
         with tempfile.TemporaryDirectory() as directory:
             adapter = FakeAdapter()
