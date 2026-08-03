@@ -1,16 +1,42 @@
-# MSMU 目标测试模型矩阵
+# 项目目标测试模型矩阵
 
-本矩阵只列当前横向比较的目标轨。完整注册 profile 仍保存在
-`src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` 中，用于历史结果复现；当前目标范围由同文件的
-`CURRENT_TARGET_PROFILE_KEYS` 唯一确定。每条正式结果仍须记录 model revision、inference protocol、
-prompt/template、图像处理、decoding 和 scorer protocol。精简展示表只有在逐行校验这些 provenance、
-一次只选择一个 scorer protocol，并在模型名称中区分不同 input track 时才可省略 protocol 列。
+本矩阵同时区分“项目级模型身份”和“已经落地的 benchmark-specific inference profile”。剩余三个
+benchmark 的目标范围是 MSMU 阶段已有 15 个模型身份加 4 个新开源 SOTA 模型，共 19 个模型身份；
+benchmark 范围与推进顺序见[四 Benchmark 评测范围](evaluation-scope.md)。
+
+完整注册 profile 仍保存在 `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` 中，用于历史结果
+复现；同文件的 `CURRENT_TARGET_PROFILE_KEYS` 只唯一确定已经实现并完成的 MSMU 目标 profile，不
+包含尚未实现的 CV-Bench、Q-Spatial Bench 或 SPBench-SI 计划。每条正式结果仍须记录 model revision、
+inference protocol、prompt/template、图像处理、decoding 和 scorer protocol。精简展示表只有在逐行
+校验这些 provenance、一次只选择一个 scorer protocol，并在模型名称中区分不同 input track 时才可
+省略 protocol 列。
+
+## 新增的 4 个开源 SOTA 模型
+
+以下四个模型于 2026-08-03 纳入项目级目标模型范围。它们计划与原有模型一起评测剩余三个 benchmark，
+但当前只完成“模型身份入矩阵”：下载尚未完成，snapshot revision、adapter、input profile、inference
+protocol 和输出目录均未锁定，因此没有加入 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS`。
+
+| Model identity | Hugging Face weights | 纳入原因与报告输入 | 当前状态 |
+|---|---|---|---|
+| [RoboBrain2.5-8B-NV](https://huggingface.co/BAAI/RoboBrain2.5-8B-NV) | `BAAI/RoboBrain2.5-8B-NV` | MSMU-Bench 64.17、CV-Bench 94.58 的开源 RGB-only 报告模型 | 正在 `/media/datasets/lihaoran/huggingface/` 下载；未锁定 revision，未注册 profile |
+| [RoboBrain2.5-8B-MT](https://huggingface.co/BAAI/RoboBrain2.5-8B-MT) | `BAAI/RoboBrain2.5-8B-MT` | Q-Spatial Bench 78.31 的开源 RGB-only 公平报告模型；论文表格也写作 MTT | 正在 `/media/datasets/lihaoran/huggingface/` 下载；未锁定 revision，未注册 profile |
+| [HiSpatial-3B](https://huggingface.co/lhzzzzzy/HiSpatial-3B) | `lhzzzzzy/HiSpatial-3B` | Q-Spatial Bench 85.16 的开源报告模型；该值使用 RGB + MoGe-2 估计 XYZ point map，属于原生/非公平输入 | 正在 `/media/datasets/lihaoran/huggingface/` 下载；未锁定 revision，未注册 fair/native profile |
+| [SpatialLadder-3B](https://huggingface.co/hongxingli/SpatialLadder-3B) | `hongxingli/SpatialLadder-3B` | SPBench-SI 70.20 的最高开源 RGB-only 报告模型 | 正在 `/media/datasets/lihaoran/huggingface/` 下载；未锁定 revision，未注册 profile |
+
+这些分数是外部公开报告参考，不是本项目结果。RoboBrain 两个权重使用相同架构与训练数据，但分别是
+NVIDIA 与 Moore Threads 训练版本，作为两个独立模型身份保留。HiSpatial 若同时建立 RGB-only fair
+轨和官方 XYZ point-map native 轨，必须使用不同 protocol、输出目录和结果列。实现 adapter 时分别
+从 [FlagOpen/RoboBrain2.5](https://github.com/FlagOpen/RoboBrain2.5)、
+[microsoft/HiSpatial](https://github.com/microsoft/HiSpatial) 和
+[ZJU-REAL/SpatialLadder](https://github.com/ZJU-REAL/SpatialLadder) 锁定上游 commit，不以模型页的
+浮动默认分支代替 revision。
+
+## MSMU 当前 18 条已完成目标 inference profile
 
 下表状态于 2026-08-03 在 `msmu-a800` 的 canonical 结果根现场复核。服务器实时状态仍须读取结果
 目录中的 prediction、validator、metadata、scored rows、judge failures、`summary.json` 和 publication
 gates，不能只引用本快照。
-
-## 当前 18 条目标 inference profile
 
 | Profile | Model / locked revision | Input track | Backend | Inference protocol | Status |
 |---|---|---|---|---|---|
@@ -38,10 +64,11 @@ gates，不能只引用本快照。
 2026-08-03 现场审计发现且只发现上述 18 条目标结果。每条都满足：prediction index 精确覆盖
 `0..986`、正式 validator 通过、metadata 与锁定 profile/revision/protocol 一致、scored rows 为 987
 条、judge failures 为 0、八类齐全，且四项 publication gate 全部为真。评分调度状态为
-`complete=18`、`pending=0`，因此当前目标矩阵已全部完成 MSMU 正式测试。
+`complete=18`、`pending=0`，因此当前 MSMU 目标 profile 集已全部完成正式测试。
 
-本次只收敛“当前目标范围”，不删除历史 adapter、注册 profile 或既有结果。直接 Qwen2.5-VL/PEFT
-轨和其他历史注册 API 轨不进入本矩阵；报告生成器仍按合法 summary 发现结果，不硬编码本表名单。
+本次只收敛“MSMU 已完成目标 profile 集”，不删除历史 adapter、注册 profile 或既有结果。直接
+Qwen2.5-VL/PEFT 轨和其他历史注册 API 轨不进入本表；新增四个 SOTA 模型也不追溯计入这 18 条结果。
+报告生成器仍按合法 summary 发现结果，不硬编码本表名单。
 
 ## 专用模型身份说明
 
@@ -60,9 +87,10 @@ gates，不能只引用本快照。
 
 ## 公平轨与原生轨
 
-公平轨只使用一张 MSMU RGB 和原题。原生轨可以启用模型官方设计中由该 RGB 派生的组件，但不能
-使用传感器/GT depth、reference、类别、额外 QA 或开放词汇检测器伪造 region。公平轨与原生轨的
-protocol id、输出目录和结果列必须保持独立。
+MSMU 公平轨只使用一张 MSMU RGB 和原题。原生轨可以启用模型官方设计中由该 RGB 派生的组件，但
+不能使用传感器/GT depth、reference、类别、额外 QA 或开放词汇检测器伪造 region。其他 benchmark
+必须重新定义各自的合法输入；通用原则仍是 fair RGB-only 与官方原生输入分别使用独立 protocol、
+输出目录和结果列。
 
 ## 已知推理偏差
 

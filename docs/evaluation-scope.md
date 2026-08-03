@@ -1,0 +1,80 @@
+# 四 Benchmark 评测范围与推进顺序
+
+本文件维护项目级 benchmark 范围、推进顺序和数据准备边界。模型身份与已经落地的 inference profile
+见[目标测试模型矩阵](model-matrix.md)；每个 benchmark 的 split、输入合同、scorer、protocol id 和
+发布门禁仍须在对应 canonical protocol 与实现中单独锁定。
+
+## 当前范围
+
+| Benchmark | 目标范围 | 仓库实现状态 | 当前阶段 |
+|---|---|---|---|
+| MSMU-Bench | official `test`，987 条 | 已实现 input contract、validator、inference 与 scorer | 18 条既有目标 profile 已完成；本阶段告一段落 |
+| CV-Bench | 官方 benchmark；精确 split、样本数与 scorer 待实现前核验 | 尚未实现 | **下一项**：先完成协议审计、数据验收，再设计和运行评测 |
+| Q-Spatial Bench | Q-Spatial++ 与 Q-Spatial-ScanNet | 尚未实现 | CV-Bench 之后；与 SPBench-SI 的先后待定；ScanNet 原始图像的授权与完整性须另行验收 |
+| SPBench-SI | SPBench 单图版本；不包含 SPBench-MV | 尚未实现 | CV-Bench 之后；与 Q-Spatial Bench 的先后待定 |
+
+“尚未实现”表示仓库中还没有可发布的 benchmark contract、validator、scorer protocol、运行入口或
+结果目录，不能因为数据已经下载就宣称可以正式评测。当前顺序只确定 **CV-Bench 优先**；Q-Spatial
+Bench 与 SPBench-SI 的后续先后尚未确定，确定后须同步本文与 CHANGELOG。
+
+## 目标模型覆盖
+
+剩余三个 benchmark 的项目级待测范围为：MSMU 阶段已有 15 个模型身份，加上 2026-08-03 新纳入的
+4 个开源 SOTA 参考模型，共 19 个模型身份。新增模型是 RoboBrain2.5-8B-NV、
+RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B；权重身份、输入轨和当前准备状态见
+[模型矩阵的新增 SOTA 模型](model-matrix.md#新增的-4-个开源-sota-模型)。
+
+这里的“19 个模型身份”不等于“19 条 inference profile”。同一模型在 fair RGB-only 与官方原生
+输入下必须拆成不同 profile、protocol 和结果目录。现有 18 条 `CURRENT_TARGET_PROFILE_KEYS` 只描述
+已经落地并完成的 MSMU profile；新增 4 个模型尚未注册 benchmark-specific profile，也不追溯计入
+MSMU 的已完成集合。是否以后补测它们的 MSMU 结果属于独立范围决策。
+
+## 开源 SOTA 参考
+
+下表数值来自 2026-08-03 收集的论文/项目公开报告，只用于选择对照模型，**不是本项目复现结果**。
+正式报告必须把项目实测值与外部报告值分开，并保留 benchmark 版本、输入轨与 scorer provenance。
+
+| Benchmark | 公开报告参考 | 纳入矩阵的模型 | 公平性说明 |
+|---|---|---|---|
+| MSMU-Bench | 64.17 | RoboBrain2.5-8B-NV | 开源、RGB-only 公平报告值 |
+| CV-Bench | 94.58 | RoboBrain2.5-8B-NV | 开源、RGB-only 公平报告值 |
+| Q-Spatial Bench | 85.16 / 78.31 | HiSpatial-3B / RoboBrain2.5-8B-MT | 85.16 使用 RGB + MoGe-2 估计 XYZ point map；78.31 是开源 RGB-only 公平报告值 |
+| SPBench-SI | 79.10 / 70.20 | SpatialLadder-3B | 79.10 的 GAMSI-S1+S2 权重未公开，不纳入待测矩阵；70.20 是 SpatialLadder-3B 的开源 RGB-only 报告值 |
+
+“公平”在本阶段只表示模型输入限于 benchmark 原始提供的 RGB 图像，不额外输入深度图、XYZ point
+map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方数据与评测代码逐项设计；不得直接
+把 MSMU 的 prompt、图像处理或 scorer 复制到其他 benchmark。
+
+## 服务器数据与模型位置
+
+- Q-Spatial Bench、CV-Bench、SPBench-SI 的既有下载位于
+  `/media/datasets/tangzecong/huggingface/`。它们是 legacy 资产：只读引用，不移动、不删除，也不向
+  该 namespace 继续下载。路径存在不等于 split、图片、license 或 fingerprint 已验收。
+- 2026-08-03 新增的四个模型正在 `/media/datasets/lihaoran/huggingface/` 下载。下载完成后仍须现场
+  核对 snapshot SHA、权重完整性、license、processor/template 与上游 revision，完成前不得登记成
+  可运行 profile。
+- 既有目标模型继续从 `/media/datasets/tangzecong/huggingface/` 的精确 legacy 路径读取，不做批量
+  迁移。今后新增的模型、dataset、environment、cache、upstream 和 checkpoint 一律写入
+  `/media/datasets/lihaoran/`。
+
+## 上游入口
+
+以下入口用于下一阶段锁定代码 commit 与数据 revision，不代表当前仓库已经兼容其默认评测脚本：
+
+| Benchmark | 官方代码 | 数据集 |
+|---|---|---|
+| Q-Spatial Bench | [andrewliao11/Q-Spatial-Bench-code](https://github.com/andrewliao11/Q-Spatial-Bench-code) | [andrewliao11/Q-Spatial-Bench](https://huggingface.co/datasets/andrewliao11/Q-Spatial-Bench) |
+| CV-Bench | [cambrian-mllm/cambrian](https://github.com/cambrian-mllm/cambrian) | [nyu-visionx/CV-Bench](https://huggingface.co/datasets/nyu-visionx/CV-Bench) |
+| SPBench-SI | [ZJU-REAL/SpatialLadder](https://github.com/ZJU-REAL/SpatialLadder) | [hongxingli/SPBench](https://huggingface.co/datasets/hongxingli/SPBench) |
+
+## CV-Bench 实现前门禁
+
+下一阶段开始写代码或运行服务器任务前，至少完成以下核对并把结果固化到 CV-Bench protocol、模型
+profile 与回归测试：
+
+1. 锁定官方数据集 revision、split、样本数、媒体字段、答案字段与许可，验证本地数据完整性；
+2. 锁定官方代码/评测 commit，确认 prompt、选项解析、计分公式、主指标及异常样本语义；
+3. 定义 benchmark-owned model input、prediction schema、validator、subset/full 边界和输出布局；
+4. 为 19 个目标模型身份确定可执行 profile；fair/native 输入存在差异时分别登记；
+5. 先做 processor/template 与单图输入审计，再做小量 smoke；只有完整 split 和 publication gates
+   通过后才能发布结果。

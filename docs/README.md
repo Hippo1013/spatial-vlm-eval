@@ -8,10 +8,13 @@
 | 信息 | 机器事实源 | 人类文档 |
 |---|---|---|
 | MSMU 输入、校验、judge、阈值与聚合 | `src/spatial_vlm_eval/benchmarks/msmu/` | [canonical protocol](benchmarks/msmu/protocol.md) |
-| 注册 profile、当前目标范围、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` | [模型矩阵](model-matrix.md) |
+| 四 benchmark 范围、推进顺序与数据准备边界 | 实现前为项目规划；实现后由各 benchmark registry/validator 固化 | [评测范围](evaluation-scope.md) |
+| 项目级目标模型身份与新增 SOTA 范围 | 实现前为项目规划 | [模型矩阵](model-matrix.md) |
+| 已注册 MSMU profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` | [模型矩阵的 MSMU profile](model-matrix.md#msmu-当前-18-条已完成目标-inference-profile) |
 | 阶段三默认/Qwen3 补测轨与顺序 | `run_stage3_serial_inference.sh --list` / `--qwen3 --list` | [阶段三 runbook](msmu-stage3-full-eval.md) |
 | 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata 和 `summary.json` | 模型矩阵只保存注明日期的已验证快照 |
 | CLI、环境变量与输出布局 | 脚本 `--help`、`configs/msmu-server.env.example` | 对应 runbook |
+| 服务器显式出站代理 | 仓库外 `/media/datasets/lihaoran/tools/mihomo/` | [网络代理手册](server-network-proxy.md) |
 | 精确代码历史 | Git commit/diff | 根目录 [CHANGELOG](../CHANGELOG.md) 只记录语义变化 |
 | 长期设计取舍 | 实现与回归测试 | [ADR](decisions/README.md) |
 | 原始故障证据与已解决问题 | 未跟踪运行日志 | [Troubleshooting](troubleshooting/README.md) 只保留可复用结论 |
@@ -43,7 +46,10 @@
 
 ### 状态与参考
 
-- [模型矩阵](model-matrix.md)：当前目标 profile、锁定身份、已知偏差和注明日期的验证状态快照。
+- [四 Benchmark 评测范围](evaluation-scope.md)：MSMU、CV-Bench、Q-Spatial Bench、SPBench-SI 的
+  当前阶段、SOTA 对照来源、服务器资产边界与 CV-Bench 实现前门禁。
+- [模型矩阵](model-matrix.md)：19 个项目级目标模型身份、新增 SOTA 模型，以及 MSMU 已落地 profile、
+  锁定身份、已知偏差和注明日期的验证状态快照。
 - [Judge 提示词中文参考](msmu-judge-prompts-zh-reference.md)：人工阅读译文；英文 scorer 源码仍是
   唯一运行真值。
 - [MSMU 遗留小问题](benchmarks/msmu/known-minor-issues.md)：仅供以后人工复核的暂缓问题清单。
@@ -58,6 +64,7 @@
 - [阶段三 full-987](msmu-stage3-full-eval.md)：获准轨、正式推理、抽查与评分流程。
 - [阶段三评分命令](msmu-stage3-scoring-commands.md)：只保留操作者需要输入的评分指令。
 - [GPU burn 启停](server-gpu-burn-runbook.md)：项目协作者管理的固定 burn pane 操作。
+- [服务器网络代理](server-network-proxy.md)：Mihomo 首次配置、tmux 生命周期、按 shell 开关与验证。
 
 ### 历史、决策与故障知识
 
@@ -86,6 +93,7 @@
 
 | 触发事件 | 必须更新 | 时机 |
 |---|---|---|
+| benchmark 范围、推进顺序或项目级目标模型身份改变 | 评测范围、模型矩阵、README、CHANGELOG、文档一致性测试 | 决定生效时 |
 | 输入、prompt、图像处理、judge、阈值、聚合或 cache identity 改变 | protocol、相关 ADR、CHANGELOG、回归测试；必要时更换 protocol/cache id | 代码完成前 |
 | profile、模型 revision、decoding 或原生/公平轨改变 | `profiles.py`、模型矩阵、推理手册、CHANGELOG、相关测试 | 同一提交 |
 | 环境变量、服务器路径模板、CLI、输出布局或编排改变 | env example、对应 runbook、README 最短入口、脚本测试 | 同一提交 |

@@ -13,9 +13,18 @@ judge v4 scorer。模型适配与 benchmark 评分分层，任何模型都不能
 - 评分：八类非加权 `official_macro8_accuracy`，目录驱动串行评分和 publication gates。
 - 结果性质：official-compatible internal score，不是 GPT-4-Turbo strict official score。
 
-注册 profile、当前目标范围、锁定 revision 和注明日期的已验证状态只在
-[模型矩阵](docs/model-matrix.md)维护；服务器当前状态以结果目录中的 `status.tsv`、validator、metadata
-和 `summary.json` 为准，不从 README 推断。
+## 当前评测范围
+
+项目目标覆盖 MSMU-Bench、CV-Bench、Q-Spatial Bench 和 SPBench-SI。MSMU 的既有 18 条目标 profile
+已完成，本阶段告一段落；剩余三个 benchmark 尚未在仓库中实现，下一项先做 CV-Bench，再推进
+Q-Spatial Bench 与 SPBench-SI。精确范围、数据准备边界与实现前门禁见
+[四 Benchmark 评测范围](docs/evaluation-scope.md)。
+
+项目级目标范围现为 19 个模型身份：MSMU 阶段已有 15 个，加上 RoboBrain2.5-8B-NV、
+RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B。新增四款目前处于下载和协议准备阶段，尚未
+注册成可运行 profile；模型身份、输入公平性和已验证状态只在[模型矩阵](docs/model-matrix.md)维护。
+服务器当前结果状态以结果目录中的 `status.tsv`、validator、metadata 和 `summary.json` 为准，不从
+README 推断。
 完整文档分类与更新规则见[文档地图](docs/README.md)，语义变更见 [CHANGELOG](CHANGELOG.md)。
 
 正式推理、评分和汇总产物以 `.env.server` 配置的 `MANUAL_TEST_OUTPUT_ROOT` 为准；该路径应位于
@@ -27,6 +36,11 @@ judge v4 scorer。模型适配与 benchmark 评分分层，任何模型都不能
 `/media/datasets/lihaoran/latent_reasoning/msmu-outputs`。新下载的数据、模型、Conda 环境和各类缓存也
 统一写入 `/media/datasets/lihaoran/`；既有 `tangzecong` 数据、模型与环境不迁移，由 `.env.server`
 中的 legacy 路径继续显式引用。完整目录表见[推理手册的服务器存储约定](docs/msmu-inference.md#1-运行前边界)。
+三个待实现 benchmark 的既有下载与旧模型继续从 `/media/datasets/tangzecong/huggingface/` 只读引用；
+新增四个 SOTA 模型下载到 `/media/datasets/lihaoran/huggingface/`，详情见
+[评测范围的数据与模型位置](docs/evaluation-scope.md#服务器数据与模型位置)。
+服务器命令需要显式出站代理时，使用仓库外的本机 Mihomo 服务；首次配置、tmux 启停、按 shell 开关
+和出口验证见[服务器网络代理手册](docs/server-network-proxy.md)。
 
 人工测试从[三阶段入口](docs/msmu-all-model-test-commands.md)开始；每个阶段均有统一入口脚本，会自动
 加载 `.env.server`。阶段三默认范围与 Qwen3 补测顺序以

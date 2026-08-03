@@ -90,7 +90,9 @@ class DocumentationConsistencyTest(unittest.TestCase):
         documented = re.findall(r"^\| `([^`]+)` \|", matrix, flags=re.MULTILINE)
         self.assertEqual(documented, list(CURRENT_TARGET_PROFILE_KEYS))
         count = re.search(
-            r"^## 当前 (\d+) 条目标 inference profile$", matrix, flags=re.MULTILINE
+            r"^## MSMU 当前 (\d+) 条已完成目标 inference profile$",
+            matrix,
+            flags=re.MULTILINE,
         )
         self.assertIsNotNone(count)
         self.assertEqual(int(count.group(1)), len(CURRENT_TARGET_PROFILE_KEYS))
@@ -106,6 +108,38 @@ class DocumentationConsistencyTest(unittest.TestCase):
                 for key in CURRENT_TARGET_PROFILE_KEYS
             )
         )
+
+    def test_cross_benchmark_scope_and_planned_sota_models_are_explicit(self) -> None:
+        scope = (self.docs / "evaluation-scope.md").read_text(encoding="utf-8")
+        matrix = (self.docs / "model-matrix.md").read_text(encoding="utf-8")
+        readme = (self.repository / "README.md").read_text(encoding="utf-8")
+
+        for benchmark in [
+            "MSMU-Bench",
+            "CV-Bench",
+            "Q-Spatial Bench",
+            "SPBench-SI",
+        ]:
+            with self.subTest(benchmark=benchmark):
+                self.assertIn(benchmark, scope)
+                self.assertIn(benchmark, readme)
+
+        for model in [
+            "RoboBrain2.5-8B-NV",
+            "RoboBrain2.5-8B-MT",
+            "HiSpatial-3B",
+            "SpatialLadder-3B",
+        ]:
+            with self.subTest(model=model):
+                self.assertIn(model, scope)
+                self.assertIn(model, matrix)
+
+        self.assertIn("共 19 个模型身份", scope)
+        self.assertIn("**下一项**", scope)
+        self.assertIn("不是本项目复现结果", scope)
+        self.assertIn("尚未注册 benchmark-specific profile", scope)
+        self.assertIn("/media/datasets/tangzecong/huggingface/", scope)
+        self.assertIn("/media/datasets/lihaoran/huggingface/", scope)
 
     def test_stage3_runbook_matches_serial_script_plan(self) -> None:
         runbook = (self.docs / "msmu-stage3-full-eval.md").read_text(encoding="utf-8")
@@ -322,6 +356,7 @@ class DocumentationConsistencyTest(unittest.TestCase):
             "## 文档读取路由",
             "## 文档更新触发",
             "docs/README.md",
+            "docs/evaluation-scope.md",
             "docs/troubleshooting/",
         ]:
             with self.subTest(required=required):

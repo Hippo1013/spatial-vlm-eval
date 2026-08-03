@@ -35,6 +35,10 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- 将项目级待测范围扩展为 MSMU-Bench、CV-Bench、Q-Spatial Bench、SPBench-SI 四个 benchmark；MSMU
+  既有 18 条 profile 已完成，下一实施对象为 CV-Bench。目标模型范围在原有 15 个模型身份上新增
+  RoboBrain2.5-8B-NV、RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B，共 19 个模型身份；
+  新增模型尚在下载且未注册 profile，不追溯计入 MSMU 已完成结果。
 - 将当前 MSMU 目标测试矩阵固化为 18 条已经通过 full-987 validator 与 publication gates 的结果轨；
   目标范围由 `CURRENT_TARGET_PROFILE_KEYS` 统一维护，历史 adapter、注册 profile 与结果继续保留用于
   复现，但不再混入当前目标矩阵。
@@ -70,6 +74,10 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Documentation
 
+- 增加四 benchmark 评测范围文档，区分外部 SOTA 报告值与项目复现结果，记录三个待实现 benchmark
+  的 legacy 数据位置、新模型下载位置、公平/原生输入边界和 CV-Bench 实现前门禁。
+- 增加 `msmu-a800` Mihomo 显式出站代理手册，记录仓库外安装、tmux/PID 生命周期、按 shell 开关、
+  本机监听与出口验证；订阅、完整节点身份和出口 IP 不进入仓库。
 - 建立统一文档地图、维护触发规则、ADR 决策记录和 troubleshooting 知识库。
 - 增加文档链接、profile 矩阵、阶段三名单与 scorer protocol 的一致性检查。
 - 明确仓库外 `MANUAL_TEST_OUTPUT_ROOT` 才是正式推理/评分结果根；人工抽查与派生导出同样写在

@@ -46,11 +46,12 @@
 | 修改 benchmark 输入、schema、validator、judge、阈值、cache 或聚合 | 对应 `docs/benchmarks/<name>/` 协议、`docs/architecture.md`、相关 benchmark 测试 | 方案与编辑前 |
 | 修改模型 profile、processor/template、图像输入、decoding 或 revision | `docs/model-matrix.md`、`docs/msmu-inference.md`、对应 benchmark 输入协议和 model 测试 | 设计 adapter 前 |
 | 修改 shell、环境变量、输出路径、服务器部署或 GPU 编排 | `docs/msmu-inference.md`、相关阶段 runbook、`docs/troubleshooting/` 和脚本测试 | 执行服务器命令前 |
+| 配置、操作或修改服务器显式出站代理 | `docs/server-network-proxy.md` | 输入订阅或执行代理命令前 |
 | 运行三阶段人工测试 | `docs/msmu-all-model-test-commands.md` 与当前阶段文档 | 启动模型前 |
 | 启动 judge 或正式评分 | MSMU protocol、`docs/msmu-stage3-scoring-commands.md`、`docs/architecture.md` | readiness 检查与评分前 |
 | 查询当前进度、汇报或发布结果 | `docs/model-matrix.md`，并现场检查服务器 validator/metadata/status/summary | 写结论前 |
 | 追溯行为变化、设计原因或已知故障 | `CHANGELOG.md`、相关 ADR、`docs/troubleshooting/` 与原始运行日志 | 下结论或修复前 |
-| 新增 benchmark | 本文件“新增 benchmark”、`docs/README.md` 和已有 benchmark 的同类文件 | 创建目录或协议前 |
+| 新增 benchmark | 本文件“新增 benchmark”、`docs/evaluation-scope.md`、`docs/model-matrix.md`、`docs/README.md` 和已有 benchmark 的同类文件 | 创建目录或协议前 |
 
 ## MSMU 不变量
 
