@@ -209,7 +209,4 @@ class UpstreamCommandAdapter(InferenceAdapter):
             finally:
                 for stream in (self._process.stdin, self._process.stdout):
                     if stream is not None and not stream.closed:
-                        try:
-                            stream.close()
-                        except (BrokenPipeError, OSError):
-                            pass
+                        stream.close()

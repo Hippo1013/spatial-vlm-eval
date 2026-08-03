@@ -95,7 +95,7 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 - CV-Bench SpatialBot runner 现在验证并显式绑定锁定的本地 SigLIP vision tower，避免上游 checkpoint
   config 在离线测试中按仓库名隐式联网；ZoeDepth 的 MiDaS torch.hub 请求同样改绑到锁定 commit 的
-  本地 checkout；checkpoint 与 legacy 只读快照均不修改。子 runner 提前退出后的 pipe 关闭也改为幂等。
+  本地 checkout；checkpoint 与 legacy 只读快照均不修改。
 - 3DThinker Mental-3D adapter 在保留 index `-1` 的视觉 canary 中验证完整 raw response，不再先抽取
   `<answer>` 而丢失颜色/形状/位置证据；真实 benchmark index 继续只保留最后完整 answer tag，正式
   prediction 语义不变。
