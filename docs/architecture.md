@@ -7,12 +7,12 @@ processor/template、图像张量和 generation。shell 只负责编排，不复
 
 ```text
 dataset-owned test rows
-  ├─ private provenance: raw type, reference, conversation history
-  └─ restricted MSMUModelInput(index, RGB image, clean first question)
+  ├─ private provenance: answer/reference, task/source, conversation history
+  └─ restricted input(index, exactly one RGB image, benchmark-owned prompt)
        → model-family adapter
        → GenerationResult(prediction + generation metadata)
        → fsync append-only journal
-       → benchmark-owned six-field rows
+       → benchmark-owned prediction rows
        → atomic predictions.jsonl
        → mandatory validator
        → scorer / judge
@@ -29,6 +29,10 @@ index, image, question
 它没有 reference、raw type、task family、完整 conversations 或其他同图历史。生成完成后，benchmark
 层通过 index 从 official row 重新附着前五个 prediction 字段。新增 adapter 不得自行构造六字段
 JSONL，也不得持有原始 dataset row。
+
+`CVBenchTestContract` 使用相同三字段可见边界，但 prompt 是锁定数据集的题目/选项加官方直接答题
+后缀；prediction 只保存 `index, raw_prediction`，answer/task/source 仅在 scorer 中按 index 重新关联。
+MSMU 与 CV-Bench 的 schema、validator 和 scorer protocol 不复用。
 
 每次调用前创建输入审计：index、清洗后题干、RGB 数量、mode、尺寸、像素 SHA-256、profile、
 inference protocol 和 chat template。审计禁止保存 base64/API key；它证明“送入哪张图”，但不会把
@@ -57,6 +61,10 @@ revision、inference/scorer protocol、图像处理、decoding、upstream commit
 每个 benchmark 子包拥有数据/split 合同、不可泄漏字段、prediction schema、validator、judge prompt、
 cache identity、阈值、聚合与 scorer protocol。model 包不得定义指标。
 
+CV-Bench 子包额外拥有 23 条目标轨的 benchmark-specific registry，因为同一模型在不同 benchmark 的
+prompt、decoding 和合法 input track 并不相同。通用 journal/resume/原子写入来自 model-neutral
+runtime；registry 不进入 scorer 的结果发现逻辑。
+
 ### `spatial_vlm_eval.models`
 
 - `common/`：journal、resume、审计、原子写入、revision 检查和 CLI 公共参数；
@@ -68,6 +76,18 @@ cache identity、阈值、聚合与 scorer protocol。model 包不得定义指�
 `*_revision_verified=false`，不得在报告中描述为已机器验证。
 
 ## shell 层
+
+`scripts/cv_bench/` 提供统一两阶段入口。test stage 生成绑定 dataset/model/adapter/processor/decoding/
+sharding/GPU selection 的 gate；full stage 不能绕过或复用过期 gate。TP=1 deterministic 通用模型使用
+两个已经启动的 endpoint 做固定偶/奇分片，其他轨按 registry 保持单 endpoint 或上游明确支持的并行
+方式。GPU preflight 只读 `nvidia-smi` inventory/process，从不终止任何进程。专用模型通过 persistent
+JSONL bridge 接入锁定上游 runner；bridge 请求不包含 answer/task/source，runner 必须回传单图 tensor/
+media count 和 template digest。
+
+CV-Bench 评分器递归发现完整 prediction，不维护 profile 名单，评分前强制 full validator。报告器只
+接受当前 robust scorer protocol 下通过 publication gates 且 registry provenance 完整的 summary；
+一条 profile 出现多个发布候选时 fail closed。最终表固定使用模型名称区分 input track，一次只选择一个
+scorer protocol，并保留完整 provenance 于 metadata/summary。
 
 `scripts/msmu/` 包含 family inference、vLLM server、GPU preflight、validator/scorer 和 pipeline。
 GPU preflight 只读取 `nvidia-smi`；显存不足、利用率超限或已有 compute process 时退出，绝不终止
@@ -143,6 +163,25 @@ scorer protocol 与 result kind 仍以已经校验的 metadata/summary 和结果
 `MANUAL_TEST_OUTPUT_ROOT/_answer_audit/`。仓库根不得创建 `output/` 或 `outputs/`。
 
 ## 输出布局
+
+CV-Bench 使用独立仓库外根：
+
+```text
+CVBENCH_OUTPUT_ROOT/
+├── runs/PROFILE/MODEL_REVISION/INFERENCE_PROTOCOL/
+│   ├── test_gate.json
+│   ├── predictions.jsonl
+│   ├── predictions.jsonl.journal.jsonl
+│   ├── predictions.jsonl.metadata.json
+│   ├── prediction_validation.json
+│   └── scores/SCORER_PROTOCOL/
+│       ├── scored_rows.jsonl
+│       ├── summary.json
+│       └── publication_gates.json
+└── cv-bench-result.md
+```
+
+以下是 MSMU 的既有布局：
 
 未显式设置 `OUTPUT` 时，公共路径函数在 `OUTPUT_ROOT` 下生成：
 

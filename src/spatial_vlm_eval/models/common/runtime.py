@@ -1,8 +1,8 @@
-"""Recoverable MSMU inference runner with strict provenance ownership.
+"""Benchmark-neutral recoverable vision inference with strict provenance ownership.
 
-Adapters are called with ``MSMUModelInput`` only.  This module journals every
-attempt, resumes completed indices, and atomically materializes the benchmark's
-six-field prediction schema only after every selected index succeeds.
+Adapters receive only a structural index/image/question input. This module journals
+every attempt, resumes completed indices, and asks the benchmark-owned contract to
+materialize prediction rows only after every selected index succeeds.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 
 from ...benchmarks.msmu.data import OFFICIAL_TEST_SIZE, MSMUModelInput, MSMUTestContract
 from ...benchmarks.msmu.scorer import SCORER_PROTOCOL
@@ -56,6 +56,14 @@ class GenerationResult:
     warnings: tuple[str, ...] = ()
 
 
+class RestrictedVisionInput(Protocol):
+    """Structural input boundary shared by image-plus-prompt benchmarks."""
+
+    index: int
+    image: Any
+    question: str
+
+
 class InferenceAdapter:
     """Small interface implemented by model-family adapters."""
 
@@ -69,10 +77,10 @@ class InferenceAdapter:
     def metadata(self) -> dict[str, Any]:
         raise NotImplementedError
 
-    def generate(self, model_input: MSMUModelInput) -> GenerationResult:
+    def generate(self, model_input: RestrictedVisionInput) -> GenerationResult:
         raise NotImplementedError
 
-    def generate_batch(self, model_inputs: Sequence[MSMUModelInput]) -> list[GenerationResult]:
+    def generate_batch(self, model_inputs: Sequence[RestrictedVisionInput]) -> list[GenerationResult]:
         return [self.generate(model_input) for model_input in model_inputs]
 
     def close(self) -> None:
@@ -133,7 +141,7 @@ def pixel_sha256(image: Any) -> str:
     return digest.hexdigest()
 
 
-def input_audit(model_input: MSMUModelInput, adapter_metadata: dict[str, Any]) -> dict[str, Any]:
+def input_audit(model_input: RestrictedVisionInput, adapter_metadata: dict[str, Any]) -> dict[str, Any]:
     rgb = model_input.image.convert("RGB")
     return {
         "index": int(model_input.index),
@@ -253,7 +261,7 @@ class PredictionJournal:
     def append_success(
         self,
         *,
-        model_input: MSMUModelInput,
+        model_input: RestrictedVisionInput,
         attempt: int,
         audit: dict[str, Any],
         result: GenerationResult,
@@ -276,7 +284,7 @@ class PredictionJournal:
     def append_failure(
         self,
         *,
-        model_input: MSMUModelInput,
+        model_input: RestrictedVisionInput,
         attempt: int,
         audit: dict[str, Any],
         error: BaseException,
@@ -370,12 +378,16 @@ def validate_adapter_metadata(metadata: dict[str, Any]) -> None:
         raise TypeError("Adapter upstream metadata must be an object")
 
 
-def run_msmu_inference(
+def run_recoverable_inference(
     *,
-    contract: MSMUTestContract,
+    contract: Any,
     adapter: InferenceAdapter,
     output: str | Path,
     target_indices: Sequence[int],
+    benchmark: str,
+    split: str,
+    official_size: int,
+    scorer_protocol: str,
     journal_path: str | Path | None = None,
     metadata_path: str | Path | None = None,
     retries: int = 2,
@@ -383,7 +395,7 @@ def run_msmu_inference(
     workers: int = 1,
     resume: bool = True,
 ) -> dict[str, Any]:
-    """Run, resume, and atomically finalize a selected MSMU inference set."""
+    """Run, resume, and atomically finalize one restricted benchmark split."""
 
     started_wall = time.monotonic()
     started_at = utc_now()
@@ -398,6 +410,9 @@ def run_msmu_inference(
     if len(resolved_paths) != 3:
         raise ValueError("output, journal, and metadata paths must be three distinct files")
     selected = [int(index) for index in target_indices]
+    locked_official_size = int(official_size)
+    if locked_official_size <= 0:
+        raise ValueError("official_size must be positive")
     if len(selected) != len(set(selected)):
         raise ValueError("Target indices contain duplicates")
     outside = [index for index in selected if not 0 <= index < len(contract)]
@@ -426,9 +441,10 @@ def run_msmu_inference(
 
     runtime_packages = _package_versions()
     run_identity = {
+        "benchmark": str(benchmark),
         "dataset_root": str(contract.dataset_root),
         "dataset_fingerprint": contract.dataset_fingerprint,
-        "split": "test",
+        "split": str(split),
         "target_indices": selected,
         "adapter": adapter_metadata,
         "python": sys.version.split()[0],
@@ -437,12 +453,14 @@ def run_msmu_inference(
     signature = _run_signature(run_identity)
     journal = PredictionJournal(resolved_journal, signature, resume=resume)
     successes = journal.successful_results(set(selected))
+    terminal_failures: set[int] = set()
+    terminal_failure_lock = threading.Lock()
     if output_path.exists() and set(successes) != set(selected):
         raise FileExistsError(
             f"Refusing to overwrite an existing prediction file before the journal is complete: {output_path}"
         )
     def run_batch(
-        batch: Sequence[MSMUModelInput],
+        batch: Sequence[RestrictedVisionInput],
         *,
         attempt_offset: int = 0,
     ) -> dict[int, GenerationResult]:
@@ -476,6 +494,31 @@ def run_msmu_inference(
                         audit=audit,
                         error=exc,
                     )
+                status_code = getattr(exc, "status_code", None)
+                explicit_retryable = getattr(exc, "retryable", None)
+                retryable = (
+                    bool(explicit_retryable)
+                    if explicit_retryable is not None
+                    else status_code is None
+                    or status_code == 429
+                    or (isinstance(status_code, int) and status_code >= 500)
+                )
+                if not retryable:
+                    with terminal_failure_lock:
+                        terminal_failures.update(int(model_input.index) for model_input in batch)
+                    break
+                if attempt < attempt_offset + retry_count + 1 and (
+                    status_code == 429 or (isinstance(status_code, int) and status_code >= 500)
+                ):
+                    headers = getattr(exc, "response_headers", {}) or {}
+                    retry_after = headers.get("retry-after")
+                    try:
+                        delay = float(retry_after) if retry_after is not None else 2.0 ** (
+                            attempt - attempt_offset - 1
+                        )
+                    except (TypeError, ValueError):
+                        delay = 2.0 ** (attempt - attempt_offset - 1)
+                    time.sleep(min(max(delay, 0.0), 30.0))
                 continue
 
             # Journal writes are intentionally outside the retry handler. If durable
@@ -530,7 +573,11 @@ def run_msmu_inference(
 
     try:
         for pass_index in range(missing_retry_pass_count + 1):
-            pending_indices = [index for index in selected if index not in successes]
+            pending_indices = [
+                index
+                for index in selected
+                if index not in successes and index not in terminal_failures
+            ]
             if not pending_indices:
                 break
             run_indices(
@@ -552,18 +599,21 @@ def run_msmu_inference(
     output_sha256 = hashlib.sha256(output_path.read_bytes()).hexdigest()
     empty_indices = [index for index in selected if not successes[index].text.strip()]
     warning_count = sum(len(successes[index].warnings) for index in selected)
-    is_full_split = len(contract) == OFFICIAL_TEST_SIZE and selected == list(range(OFFICIAL_TEST_SIZE))
+    is_full_split = len(contract) == locked_official_size and selected == list(
+        range(locked_official_size)
+    )
     finished_at = utc_now()
     metadata = {
         "schema_version": METADATA_SCHEMA_VERSION,
         "inference_protocol": adapter_metadata["inference_protocol"],
-        "scorer_protocol": SCORER_PROTOCOL,
+        "scorer_protocol": str(scorer_protocol),
         "model": adapter_metadata,
         "dataset": {
+            "benchmark": str(benchmark),
             "root": str(contract.dataset_root),
-            "split": "test",
+            "split": str(split),
             "fingerprint": contract.dataset_fingerprint,
-            "official_test_size": OFFICIAL_TEST_SIZE,
+            "official_test_size": locked_official_size,
             "loaded_size": len(contract),
             "target_indices": selected,
             "num_targets": len(selected),
@@ -594,3 +644,36 @@ def run_msmu_inference(
     }
     atomic_write_json(resolved_metadata, metadata)
     return metadata
+
+
+def run_msmu_inference(
+    *,
+    contract: MSMUTestContract,
+    adapter: InferenceAdapter,
+    output: str | Path,
+    target_indices: Sequence[int],
+    journal_path: str | Path | None = None,
+    metadata_path: str | Path | None = None,
+    retries: int = 2,
+    retry_missing_passes: int = 0,
+    workers: int = 1,
+    resume: bool = True,
+) -> dict[str, Any]:
+    """Compatibility wrapper for the canonical MSMU recoverable runner."""
+
+    return run_recoverable_inference(
+        contract=contract,
+        adapter=adapter,
+        output=output,
+        target_indices=target_indices,
+        benchmark="MSMU-Bench",
+        split="test",
+        official_size=OFFICIAL_TEST_SIZE,
+        scorer_protocol=SCORER_PROTOCOL,
+        journal_path=journal_path,
+        metadata_path=metadata_path,
+        retries=retries,
+        retry_missing_passes=retry_missing_passes,
+        workers=workers,
+        resume=resume,
+    )

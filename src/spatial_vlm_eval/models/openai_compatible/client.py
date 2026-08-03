@@ -15,8 +15,7 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-from ...benchmarks.msmu.data import MSMUModelInput
-from ..common.runtime import GenerationResult, InferenceAdapter
+from ..common.runtime import GenerationResult, InferenceAdapter, RestrictedVisionInput
 from ..profiles import InferenceProfile, get_profile
 
 SUPPORTED_PROFILE_KEYS = {
@@ -61,6 +60,7 @@ class APIRequestError(RuntimeError):
         response_headers: dict[str, str] | None = None,
         router_metadata: dict[str, Any] | None = None,
         elapsed_ms: float | None = None,
+        retryable: bool | None = None,
     ) -> None:
         super().__init__(message)
         self.status_code = status_code
@@ -68,6 +68,7 @@ class APIRequestError(RuntimeError):
         self.response_headers = dict(response_headers or {})
         self.router_metadata = dict(router_metadata or {})
         self.elapsed_ms = elapsed_ms
+        self.retryable = retryable
 
     def diagnostics(self) -> dict[str, Any]:
         """Return only non-secret failure fields suitable for run artifacts."""
@@ -80,6 +81,7 @@ class APIRequestError(RuntimeError):
                 "response_headers": self.response_headers or None,
                 "router_metadata": self.router_metadata or None,
                 "elapsed_ms": self.elapsed_ms,
+                "retryable": self.retryable,
             }.items()
             if value is not None
         }
@@ -103,7 +105,7 @@ def single_image_user_message(question: str, image_data_uri: str) -> list[dict[s
     """Return exactly one user message, one question, and one PNG image."""
 
     if not image_data_uri.startswith("data:image/png;base64,"):
-        raise ValueError("MSMU OpenAI-compatible requests require a PNG data URI")
+        raise ValueError("OpenAI-compatible vision requests require a PNG data URI")
     return [
         {
             "role": "user",
@@ -257,15 +259,39 @@ class OpenAICompatibleAdapter(InferenceAdapter):
         served_model_name: str | None = None,
         timeout: float = 180.0,
         metadata_retries: int = 10,
+        policy_key: str | None = None,
+        image_source: str = "MSMU RGB only",
     ) -> None:
         self.profile = get_profile(profile) if isinstance(profile, str) else profile
-        if self.profile.key not in SUPPORTED_PROFILE_KEYS:
+        self.policy_key = str(policy_key) if policy_key else self.profile.key
+        if (
+            self.profile.key not in SUPPORTED_PROFILE_KEYS
+            and str(backend) != "vllm"
+            and self.policy_key not in OPENROUTER_PROFILE_POLICIES
+        ):
             raise ValueError(f"Profile {self.profile.key!r} is not OpenAI-compatible")
         self.backend = str(backend)
         self.base_url = str(base_url).rstrip("/")
         self.api_key = str(api_key)
         self.timeout = float(timeout)
         self.metadata_retries = int(metadata_retries)
+        self.image_source = str(image_source)
+        profile_decoding = getattr(self.profile, "decoding", None)
+        if isinstance(profile_decoding, dict):
+            self.decoding = dict(profile_decoding)
+        else:
+            temperature = getattr(self.profile, "temperature", None)
+            self.decoding = {
+                "do_sample": False if temperature == 0 else None,
+                "num_beams": 1 if str(backend) == "vllm" else None,
+                "temperature": temperature,
+                "reasoning_effort": getattr(self.profile, "reasoning_effort", None),
+                "max_completion_tokens": getattr(self.profile, "max_new_tokens", None),
+            }
+        maximum = self.decoding.get("max_new_tokens", self.decoding.get("max_completion_tokens"))
+        self.max_new_tokens = int(maximum)
+        self.temperature = self.decoding.get("temperature")
+        self.reasoning_effort = self.decoding.get("reasoning_effort")
         if self.timeout <= 0:
             raise ValueError("API timeout must be positive")
         if self.metadata_retries < 0:
@@ -281,7 +307,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "gpt5_openrouter_non_zdr": {"openrouter"},
             "gemini31pro": {"openrouter", "google"},
             "gemini31pro_openrouter_non_zdr": {"openrouter"},
-        }.get(self.profile.key, {"vllm"})
+        }.get(self.policy_key, {"vllm"})
         if self.backend not in allowed:
             raise ValueError(
                 f"Backend {self.backend!r} is incompatible with profile {self.profile.key!r}; "
@@ -316,18 +342,14 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "inference_protocol": self.profile.inference_protocol,
             "chat_template": self.profile.chat_template,
             "image_processing": {
-                "source": "MSMU RGB only",
+                "source": self.image_source,
                 "transport": "one canonical PNG data URI",
                 "mime_type": "image/png",
                 "image_count": 1,
                 "content_order": ["image", "question"],
             },
             "decoding": {
-                "do_sample": False if self.profile.temperature == 0 else None,
-                "num_beams": 1 if self.backend == "vllm" else None,
-                "temperature": self.profile.temperature,
-                "reasoning_effort": self.profile.reasoning_effort,
-                "max_completion_tokens": self.profile.max_new_tokens,
+                **self.decoding,
                 "stream": False,
             },
             "provider_policy": provider_policy,
@@ -340,7 +362,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
     def _openrouter_provider_policy(self) -> dict[str, Any]:
         try:
             only, _expected_provider, require_zdr = OPENROUTER_PROFILE_POLICIES[
-                self.profile.key
+                self.policy_key
             ]
         except KeyError as exc:
             raise ValueError(
@@ -354,7 +376,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "zdr": require_zdr,
         }
 
-    def request_payload(self, model_input: MSMUModelInput) -> dict[str, Any]:
+    def request_payload(self, model_input: RestrictedVisionInput) -> dict[str, Any]:
         payload: dict[str, Any] = {
             "model": self.request_model,
             "messages": single_image_user_message(
@@ -364,19 +386,23 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "stream": False,
         }
         if self.backend in {"vllm", "openrouter"}:
-            payload["max_tokens"] = self.profile.max_new_tokens
+            payload["max_tokens"] = self.max_new_tokens
         else:
-            payload["max_completion_tokens"] = self.profile.max_new_tokens
-        if self.profile.temperature is not None:
-            payload["temperature"] = self.profile.temperature
-        if self.profile.reasoning_effort is not None:
+            payload["max_completion_tokens"] = self.max_new_tokens
+        if self.temperature is not None:
+            payload["temperature"] = self.temperature
+        if self.decoding.get("top_p") is not None:
+            payload["top_p"] = self.decoding["top_p"]
+        if self.backend == "vllm" and self.decoding.get("seed") is not None:
+            payload["seed"] = int(self.decoding["seed"])
+        if self.reasoning_effort is not None:
             if self.backend == "openrouter":
                 payload["reasoning"] = {
-                    "effort": self.profile.reasoning_effort,
+                    "effort": self.reasoning_effort,
                     "exclude": True,
                 }
             elif self.backend in {"openai", "google"}:
-                payload["reasoning_effort"] = self.profile.reasoning_effort
+                payload["reasoning_effort"] = self.reasoning_effort
         if self.backend == "openrouter":
             payload["provider"] = self._openrouter_provider_policy()
         return payload
@@ -515,7 +541,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
 
         try:
             _only, expected_provider, _require_zdr = OPENROUTER_PROFILE_POLICIES[
-                self.profile.key
+                self.policy_key
             ]
         except KeyError as exc:
             raise APIRequestError(
@@ -528,7 +554,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             )
         canonical_model = str(generation.get("model") or response.data.get("model") or "")
         try:
-            expected_canonical_model = OPENROUTER_CANONICAL_MODELS[self.profile.key]
+            expected_canonical_model = OPENROUTER_CANONICAL_MODELS[self.policy_key]
         except KeyError as exc:
             raise APIRequestError(
                 f"Profile {self.profile.key!r} has no locked OpenRouter canonical model"
@@ -560,47 +586,54 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "num_media_prompt": int(media_count),
         }
 
-    def generate(self, model_input: MSMUModelInput) -> GenerationResult:
+    def generate(self, model_input: RestrictedVisionInput) -> GenerationResult:
         response = self._request_json(
             method="POST",
             url=f"{self.base_url}/chat/completions",
             payload=self.request_payload(model_input),
         )
-        choices = response.data.get("choices")
-        if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
-            raise APIRequestError("Chat completion response must contain exactly one choice")
-        choice = choices[0]
-        returned_model = response.data.get("model")
-        if self.backend == "vllm" and str(returned_model or "") != self.request_model:
-            raise APIRequestError(
-                f"vLLM served-model mismatch: got {returned_model!r}, expected {self.request_model!r}"
-            )
-        message = choice.get("message")
-        if not isinstance(message, dict):
-            raise APIRequestError("Chat completion choice lacks an assistant message")
-        text = self._message_text(message)
-        if self.backend == "openrouter":
-            generation_metadata = self._openrouter_generation_metadata(response)
-        else:
-            usage = response.data.get("usage") if isinstance(response.data.get("usage"), dict) else {}
-            completion_details = (
-                usage.get("completion_tokens_details")
-                if isinstance(usage.get("completion_tokens_details"), dict)
-                else {}
-            )
-            generation_metadata = {
-                "generation_id": response.data.get("id"),
-                "provider_request_id": response.headers.get("x-request-id"),
-                "canonical_model": response.data.get("model"),
-                "provider": self.backend,
-                "upstream_id": response.data.get("id"),
-                "finish_reason": choice.get("finish_reason"),
-                "prompt_tokens": usage.get("prompt_tokens"),
-                "output_tokens": usage.get("completion_tokens"),
-                "reasoning_tokens": completion_details.get("reasoning_tokens"),
-                "cost": None,
-                "latency_ms": response.elapsed_ms,
-                "num_media_prompt": 1,
-            }
+        try:
+            choices = response.data.get("choices")
+            if not isinstance(choices, list) or len(choices) != 1 or not isinstance(choices[0], dict):
+                raise APIRequestError("Chat completion response must contain exactly one choice")
+            choice = choices[0]
+            returned_model = response.data.get("model")
+            if self.backend == "vllm" and str(returned_model or "") != self.request_model:
+                raise APIRequestError(
+                    f"vLLM served-model mismatch: got {returned_model!r}, expected {self.request_model!r}"
+                )
+            message = choice.get("message")
+            if not isinstance(message, dict):
+                raise APIRequestError("Chat completion choice lacks an assistant message")
+            text = self._message_text(message)
+            if self.backend == "openrouter":
+                generation_metadata = self._openrouter_generation_metadata(response)
+            else:
+                usage = response.data.get("usage") if isinstance(response.data.get("usage"), dict) else {}
+                completion_details = (
+                    usage.get("completion_tokens_details")
+                    if isinstance(usage.get("completion_tokens_details"), dict)
+                    else {}
+                )
+                generation_metadata = {
+                    "generation_id": response.data.get("id"),
+                    "provider_request_id": response.headers.get("x-request-id"),
+                    "canonical_model": response.data.get("model"),
+                    "provider": self.backend,
+                    "upstream_id": response.data.get("id"),
+                    "finish_reason": choice.get("finish_reason"),
+                    "prompt_tokens": usage.get("prompt_tokens"),
+                    "output_tokens": usage.get("completion_tokens"),
+                    "reasoning_tokens": completion_details.get("reasoning_tokens"),
+                    "cost": None,
+                    "latency_ms": response.elapsed_ms,
+                    "num_media_prompt": 1,
+                }
+        except APIRequestError as exc:
+            # The POST already returned a successful completion. Retrying the whole
+            # generation could duplicate a paid call; metadata/contract failures
+            # therefore require operator inspection or a journal-safe resume policy.
+            exc.retryable = False
+            raise
         warnings = ("model returned an empty text completion",) if not text.strip() else ()
         return GenerationResult(text=text, metadata=generation_metadata, warnings=warnings)

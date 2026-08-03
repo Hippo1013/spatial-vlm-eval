@@ -1,7 +1,17 @@
 {
-  "captured_at": "2026-07-31",
+  "captured_at": "2026-08-03",
   "source_root": "/media/datasets/tangzecong/latent_reasoning",
-  "note": "Canonical MSMU scorer semantics are v4; the judge cache uses its separately versioned v3 malformed-zero identity, and model adapters have independent inference protocol ids.",
+  "note": "Canonical MSMU scorer semantics are v4. CV-Bench uses its independent locked dataset, robust multiple-choice scorer and 23-track inference registry; inference and scorer protocol ids remain separate.",
+  "dataset_revisions": {
+    "nyu-visionx/CV-Bench": "bc284db50d036958861cb60cdd7b77612052ce0d"
+  },
+  "legacy_dataset_locations": {
+    "nyu-visionx/CV-Bench": "/media/datasets/tangzecong/huggingface/datasets/CV-Bench"
+  },
+  "dataset_file_sha256": {
+    "nyu-visionx/CV-Bench/test_2d.parquet": "33196034ef4bf3265cae4a7ff5c4071b2ff1cc21123e8e285c6a91393897ecbc",
+    "nyu-visionx/CV-Bench/test_3d.parquet": "ef91fe8b5392eb2a16e318ca68fa02449d45ba1e152afece12a0a526e9fbbc25"
+  },
   "legacy_files": {
     "msmu_sft_baseline/data.py": "440D315DF868461661D3C1596CE139A3DFEEE36045E83C78C7A06C84671EF4E8",
     "msmu_sft_baseline/infer.py": "674FF38B7B8E91BA47286F2BCF90058BFDCED7CD0DF072879426A4134EF17E48",
@@ -13,6 +23,7 @@
     "serve_msmu_local_judge.sh": "DB28D47195B655A2F6BBF2F4956A445FDF16DD643A4EF77E49938F2429EB5CF7"
   },
   "upstream_commits": {
+    "cambrian-mllm/cambrian": "539ffc3254bba004e5d012b65c0ad6cb308897c5",
     "yliu-cs/SSR": "52a21a14a84a98f07575721dd3200f76c11930d8",
     "yliu-cs/ml-depth-pro": "edb23bbab37cfc4d3fe1048a2f126ca7c590ab64",
     "AnjieCheng/SpatialRGPT": "16715d4f1419997da18926c6ce574802d1eb3a37",
@@ -20,7 +31,10 @@
     "zhangquanchen/3DThinker": "c9469e01b719310b0eaecc1133317e4ecfc74d8c",
     "BAAI-DCAI/SpatialBot": "775ad8cf2f9251261dcd70b2639133d506ff583f",
     "isl-org/ZoeDepth": "d87f17b2f5fdcb174cf4fb115491f4a6c60de152",
-    "QwenLM/Qwen3-VL": "96588727e44c78b25ba03ea03b8e12f7e64fd0da"
+    "QwenLM/Qwen3-VL": "96588727e44c78b25ba03ea03b8e12f7e64fd0da",
+    "FlagOpen/RoboBrain2.5": "af98c932aac9ff715d70da177088d7bb95573ff7",
+    "microsoft/HiSpatial": "9b0a5718ed0fb3b8bd9d9e0b36b6192bd3e99be1",
+    "ZJU-REAL/SpatialLadder": "7a0d2ee85c28728835300310a349a53a15967f2e"
   },
   "checkpoint_sha256": {
     "apple/ml-depth-pro/depth_pro.pt": "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"
@@ -49,6 +63,10 @@
     "yliu-cs/SSR-MIDI-7B": "8ed878fa16e3e440741ed8c1fedfcfe40710258d",
     "a8cheng/SpatialRGPT-VILA1.5-8B": "64df7902f82b5053f5a53455095805e6de3a1f87",
     "jankin123/3DThinker-Mindcube": "69a70411605f86ec69bada0a625bb96ddee995d9",
-    "RussRobin/SpatialBot-3B": "41d3b52c642058dfb087885bec0b8e37e0e67f8d"
+    "RussRobin/SpatialBot-3B": "41d3b52c642058dfb087885bec0b8e37e0e67f8d",
+    "BAAI/RoboBrain2.5-8B-NV": "3d77a19a3ddd8616b3979e03de56096edfb12ff6",
+    "BAAI/RoboBrain2.5-8B-MT": "01145b89a0fe49f78f5d677d25af7351088d7c7d",
+    "lhzzzzzy/HiSpatial-3B": "75a5e3d65351d7602c492aa91533f62b8a252604",
+    "hongxingli/SpatialLadder-3B": "0819c3adf8827a2ea6c0348d49a23503ecb1f428"
   }
 }

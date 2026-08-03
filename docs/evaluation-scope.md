@@ -9,25 +9,26 @@
 | Benchmark | 目标范围 | 仓库实现状态 | 当前阶段 |
 |---|---|---|---|
 | MSMU-Bench | official `test`，987 条 | 已实现 input contract、validator、inference 与 scorer | 18 条既有目标 profile 已完成；本阶段告一段落 |
-| CV-Bench | 官方 benchmark；精确 split、样本数与 scorer 待实现前核验 | 尚未实现 | **下一项**：先完成协议审计、数据验收，再设计和运行评测 |
-| Q-Spatial Bench | Q-Spatial++ 与 Q-Spatial-ScanNet | 尚未实现 | CV-Bench 之后；与 SPBench-SI 的先后待定；ScanNet 原始图像的授权与完整性须另行验收 |
-| SPBench-SI | SPBench 单图版本；不包含 SPBench-MV | 尚未实现 | CV-Bench 之后；与 Q-Spatial Bench 的先后待定 |
+| CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | contract、23-profile registry、两阶段推理、scorer 与报告已实现 | 本地链路验证中；服务器 test gate/full-2638 尚未运行 |
+| Q-Spatial Bench | Q-Spatial++ 与 Q-Spatial-ScanNet | 尚未实现 | **下一项待定**；ScanNet 原始图像的授权与完整性须另行验收 |
+| SPBench-SI | SPBench 单图版本；不包含 SPBench-MV | 尚未实现 | 与 Q-Spatial Bench 的先后待定 |
 
 “尚未实现”表示仓库中还没有可发布的 benchmark contract、validator、scorer protocol、运行入口或
-结果目录，不能因为数据已经下载就宣称可以正式评测。当前顺序只确定 **CV-Bench 优先**；Q-Spatial
-Bench 与 SPBench-SI 的后续先后尚未确定，确定后须同步本文与 CHANGELOG。
+结果目录，不能因为数据已经下载就宣称可以正式评测。CV-Bench 的“已实现”只指代码、协议和本地
+验证链路，不表示 23 条服务器结果已经产生；状态必须以 test gate、validator、metadata、summary 和
+publication gates 为准。Q-Spatial Bench 与 SPBench-SI 的后续先后尚未确定。
 
 ## 目标模型覆盖
 
-剩余三个 benchmark 的项目级待测范围为：MSMU 阶段已有 15 个模型身份，加上 2026-08-03 新纳入的
+项目级待测范围为：MSMU 阶段已有 15 个模型身份，加上 2026-08-03 新纳入的
 4 个开源 SOTA 参考模型，共 19 个模型身份。新增模型是 RoboBrain2.5-8B-NV、
 RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B；权重身份、输入轨和当前准备状态见
 [模型矩阵的新增 SOTA 模型](model-matrix.md#新增的-4-个开源-sota-模型)。
 
 这里的“19 个模型身份”不等于“19 条 inference profile”。同一模型在 fair RGB-only 与官方原生
 输入下必须拆成不同 profile、protocol 和结果目录。现有 18 条 `CURRENT_TARGET_PROFILE_KEYS` 只描述
-已经落地并完成的 MSMU profile；新增 4 个模型尚未注册 benchmark-specific profile，也不追溯计入
-MSMU 的已完成集合。是否以后补测它们的 MSMU 结果属于独立范围决策。
+已经落地并完成的 MSMU profile；CV-Bench 的 23 条目标轨由独立 registry 维护，其中已包含新增 4 个
+模型的合法输入轨，但不追溯计入 MSMU 的已完成集合。是否以后补测它们的 MSMU 结果属于独立范围决策。
 
 ## 开源 SOTA 参考
 
@@ -50,16 +51,16 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 - Q-Spatial Bench、CV-Bench、SPBench-SI 的既有下载位于
   `/media/datasets/tangzecong/huggingface/`。它们是 legacy 资产：只读引用，不移动、不删除，也不向
   该 namespace 继续下载。路径存在不等于 split、图片、license 或 fingerprint 已验收。
-- 2026-08-03 新增的四个模型正在 `/media/datasets/lihaoran/huggingface/` 下载。下载完成后仍须现场
-  核对 snapshot SHA、权重完整性、license、processor/template 与上游 revision，完成前不得登记成
-  可运行 profile。
+- 2026-08-03 新增四个模型的目标 Hugging Face revision 和上游 commit 已锁入 CV-Bench registry；
+  服务器运行前仍须现场核对 snapshot 完整性、license、processor/template 与 runner 实现 SHA。新增
+  下载只写入 `/media/datasets/lihaoran/huggingface/`。
 - 既有目标模型继续从 `/media/datasets/tangzecong/huggingface/` 的精确 legacy 路径读取，不做批量
   迁移。今后新增的模型、dataset、environment、cache、upstream 和 checkpoint 一律写入
   `/media/datasets/lihaoran/`。
 
 ## 上游入口
 
-以下入口用于下一阶段锁定代码 commit 与数据 revision，不代表当前仓库已经兼容其默认评测脚本：
+以下入口是上游身份来源；是否兼容其默认脚本仍以各 benchmark protocol 和测试为准：
 
 | Benchmark | 官方代码 | 数据集 |
 |---|---|---|
@@ -67,14 +68,16 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 | CV-Bench | [cambrian-mllm/cambrian](https://github.com/cambrian-mllm/cambrian) | [nyu-visionx/CV-Bench](https://huggingface.co/datasets/nyu-visionx/CV-Bench) |
 | SPBench-SI | [ZJU-REAL/SpatialLadder](https://github.com/ZJU-REAL/SpatialLadder) | [hongxingli/SPBench](https://huggingface.co/datasets/hongxingli/SPBench) |
 
-## CV-Bench 实现前门禁
+## CV-Bench 已锁定实现
 
-下一阶段开始写代码或运行服务器任务前，至少完成以下核对并把结果固化到 CV-Bench protocol、模型
-profile 与回归测试：
+以下边界已固化在 [CV-Bench protocol](benchmarks/cv_bench/protocol.md)、registry 和回归测试：
 
 1. 锁定官方数据集 revision、split、样本数、媒体字段、答案字段与许可，验证本地数据完整性；
 2. 锁定官方代码/评测 commit，确认 prompt、选项解析、计分公式、主指标及异常样本语义；
 3. 定义 benchmark-owned model input、prediction schema、validator、subset/full 边界和输出布局；
-4. 为 19 个目标模型身份确定可执行 profile；fair/native 输入存在差异时分别登记；
-5. 先做 processor/template 与单图输入审计，再做小量 smoke；只有完整 split 和 publication gates
-   通过后才能发布结果。
+4. 19 个目标模型身份展开为 23 条独立轨；fair/native、checkpoint 与提示词差异分别登记；
+5. processor/template、视觉 canary、smoke8 与输入审计形成绑定 gate；只有完整 2638 条和 publication
+   gates 通过后才能发布结果。
+
+本轮不自动启动服务器 full-2638。下一执行动作是按 backend/family 各选一条运行 test stage，确认
+锁定资产、GPU 与专用 runner 后再逐轨建立 gate。

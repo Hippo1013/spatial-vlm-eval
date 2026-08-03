@@ -33,6 +33,11 @@ msmu-spatialbot-infer = "spatial_vlm_eval.models.spatialbot.infer:main"
 msmu-smoke-indices = "spatial_vlm_eval.benchmarks.msmu.smoke_indices:main"
 msmu-validate = "spatial_vlm_eval.benchmarks.msmu.prediction_validation:main"
 msmu-score = "spatial_vlm_eval.benchmarks.msmu.scorer:main"
+cvbench-infer = "spatial_vlm_eval.benchmarks.cv_bench.inference:main"
+cvbench-validate = "spatial_vlm_eval.benchmarks.cv_bench.prediction_validation:main"
+cvbench-score = "spatial_vlm_eval.benchmarks.cv_bench.scorer:main"
+cvbench-score-results = "spatial_vlm_eval.benchmarks.cv_bench.score_results:main"
+cvbench-report = "spatial_vlm_eval.benchmarks.cv_bench.report:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

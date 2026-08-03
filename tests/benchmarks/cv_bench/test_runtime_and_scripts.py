@@ -1,0 +1,201 @@
+from __future__ import annotations
+
+import subprocess
+import tempfile
+import unittest
+from dataclasses import dataclass
+from pathlib import Path
+from unittest.mock import patch
+
+from PIL import Image
+
+from spatial_vlm_eval.models.common.runtime import (
+    GenerationResult,
+    InferenceAdapter,
+    run_recoverable_inference,
+)
+from spatial_vlm_eval.models.openai_compatible.client import APIRequestError
+
+
+@dataclass(frozen=True)
+class _Input:
+    index: int
+    image: object
+    question: str
+
+
+class _Contract:
+    def __init__(self, root):
+        self.dataset_root = Path(root)
+        self.dataset_fingerprint = "fake-dataset"
+
+    def __len__(self):
+        return 1
+
+    def model_input(self, index):
+        return _Input(index, Image.new("RGB", (4, 4)), "question")
+
+    def model_inputs(self, indices):
+        return [self.model_input(index) for index in indices]
+
+    def prediction_row(self, index, prediction):
+        return {"index": index, "raw_prediction": prediction}
+
+
+class _RetryAdapter(InferenceAdapter):
+    supports_concurrency = False
+
+    def __init__(self, *, fail_first):
+        self.calls = 0
+        self.fail_first = fail_first
+
+    def metadata(self):
+        return {
+            "model": "fake",
+            "model_revision": "rev",
+            "backend": "openrouter",
+            "profile": "fake",
+            "inference_protocol": "protocol",
+            "chat_template": "template",
+            "image_processing": {"image_count": 1},
+            "decoding": {"temperature": 0},
+            "upstream": {},
+        }
+
+    def generate(self, model_input):
+        self.calls += 1
+        if self.fail_first and self.calls == 1:
+            raise APIRequestError("rate limited", status_code=429)
+        return GenerationResult("A", metadata={"num_media_prompt": 1})
+
+
+class _NonRetryableAdapter(_RetryAdapter):
+    def generate(self, model_input):
+        self.calls += 1
+        raise APIRequestError("bad request", status_code=400)
+
+
+class _PaidCompletionVerificationFailure(_RetryAdapter):
+    def generate(self, model_input):
+        self.calls += 1
+        raise APIRequestError("metadata verification failed", retryable=False)
+
+
+class CVBenchRuntimeAndScriptsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.repository = Path(__file__).resolve().parents[3]
+
+    def test_public_inference_list_matches_23_profile_registry(self):
+        completed = subprocess.run(
+            ["bash", "scripts/cv_bench/run_inference.sh", "--list"],
+            cwd=self.repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        lines = [line for line in completed.stdout.splitlines() if line]
+        self.assertEqual(len(lines), 23)
+        self.assertTrue(lines[0].startswith("llava_next_mistral_7b\t"))
+        self.assertTrue(lines[-1].startswith("spatialladder3b_thinking\t"))
+
+    def test_dry_run_preserves_registry_order_for_unsorted_selection(self):
+        with tempfile.TemporaryDirectory() as directory:
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "scripts/cv_bench/run_inference.sh",
+                    "--stage",
+                    "full",
+                    "--models",
+                    "qwen3_vl_8b,llava_next_mistral_7b",
+                    "--output-root",
+                    directory,
+                    "--dry-run",
+                ],
+                cwd=self.repository,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        lines = completed.stdout.splitlines()
+        self.assertIn('"profile": "llava_next_mistral_7b"', lines[0])
+        self.assertIn('"profile": "qwen3_vl_8b"', lines[1])
+
+    def test_all_cvbench_shell_scripts_are_syntax_valid(self):
+        for path in sorted((self.repository / "scripts" / "cv_bench").glob("*.sh")):
+            with self.subTest(path=path.name):
+                subprocess.run(["bash", "-n", str(path)], check=True)
+
+    def test_retry_backoff_and_resume_do_not_repeat_successful_paid_call(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            output = root / "predictions.jsonl"
+            first = _RetryAdapter(fail_first=True)
+            with patch("spatial_vlm_eval.models.common.runtime.time.sleep") as sleep:
+                run_recoverable_inference(
+                    contract=_Contract(root),
+                    adapter=first,
+                    output=output,
+                    target_indices=[0],
+                    benchmark="CV-Bench",
+                    split="test",
+                    official_size=1,
+                    scorer_protocol="scorer",
+                    retries=1,
+                )
+            self.assertEqual(first.calls, 2)
+            sleep.assert_called_once_with(1.0)
+
+            resumed = _RetryAdapter(fail_first=False)
+            run_recoverable_inference(
+                contract=_Contract(root),
+                adapter=resumed,
+                output=output,
+                target_indices=[0],
+                benchmark="CV-Bench",
+                split="test",
+                official_size=1,
+                scorer_protocol="scorer",
+                retries=1,
+            )
+            self.assertEqual(resumed.calls, 0)
+
+    def test_non_retryable_http_error_is_not_reissued(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = _NonRetryableAdapter(fail_first=False)
+            with self.assertRaisesRegex(RuntimeError, "Inference incomplete"):
+                run_recoverable_inference(
+                    contract=_Contract(directory),
+                    adapter=adapter,
+                    output=Path(directory) / "predictions.jsonl",
+                    target_indices=[0],
+                    benchmark="CV-Bench",
+                    split="test",
+                    official_size=1,
+                    scorer_protocol="scorer",
+                    retries=3,
+                )
+            self.assertEqual(adapter.calls, 1)
+
+    def test_paid_completion_verification_failure_is_not_reissued(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = _PaidCompletionVerificationFailure(fail_first=False)
+            with self.assertRaisesRegex(RuntimeError, "Inference incomplete"):
+                run_recoverable_inference(
+                    contract=_Contract(directory),
+                    adapter=adapter,
+                    output=Path(directory) / "predictions.jsonl",
+                    target_indices=[0],
+                    benchmark="CV-Bench",
+                    split="test",
+                    official_size=1,
+                    scorer_protocol="scorer",
+                    retries=3,
+                    retry_missing_passes=1,
+                )
+            self.assertEqual(adapter.calls, 1)
+
+
+if __name__ == "__main__":
+    unittest.main()

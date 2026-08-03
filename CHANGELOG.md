@@ -7,6 +7,16 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 增加独立 CV-Bench 全链路：锁定 revision `bc284db50d036958861cb60cdd7b77612052ce0d`
+  的 2D/3D 两个 Parquet（2638 条）、不可泄漏的单图输入合同、两字段 prediction validator、23 条目标
+  profile registry、test/full 两阶段绑定 gate、目录驱动评分与 publication-gated Markdown 报告。
+- 增加 CV-Bench robust multiple-choice scorer protocol：只接受唯一合法字母或唯一完整选项文本，冲突/
+  多答案/越界/空值保守记零；主指标固定为 ADE/COCO 等权 2D、Omni3D 3D 及二者等权 Overall，micro
+  accuracy 仅作审计。
+- 增加 benchmark-neutral 可恢复推理 runner，以及 CV-Bench 通用 vLLM/OpenRouter adapter、官方
+  Transformers processor/template 审计、组合视觉 canary、固定 smoke8、vLLM 容量探测、双 endpoint
+  确定性分片和专用上游 persistent JSONL bridge。专用 runner 缺实现 SHA 或 generation manifest 时
+  fail closed。
 - 为 GPT-5 与 Gemini 3.1 Pro 增加用户明确授权的 OpenRouter non-ZDR 独立 profile、inference protocol、
   run slug 和三阶段入口；仍锁定首方 provider、禁止 fallback、要求完整参数并设置
   `data_collection=deny`，不改写原 ZDR 轨或 scorer protocol。
@@ -35,6 +45,11 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- CV-Bench 本地实现阶段完成；服务器 test gate 和 full-2638 尚未运行。RoboBrain2.5 NV/MT、HiSpatial
+  和 SpatialLadder 的 CV-Bench revision/input track 已锁定，Q-Spatial Bench 与 SPBench-SI 顺序仍待定。
+- OpenAI-compatible 可恢复 runner 仅对 429/5xx 执行指数退避；非重试型 HTTP 错误不重复请求，成功
+  journal 继续保证 resume 不重复付费。CV-Bench 本地模型每次 test/full 另保存只读 GPU inventory 与
+  compute-process 审计；InternVL3-78B 强制显式枚举四张 80GB GPU。
 - 将项目级待测范围扩展为 MSMU-Bench、CV-Bench、Q-Spatial Bench、SPBench-SI 四个 benchmark；MSMU
   既有 18 条 profile 已完成，下一实施对象为 CV-Bench。目标模型范围在原有 15 个模型身份上新增
   RoboBrain2.5-8B-NV、RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B，共 19 个模型身份；
@@ -74,6 +89,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Documentation
 
+- 增加 CV-Bench canonical protocol、两阶段 runbook、23 条目标 profile 矩阵与 robust parser/publication
+  gate ADR，以及面向操作者的精简 test/full/评分/汇总命令页；同步架构、评测范围、文档地图、来源记录
+  和文档一致性测试。
 - 增加四 benchmark 评测范围文档，区分外部 SOTA 报告值与项目复现结果，记录三个待实现 benchmark
   的 legacy 数据位置、新模型下载位置、公平/原生输入边界和 CV-Bench 实现前门禁。
 - 增加 `msmu-a800` Mihomo 显式出站代理手册，记录仓库外安装、tmux/PID 生命周期、按 shell 开关、

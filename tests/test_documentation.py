@@ -6,7 +6,14 @@ import unittest
 from pathlib import Path
 from urllib.parse import unquote
 
-from spatial_vlm_eval.benchmarks.msmu.scorer import SCORER_PROTOCOL
+from spatial_vlm_eval.benchmarks.cv_bench.data import DATASET_REVISION as CVBENCH_DATASET_REVISION
+from spatial_vlm_eval.benchmarks.cv_bench.profiles import (
+    PROFILE_SEQUENCE as CVBENCH_PROFILE_SEQUENCE,
+)
+from spatial_vlm_eval.benchmarks.cv_bench.scorer import (
+    SCORER_PROTOCOL as CVBENCH_SCORER_PROTOCOL,
+)
+from spatial_vlm_eval.benchmarks.msmu.scorer import SCORER_PROTOCOL as MSMU_SCORER_PROTOCOL
 from spatial_vlm_eval.models.profiles import CURRENT_TARGET_PROFILE_KEYS, PROFILES
 
 
@@ -87,7 +94,10 @@ class DocumentationConsistencyTest(unittest.TestCase):
 
     def test_model_matrix_matches_current_target_profiles(self) -> None:
         matrix = (self.docs / "model-matrix.md").read_text(encoding="utf-8")
-        documented = re.findall(r"^\| `([^`]+)` \|", matrix, flags=re.MULTILINE)
+        msmu_section = matrix.split(
+            "## MSMU 当前 18 条已完成目标 inference profile", 1
+        )[1].split("## 完成状态", 1)[0]
+        documented = re.findall(r"^\| `([^`]+)` \|", msmu_section, flags=re.MULTILINE)
         self.assertEqual(documented, list(CURRENT_TARGET_PROFILE_KEYS))
         count = re.search(
             r"^## MSMU 当前 (\d+) 条已完成目标 inference profile$",
@@ -108,6 +118,14 @@ class DocumentationConsistencyTest(unittest.TestCase):
                 for key in CURRENT_TARGET_PROFILE_KEYS
             )
         )
+
+        cvbench_section = matrix.split(
+            "## CV-Bench 当前 23 条目标 inference profile", 1
+        )[1].split("## MSMU 当前 18 条已完成目标 inference profile", 1)[0]
+        documented_cvbench = re.findall(
+            r"^\| `([^`]+)` \|", cvbench_section, flags=re.MULTILINE
+        )
+        self.assertEqual(documented_cvbench, list(CVBENCH_PROFILE_SEQUENCE))
 
     def test_cross_benchmark_scope_and_planned_sota_models_are_explicit(self) -> None:
         scope = (self.docs / "evaluation-scope.md").read_text(encoding="utf-8")
@@ -135,9 +153,10 @@ class DocumentationConsistencyTest(unittest.TestCase):
                 self.assertIn(model, matrix)
 
         self.assertIn("共 19 个模型身份", scope)
-        self.assertIn("**下一项**", scope)
+        self.assertIn("**下一项待定**", scope)
         self.assertIn("不是本项目复现结果", scope)
-        self.assertIn("尚未注册 benchmark-specific profile", scope)
+        self.assertIn("CV-Bench 的 23 条目标轨由独立 registry 维护", scope)
+        self.assertIn("服务器 test gate/full-2638 尚未运行", scope)
         self.assertIn("/media/datasets/tangzecong/huggingface/", scope)
         self.assertIn("/media/datasets/lihaoran/huggingface/", scope)
 
@@ -176,8 +195,40 @@ class DocumentationConsistencyTest(unittest.TestCase):
             self.docs / "benchmarks" / "msmu" / "protocol.md"
         ).read_text(encoding="utf-8")
         agents = (self.repository / "AGENTS.md").read_text(encoding="utf-8")
-        self.assertIn(SCORER_PROTOCOL, protocol)
-        self.assertIn(SCORER_PROTOCOL, agents)
+        self.assertIn(MSMU_SCORER_PROTOCOL, protocol)
+        self.assertIn(MSMU_SCORER_PROTOCOL, agents)
+
+        cvbench_protocol = (
+            self.docs / "benchmarks" / "cv_bench" / "protocol.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(CVBENCH_SCORER_PROTOCOL, cvbench_protocol)
+        self.assertIn(CVBENCH_DATASET_REVISION, cvbench_protocol)
+        self.assertIn("Overall = (2D + 3D) / 2", cvbench_protocol)
+        self.assertIn("不是旧脚本的逐字节复刻", cvbench_protocol)
+
+    def test_cvbench_runbook_and_config_match_public_entrypoints(self) -> None:
+        runbook = (self.docs / "cv-bench-two-stage-runbook.md").read_text(
+            encoding="utf-8"
+        )
+        commands = (self.docs / "cv-bench-commands.md").read_text(encoding="utf-8")
+        config = (
+            self.repository / "configs" / "cv-bench-server.env.example"
+        ).read_text(encoding="utf-8")
+        readme = (self.repository / "README.md").read_text(encoding="utf-8")
+        for required in [
+            "run_inference.sh --stage test",
+            "run_inference.sh --stage full",
+            "score_results.sh --predictions",
+            "build_results_report.sh",
+            "23/23",
+        ]:
+            with self.subTest(required=required):
+                self.assertIn(required, runbook)
+                self.assertIn(required, commands)
+        self.assertIn("CVBENCH_OUTPUT_ROOT", config)
+        self.assertIn("/media/datasets/lihaoran", config)
+        self.assertIn("/media/datasets/tangzecong", config)
+        self.assertIn("CVBENCH_OUTPUT_ROOT", readme)
 
     def test_results_report_uses_one_protocol_and_concise_chinese_table(self) -> None:
         architecture = (self.docs / "architecture.md").read_text(encoding="utf-8")

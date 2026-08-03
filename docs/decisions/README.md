@@ -8,6 +8,7 @@ ADR 记录会长期影响复现性、协议身份、模块边界或结果解释�
 | ID | 状态 | 决策 |
 |---|---|---|
 | [0001](0001-separate-inference-and-scorer-protocols.md) | Accepted | 分离 inference protocol 与 scorer/cache protocol |
+| [0002](0002-cv-bench-robust-parser-and-publication-gates.md) | Accepted | CV-Bench 使用稳健选择题解析与独立发布门禁 |
 
 ## 新 ADR 触发条件
 

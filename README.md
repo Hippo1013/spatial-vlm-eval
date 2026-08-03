@@ -1,43 +1,47 @@
 # Spatial VLM Evaluation
 
-用于可复现地评测通用与空间专用视觉语言模型的多 benchmark 工作区。仓库当前实现
-MSMU-Bench official test 987 条的受限输入合同、统一可恢复推理、严格 prediction validator 和本地
-judge v4 scorer。模型适配与 benchmark 评分分层，任何模型都不能收到 reference、类型标签、其他 QA
-或同图历史。
+用于可复现地评测通用与空间专用视觉语言模型的多 benchmark 工作区。仓库当前实现 MSMU-Bench
+official test 987 条和 CV-Bench locked test 2638 条的受限输入合同、可恢复推理、严格 validator、独立
+scorer protocol 与发布门禁。模型适配与 benchmark 评分分层，任何模型都不能收到答案、reference、
+类型标签、来源或其他协议禁止字段。
 
 ## 当前能力
 
-- Benchmark：MSMU-Bench official `test` split（987 条）。
-- 推理：多模型 fair/native profile、输入审计、fsync journal、断点恢复和原子输出。
-- 验收：严格六字段 prediction validator，debug subset 与正式 full split 强制分离。
-- 评分：八类非加权 `official_macro8_accuracy`，目录驱动串行评分和 publication gates。
-- 结果性质：official-compatible internal score，不是 GPT-4-Turbo strict official score。
+- Benchmark：MSMU-Bench official `test`（987 条）与 CV-Bench locked `test_2d+test_3d`（2638 条）。
+- 推理：benchmark-owned 输入、23 条 CV-Bench 目标轨、单图/template 审计、fsync journal、断点恢复和
+  原子输出。
+- 验收：subset/full 强制隔离；CV-Bench test gate 绑定 dataset/model/adapter/decoding/sharding。
+- 评分：MSMU macro-8 与 CV-Bench 官方 2D/3D/Overall 公式使用彼此独立的 scorer protocol；评分与报告
+  均按目录发现并强制 publication gates。
+- 结果性质：MSMU 是 official-compatible internal score；CV-Bench 是 official formula + robust parser
+  internal score，均不冒充上游实现的逐字节复刻。
 
 ## 当前评测范围
 
 项目目标覆盖 MSMU-Bench、CV-Bench、Q-Spatial Bench 和 SPBench-SI。MSMU 的既有 18 条目标 profile
-已完成，本阶段告一段落；剩余三个 benchmark 尚未在仓库中实现，下一项先做 CV-Bench，再推进
-Q-Spatial Bench 与 SPBench-SI。精确范围、数据准备边界与实现前门禁见
+已完成；CV-Bench 已实现 23 条目标轨的本地链路，但尚未执行服务器 test gate 或正式 2638 条推理。
+Q-Spatial Bench 与 SPBench-SI 尚未实现。精确范围、数据准备边界与当前阶段见
 [四 Benchmark 评测范围](docs/evaluation-scope.md)。
 
 项目级目标范围现为 19 个模型身份：MSMU 阶段已有 15 个，加上 RoboBrain2.5-8B-NV、
-RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B。新增四款目前处于下载和协议准备阶段，尚未
-注册成可运行 profile；模型身份、输入公平性和已验证状态只在[模型矩阵](docs/model-matrix.md)维护。
+RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B。CV-Bench registry 将 fair/native、额外提示词
+和不同 checkpoint 拆成 23 条独立轨；模型身份、输入公平性和已验证状态只在
+[模型矩阵](docs/model-matrix.md)维护。
 服务器当前结果状态以结果目录中的 `status.tsv`、validator、metadata 和 `summary.json` 为准，不从
 README 推断。
 完整文档分类与更新规则见[文档地图](docs/README.md)，语义变更见 [CHANGELOG](CHANGELOG.md)。
 
-正式推理、评分和汇总产物以 `.env.server` 配置的 `MANUAL_TEST_OUTPUT_ROOT` 为准；该路径应位于
-仓库外的 `OUTPUT_ROOT`。仓库根禁止创建 `output/` 或 `outputs/`；可再生成的人工抽查和临时导出
-同样写入仓库外，不能作为 canonical 发布或恢复来源。
+MSMU 正式产物以 `MANUAL_TEST_OUTPUT_ROOT` 为准；CV-Bench 正式产物以 `CVBENCH_OUTPUT_ROOT` 为准。
+两者都必须位于仓库外。仓库根禁止创建 `output/` 或 `outputs/`；可再生成的人工抽查和临时导出同样
+写入仓库外，不能作为 canonical 发布或恢复来源。
 
 当前服务器项目与输出分别位于
 `/media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval` 和
 `/media/datasets/lihaoran/latent_reasoning/msmu-outputs`。新下载的数据、模型、Conda 环境和各类缓存也
 统一写入 `/media/datasets/lihaoran/`；既有 `tangzecong` 数据、模型与环境不迁移，由 `.env.server`
 中的 legacy 路径继续显式引用。完整目录表见[推理手册的服务器存储约定](docs/msmu-inference.md#1-运行前边界)。
-三个待实现 benchmark 的既有下载与旧模型继续从 `/media/datasets/tangzecong/huggingface/` 只读引用；
-新增四个 SOTA 模型下载到 `/media/datasets/lihaoran/huggingface/`，详情见
+CV-Bench 既有数据与旧模型继续从 `/media/datasets/tangzecong/huggingface/` 只读引用；新增下载写入
+`/media/datasets/lihaoran/huggingface/`，详情见
 [评测范围的数据与模型位置](docs/evaluation-scope.md#服务器数据与模型位置)。
 服务器命令需要显式出站代理时，使用仓库外的本机 Mihomo 服务；首次配置、tmux 启停、按 shell 开关
 和出口验证见[服务器网络代理手册](docs/server-network-proxy.md)。
@@ -52,7 +56,8 @@ README 推断。
 
 ```text
 src/spatial_vlm_eval/
-├── benchmarks/msmu/          # 数据所有权、validator、smoke selector、v4 scorer
+├── benchmarks/msmu/          # 987 条数据合同、validator、judge/scorer
+├── benchmarks/cv_bench/      # 2638 条合同、23-profile registry、推理/评分/报告
 └── models/
     ├── common/               # 输入审计、journal、resume、原子 finalization
     ├── openai_compatible/    # OpenRouter/OpenAI/Google/vLLM
@@ -64,6 +69,7 @@ src/spatial_vlm_eval/
     ├── three_d_thinker/
     └── spatialbot/
 scripts/msmu/                 # 环境、GPU preflight、服务与 pipeline 编排
+scripts/cv_bench/             # 两阶段推理、目录驱动评分和报告入口
 tests/                        # 协议不变量和 bug 回归
 docs/                         # 文档地图、canonical 协议、runbook、ADR 与 troubleshooting
 CHANGELOG.md                  # 影响结果、行为或操作方式的语义变化
@@ -101,6 +107,25 @@ python -m pip freeze > environment-manifests/ENV-NAME.pip-freeze.txt
 ```
 
 ## 最短运行路径
+
+### CV-Bench
+
+将 [CV-Bench 配置模板](configs/cv-bench-server.env.example)合并到未跟踪 `.env.server`，再先列出并测试
+单轨：
+
+```bash
+bash scripts/cv_bench/run_inference.sh --list
+bash scripts/cv_bench/run_inference.sh --stage test --model qwen3_vl_8b
+bash scripts/cv_bench/run_inference.sh --stage full --model qwen3_vl_8b
+bash scripts/cv_bench/score_results.sh --predictions /absolute/path/to/predictions.jsonl
+bash scripts/cv_bench/build_results_report.sh
+```
+
+full 必须使用当前绑定的 test gate；服务器 endpoint、专用 runner、GPU、付费 API 和分阶段验收见
+[CV-Bench 简明运行指令](docs/cv-bench-commands.md)与
+[两阶段 runbook](docs/cv-bench-two-stage-runbook.md)。
+
+### MSMU
 
 复制模板并从未跟踪文件加载：
 
@@ -167,7 +192,7 @@ bash scripts/msmu/run_model_evaluation.sh MODEL
 
 ## 严格输出合同
 
-每行 `predictions.jsonl` 始终只有：
+MSMU 每行 `predictions.jsonl` 只有：
 
 ```text
 index, raw_type, task_family, question, reference, prediction
@@ -178,6 +203,9 @@ index, raw_type, task_family, question, reference, prediction
 base64。只有所有目标 index 成功后才原子生成排序 JSONL；网络错误不能伪装成空答案，模型真实返回
 空文本则保留并告警。
 
+CV-Bench prediction 每行严格只有 `index, raw_prediction`；答案、task 和 source 只在评分时由锁定
+Parquet 重新关联。两套 schema、validator 和 scorer protocol 不互换。
+
 ## 测试
 
 ```bash
@@ -186,6 +214,7 @@ python -m compileall -q src tests
 find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n
 ```
 
-协议细节见 [MSMU canonical protocol](docs/benchmarks/msmu/protocol.md)，分层边界见
+协议细节见 [MSMU canonical protocol](docs/benchmarks/msmu/protocol.md)与
+[CV-Bench canonical protocol](docs/benchmarks/cv_bench/protocol.md)，分层边界见
 [架构说明](docs/architecture.md)。协作者从[文档地图](docs/README.md)选择任务相关材料；coding agent
 修改前必须阅读 [AGENTS.md](AGENTS.md) 并按其中的触发路由执行。
