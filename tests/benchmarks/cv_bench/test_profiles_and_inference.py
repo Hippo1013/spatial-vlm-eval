@@ -11,12 +11,17 @@ from PIL import Image
 
 from spatial_vlm_eval.benchmarks.cv_bench.inference import (
     _digest,
+    _vision_canary_spec,
     inspect_local_gpus,
     merge_prediction_shards,
     test_gate_errors,
 )
 from spatial_vlm_eval.benchmarks.cv_bench.processor_audit import validate_processor_audit
 from spatial_vlm_eval.benchmarks.cv_bench.profiles import PROFILE_SEQUENCE, PROFILES
+from spatial_vlm_eval.models.common.vision_canary import (
+    RED_IMAGE_CANARY_PROTOCOL,
+    VISION_CANARY_PROTOCOL,
+)
 
 
 class _Pixels:
@@ -27,6 +32,12 @@ class _Pixels:
 
 
 class CVBenchProfilesAndInferenceTest(unittest.TestCase):
+    def test_only_3dthinker_uses_the_minimum_red_image_canary(self):
+        for key in PROFILE_SEQUENCE:
+            protocol = _vision_canary_spec(PROFILES[key])[0]
+            expected = RED_IMAGE_CANARY_PROTOCOL if PROFILES[key].family == "3dthinker" else VISION_CANARY_PROTOCOL
+            self.assertEqual(protocol, expected, key)
+
     def test_target_registry_has_exactly_23_distinct_tracks(self):
         self.assertEqual(len(PROFILE_SEQUENCE), 23)
         self.assertEqual(len(set(PROFILE_SEQUENCE)), 23)

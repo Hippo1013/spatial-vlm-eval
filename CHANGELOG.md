@@ -52,6 +52,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- 按目标测试策略将 CV-Bench 的两条 3DThinker 轨改为独立的纯红 RGB 图颜色识别最低视觉 canary；
+  其他 21 条轨继续使用组合空间语义 canary，3DThinker 的 smoke8、单图边界审计及其他 gate 保持不变。
 - CV-Bench 本地实现阶段完成；服务器 test gate 和 full-2638 尚未运行。RoboBrain2.5 NV/MT、HiSpatial
   和 SpatialLadder 的 CV-Bench revision/input track 已锁定，Q-Spatial Bench 与 SPBench-SI 顺序仍待定。
 - OpenAI-compatible 可恢复 runner 仅对 429/5xx 执行指数退避；非重试型 HTTP 错误不重复请求，成功

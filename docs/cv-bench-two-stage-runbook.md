@@ -110,6 +110,8 @@ bash scripts/cv_bench/run_inference.sh --status
 确认每轨 `test_gate.json`、dataset/processor/input audit、vision canary、capacity probe 和 smoke8 subset
 validator 全部通过。API test 会产生真实付费调用；journal 只跳过已经成功的同签名 index。completion
 已经成功但 provider metadata/契约验证失败时不会重发付费 POST，必须先人工核对再决定后续处理。
+3DThinker 两轨的 canary 是独立的纯红图颜色识别最低门禁；其他轨仍使用红圆/蓝方块的颜色、形状和
+位置关联门禁。两者都必须证明模型边界恰好接收一张 RGB 图。
 
 ## 4. 正式全量
 

@@ -118,7 +118,8 @@ Qwen2.5-VL/PEFT 轨和其他历史注册 API 轨不进入本表；新增四个 S
   MSMU 没有 region/mask，题干也没有 region token，因此只建立 RGB-only 轨。
 - 3DThinker 使用 `zhangquanchen/3DThinker@c9469e01b719310b0eaecc1133317e4ecfc74d8c`。
   公开权重必须标为 “MindCube-trained stage-1 checkpoint”，不能代表论文完整最终模型；其内部
-  Qwen2.5 processor/model 是专用模型实现依赖，不是独立目标模型。
+  Qwen2.5 processor/model 是专用模型实现依赖，不是独立目标模型。CV-Bench 测试阶段仅要求其通过
+  独立的纯红图颜色识别最低视觉门禁；smoke8、单图输入审计和其余 gate 不降低。
 - SpatialBot 使用 merged instruction checkpoint，而非 pretrain 或同权重的 LoRA 部署形态；上游锁定
   `BAAI-DCAI/SpatialBot@775ad8cf2f9251261dcd70b2639133d506ff583f`。原生轨 ZoeDepth 锁定
   `d87f17b2f5fdcb174cf4fb115491f4a6c60de152`，只从当前 MSMU RGB 估计深度。两条轨的 vision tower

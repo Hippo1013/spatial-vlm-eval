@@ -19,6 +19,11 @@ VISION_CANARY_IMAGE_SIZE = (512, 512)
 VISION_CANARY_SUPERSAMPLE = 4
 RED_CIRCLE_BOX = (48, 48, 208, 208)
 BLUE_SQUARE_BOX = (304, 304, 464, 464)
+RED_IMAGE_CANARY_PROTOCOL = "cvbench_basic_vision_canary_solid_red_rgb512_unique_color_v1"
+RED_IMAGE_CANARY_QUESTION = (
+    "This image is filled with one solid color. What color is the image? "
+    "Answer concisely in English."
+)
 
 
 def make_vision_canary_image() -> Image.Image:
@@ -34,6 +39,28 @@ def make_vision_canary_image() -> Image.Image:
         fill=(0, 0, 255),
     )
     return image.resize(VISION_CANARY_IMAGE_SIZE, Image.Resampling.LANCZOS)
+
+
+def make_red_image_canary() -> Image.Image:
+    """Return the CV-Bench minimum-capability canary used only by 3DThinker."""
+
+    return Image.new("RGB", VISION_CANARY_IMAGE_SIZE, (255, 0, 0))
+
+
+def validate_red_image_canary_answer(answer: str) -> None:
+    """Require a unique red color answer without accepting a conflicting color."""
+
+    normalized = _normalized_answer(answer)
+    colors = set(
+        re.findall(
+            r"\b(?:red|blue|green|yellow|orange|purple|violet|pink|brown|black|white|gray|grey)\b",
+            normalized,
+        )
+    )
+    if colors != {"red"}:
+        raise ValueError(
+            "Red-image vision canary requires red and no conflicting color: " f"{answer!r}"
+        )
 
 
 def _normalized_answer(answer: str) -> str:

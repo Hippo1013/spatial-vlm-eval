@@ -25,9 +25,13 @@ from ...models.common.runtime import (
     utc_now,
 )
 from ...models.common.vision_canary import (
+    RED_IMAGE_CANARY_PROTOCOL,
+    RED_IMAGE_CANARY_QUESTION,
     VISION_CANARY_PROTOCOL,
     VISION_CANARY_QUESTION,
+    make_red_image_canary,
     make_vision_canary_image,
+    validate_red_image_canary_answer,
     validate_vision_canary_answer,
 )
 from ...models.openai_compatible.client import OpenAICompatibleAdapter
@@ -425,7 +429,7 @@ def binding(configuration: ResolvedConfiguration, contract: CVBenchTestContract)
             "processor_audit": processor_identity,
         },
         "test_protocol": {
-            "vision_canary": VISION_CANARY_PROTOCOL,
+            "vision_canary": _vision_canary_spec(configuration.profile)[0],
             "smoke_indices": list(SMOKE8_INDICES),
         },
         "sharding": {
@@ -435,20 +439,34 @@ def binding(configuration: ResolvedConfiguration, contract: CVBenchTestContract)
     }
 
 
-def _canary_report(adapter: BoundAdapter, profile: CVBenchProfile) -> dict[str, Any]:
-    image = make_vision_canary_image()
-    result = adapter.generate(
-        CVBenchModelInput(index=-1, image=image, question=VISION_CANARY_QUESTION)
+def _vision_canary_spec(profile: CVBenchProfile) -> tuple[str, str, Any, Any]:
+    if profile.family == "3dthinker":
+        return (
+            RED_IMAGE_CANARY_PROTOCOL,
+            RED_IMAGE_CANARY_QUESTION,
+            make_red_image_canary(),
+            validate_red_image_canary_answer,
+        )
+    return (
+        VISION_CANARY_PROTOCOL,
+        VISION_CANARY_QUESTION,
+        make_vision_canary_image(),
+        validate_vision_canary_answer,
     )
-    validate_vision_canary_answer(result.text)
+
+
+def _canary_report(adapter: BoundAdapter, profile: CVBenchProfile) -> dict[str, Any]:
+    protocol, question, image, validator = _vision_canary_spec(profile)
+    result = adapter.generate(CVBenchModelInput(index=-1, image=image, question=question))
+    validator(result.text)
     generation = dict(result.metadata)
     if generation.get("num_media_prompt") != 1 and generation.get("num_model_image_tensors") != 1:
         raise ValueError("Vision canary did not prove exactly one image at the model boundary")
     return {
         "passed": True,
-        "canary_protocol": VISION_CANARY_PROTOCOL,
+        "canary_protocol": protocol,
         "profile": profile.key,
-        "question": VISION_CANARY_QUESTION,
+        "question": question,
         "request_image_count": 1,
         "image_mode": "RGB",
         "image_size": list(image.size),
