@@ -14,6 +14,7 @@ from spatial_vlm_eval.benchmarks.cv_bench.command_adapter import (
 )
 from spatial_vlm_eval.benchmarks.cv_bench.data import CVBenchModelInput
 from spatial_vlm_eval.benchmarks.cv_bench.profiles import PROFILES
+from spatial_vlm_eval.benchmarks.cv_bench.specialized_runner import adapter_digest
 
 
 RUNNER_SOURCE = r'''import json, sys
@@ -91,6 +92,31 @@ class CVBenchCommandAdapterTest(unittest.TestCase):
             resolved = load_generation_manifest(profile, manifest)
             self.assertFalse(resolved["do_sample"])
             self.assertEqual(resolved["max_new_tokens"], 128)
+
+    def test_committed_generation_manifests_resolve_locked_defaults(self):
+        repository = Path(__file__).resolve().parents[3]
+        manifest_root = repository / "configs" / "cv-bench-generation"
+        for key in (
+            "ssr_rgb",
+            "ssr_native",
+            "3dthinker_rgb",
+            "spatialladder3b_rgb",
+            "spatialladder3b_thinking",
+        ):
+            with self.subTest(profile=key):
+                resolved = load_generation_manifest(
+                    PROFILES[key], manifest_root / f"{key}.json"
+                )
+                self.assertIn("do_sample", resolved)
+                self.assertGreater(resolved["max_new_tokens"], 0)
+                self.assertEqual(resolved["seed"], 42)
+
+    def test_specialized_adapter_digest_is_explicit_and_family_sensitive(self):
+        spatialrgpt = adapter_digest(PROFILES["spatialrgpt_rgb"])
+        spatialbot = adapter_digest(PROFILES["spatialbot_rgb"])
+        self.assertRegex(spatialrgpt, r"^[0-9a-f]{64}$")
+        self.assertRegex(spatialbot, r"^[0-9a-f]{64}$")
+        self.assertNotEqual(spatialrgpt, spatialbot)
 
 
 if __name__ == "__main__":

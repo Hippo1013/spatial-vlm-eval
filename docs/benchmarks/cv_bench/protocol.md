@@ -84,10 +84,11 @@ prediction 保留并告警。subset 只能出现在 `test_runs/`，即使 valida
 当前 scorer protocol：
 
 ```text
-cv_bench_robust_mcq_v1_unique_letter_or_exact_option_text
+cv_bench_robust_mcq_v2_answer_tag_unique_letter_or_exact_option_text
 ```
 
-解析只接受唯一合法的显式选项字母，或与单个选项完整匹配的文本。字母和文本同时出现且指向同一
+解析只接受唯一合法的显式选项字母，或与单个选项完整匹配的文本；带官方 thinking prompt 的轨可用
+唯一完整 `<answer>...</answer>` 界定最终答案，多个 answer tag 仍判无效。字母和文本同时出现且指向同一
 选项时有效；冲突、多答案、越界、空值或无法解析均记零分。`scored_rows.jsonl` 保存
 `parsed_answer`、`parse_status`、gold、correctness 和分组字段，不覆盖原始输出。
 

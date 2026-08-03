@@ -22,7 +22,7 @@ from .data import (
 )
 from .prediction_validation import read_jsonl, validate_prediction_rows
 
-SCORER_PROTOCOL = "cv_bench_robust_mcq_v1_unique_letter_or_exact_option_text"
+SCORER_PROTOCOL = "cv_bench_robust_mcq_v2_answer_tag_unique_letter_or_exact_option_text"
 RESULT_KIND = "cv_bench_official_formula_robust_parser_internal_score"
 
 TASK_KEYS = {
@@ -88,13 +88,22 @@ def parse_answer(raw_prediction: Any, choices: list[str]) -> ParsedAnswer:
     text = str(raw_prediction)
     if not text.strip():
         return ParsedAnswer(None, "empty")
-    letters = _explicit_letter_candidates(text)
+    tagged_answers = re.findall(
+        r"<answer>\s*(.*?)\s*</answer>", text, flags=re.IGNORECASE | re.DOTALL
+    )
+    if len(tagged_answers) > 1:
+        return ParsedAnswer(None, "multiple_answer_tags")
+    parse_text = tagged_answers[0] if tagged_answers else text
+    status_prefix = "answer_tag_" if tagged_answers else ""
+    if tagged_answers and not parse_text.strip():
+        return ParsedAnswer(None, "empty_answer_tag")
+    letters = _explicit_letter_candidates(parse_text)
     if len(letters) > 1:
-        return ParsedAnswer(None, "multiple_answers")
+        return ParsedAnswer(None, status_prefix + "multiple_answers")
     if letters:
         position = string.ascii_uppercase.index(letters[0])
         if position >= len(choices):
-            return ParsedAnswer(None, "out_of_range")
+            return ParsedAnswer(None, status_prefix + "out_of_range")
         letter_answer = letters[0]
     else:
         letter_answer = None
@@ -102,24 +111,24 @@ def parse_answer(raw_prediction: Any, choices: list[str]) -> ParsedAnswer:
     normalized_choices = [_normalized_text(choice) for choice in choices]
     matched_positions = {
         position
-        for candidate in _text_candidates(text)
+        for candidate in _text_candidates(parse_text)
         for position, choice in enumerate(normalized_choices)
         if candidate == choice
     }
     if len(matched_positions) > 1:
-        return ParsedAnswer(None, "multiple_answers")
+        return ParsedAnswer(None, status_prefix + "multiple_answers")
     text_answer = (
         string.ascii_uppercase[next(iter(matched_positions))] if matched_positions else None
     )
     if letter_answer and text_answer:
         if letter_answer != text_answer:
-            return ParsedAnswer(None, "conflict")
-        return ParsedAnswer(letter_answer, "letter_and_option_text")
+            return ParsedAnswer(None, status_prefix + "conflict")
+        return ParsedAnswer(letter_answer, status_prefix + "letter_and_option_text")
     if letter_answer:
-        return ParsedAnswer(letter_answer, "explicit_letter")
+        return ParsedAnswer(letter_answer, status_prefix + "explicit_letter")
     if text_answer:
-        return ParsedAnswer(text_answer, "option_text")
-    return ParsedAnswer(None, "unparsed")
+        return ParsedAnswer(text_answer, status_prefix + "option_text")
+    return ParsedAnswer(None, status_prefix + "unparsed")
 
 
 def _accuracy(correct: int, total: int) -> float:

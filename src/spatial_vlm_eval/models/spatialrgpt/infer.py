@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 from typing import Any
@@ -36,6 +37,7 @@ class SpatialRGPTAdapter(InferenceAdapter):
         model_base: str | None = None,
         conversation_mode: str = CONVERSATION_MODE,
         device: str = "cuda",
+        max_new_tokens: int | None = None,
     ) -> None:
         if model_revision != SPATIALRGPT_REVISION:
             raise ValueError(f"SpatialRGPT checkpoint is locked to {SPATIALRGPT_REVISION}")
@@ -66,6 +68,9 @@ class SpatialRGPTAdapter(InferenceAdapter):
         self.model_base = str(model_base) if model_base else None
         self.conversation_mode = str(conversation_mode)
         self.device_name = str(device)
+        self.max_new_tokens = int(max_new_tokens or self.profile.max_new_tokens)
+        if self.max_new_tokens <= 0:
+            raise ValueError("SpatialRGPT max_new_tokens must be positive")
         self._loaded = False
 
     def metadata(self) -> dict[str, Any]:
@@ -89,7 +94,7 @@ class SpatialRGPTAdapter(InferenceAdapter):
             "decoding": {
                 "do_sample": False,
                 "num_beams": 1,
-                "max_new_tokens": self.profile.max_new_tokens,
+                "max_new_tokens": self.max_new_tokens,
                 "use_cache": True,
             },
             "upstream": {
@@ -175,7 +180,7 @@ class SpatialRGPTAdapter(InferenceAdapter):
                 images=image_tensor.unsqueeze(0).to(self.model.device, dtype=self.torch.float16),
                 do_sample=False,
                 num_beams=1,
-                max_new_tokens=self.profile.max_new_tokens,
+                max_new_tokens=self.max_new_tokens,
                 use_cache=True,
             )
         if output_ids.shape[1] >= input_ids.shape[1] and self.torch.equal(
@@ -194,6 +199,7 @@ class SpatialRGPTAdapter(InferenceAdapter):
                 "region_masks": 0,
                 "depth_tensors": 0,
                 "conversation_mode": self.conversation_mode,
+                "template_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
             },
             warnings=warnings,
         )

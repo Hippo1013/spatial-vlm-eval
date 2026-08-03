@@ -454,7 +454,13 @@ _SPECIALIZED = [
         model_path_env="HISPATIAL_3B_MODEL",
         upstream_url="https://github.com/microsoft/HiSpatial",
         upstream_commit="9b0a5718ed0fb3b8bd9d9e0b36b6192bd3e99be1",
-        image_processing={"source": "CV-Bench RGB", "image_count": 1, "derived_xyz": "MoGe-2"},
+        image_processing={
+            "source": "CV-Bench RGB",
+            "image_count": 1,
+            "derived_xyz": "MoGe-2",
+            "derived_xyz_model": "Ruicheng/moge-2-vitl-normal",
+            "derived_xyz_revision": "b135031bae30b5ac2ae141a0e68717795ce38340",
+        },
         chat_template="HiSpatial official predictor template",
         known_deviation=(
             "The upstream CV-Bench script covers 2D Relation plus 3D only; this project deliberately "

@@ -11,6 +11,7 @@ export CVBENCH_ENV_FILE="$PWD/.env.cvbench.server"
 ```
 
 核对模板中的 legacy `CVBENCH_DATASET_ROOT`，再填好模型/endpoint 或专用 runner 配置。
+专用 runner 的一次性 digest/command 配置示例见[两阶段 runbook 的第 2 节](cv-bench-two-stage-runbook.md#2-专用模型-runner)。
 
 ## 2. 查看与检查
 

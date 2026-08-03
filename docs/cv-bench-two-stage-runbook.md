@@ -41,17 +41,22 @@ export CVBENCH_INTERNVL3_78B_GPU_IDS=0,1,2,3
 
 ## 2. 专用模型 runner
 
-12 条专用轨通过锁定上游环境中的 persistent JSONL runner 接入。为每条轨设置 command 和实现文件
-SHA-256；SSR、3DThinker direct、SpatialLadder 还必须设置 generation manifest：
+12 条专用轨通过仓库的 dataset-blind persistent JSONL runner 接入，并使用各 family 的锁定解释器。
+先用同一解释器计算组合实现 SHA-256，再为每条轨设置 command；SSR、3DThinker direct、
+SpatialLadder 还必须指向 `configs/cv-bench-generation/` 中从锁定上游/checkpoint 解析的 manifest：
 
 ```bash
-export CVBENCH_SPATIALRGPT_RGB_COMMAND=/absolute/path/to/spatialrgpt_cvbench_runner
-export CVBENCH_SPATIALRGPT_RGB_ADAPTER_DIGEST=<64-lowercase-hex>
+export RUNNER_PYTHON=/absolute/path/to/family/python
+export CVBENCH_SPATIALRGPT_RGB_COMMAND="$RUNNER_PYTHON -u -m spatial_vlm_eval.benchmarks.cv_bench.specialized_runner --profile spatialrgpt_rgb"
+export CVBENCH_SPATIALRGPT_RGB_ADAPTER_DIGEST="$($RUNNER_PYTHON -m spatial_vlm_eval.benchmarks.cv_bench.specialized_runner --profile spatialrgpt_rgb --print-adapter-digest)"
 ```
 
 runner 每行只接收 index、最终 prompt、一个 PNG data URI 和锁定 profile metadata；响应必须回传同一
 profile/revision/protocol/decoding、原始输出、模板 SHA-256，并证明一个 media 或 image tensor。缺少
 任一证明时测试 gate 失败。不得通过 runner 读取原始 Parquet 或答案/任务/来源字段。
+
+HiSpatial 额外锁定 `Ruicheng/moge-2-vitl-normal@b135031bae30b5ac2ae141a0e68717795ce38340`；
+runner 会同时验证 HiSpatial、MoGe-2 和上游 checkout，任一 revision 不符即停止。
 
 ## 3. 测试阶段
 

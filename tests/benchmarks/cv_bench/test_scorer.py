@@ -33,6 +33,10 @@ class CVBenchScorerTest(unittest.TestCase):
             "Answer is: C": ("C", "explicit_letter"),
             "right": ("B", "option_text"),
             "(A) left": ("A", "letter_and_option_text"),
+            "I considered A and C. <answer>B</answer>": (
+                "B",
+                "answer_tag_explicit_letter",
+            ),
         }
         for text, expected in accepted.items():
             with self.subTest(text=text):
@@ -44,6 +48,8 @@ class CVBenchScorerTest(unittest.TestCase):
             "(G)": "out_of_range",
             "": "empty",
             "I am unsure": "unparsed",
+            "<answer>A</answer><answer>B</answer>": "multiple_answer_tags",
+            "<answer></answer>": "empty_answer_tag",
         }
         for text, status in rejected.items():
             with self.subTest(text=text):

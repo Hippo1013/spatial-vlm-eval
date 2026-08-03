@@ -10,13 +10,16 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 - 增加独立 CV-Bench 全链路：锁定 revision `bc284db50d036958861cb60cdd7b77612052ce0d`
   的 2D/3D 两个 Parquet（2638 条）、不可泄漏的单图输入合同、两字段 prediction validator、23 条目标
   profile registry、test/full 两阶段绑定 gate、目录驱动评分与 publication-gated Markdown 报告。
-- 增加 CV-Bench robust multiple-choice scorer protocol：只接受唯一合法字母或唯一完整选项文本，冲突/
-  多答案/越界/空值保守记零；主指标固定为 ADE/COCO 等权 2D、Omni3D 3D 及二者等权 Overall，micro
-  accuracy 仅作审计。
+- 增加 CV-Bench answer-tag-aware robust multiple-choice scorer v2：只接受唯一合法字母、唯一完整
+  选项文本或唯一 `<answer>...</answer>` 最终答案，冲突/多答案/越界/空值保守记零；主指标固定为
+  ADE/COCO 等权 2D、Omni3D 3D 及二者等权 Overall，micro accuracy 仅作审计。
 - 增加 benchmark-neutral 可恢复推理 runner，以及 CV-Bench 通用 vLLM/OpenRouter adapter、官方
   Transformers processor/template 审计、组合视觉 canary、固定 smoke8、vLLM 容量探测、双 endpoint
   确定性分片和专用上游 persistent JSONL bridge。专用 runner 缺实现 SHA 或 generation manifest 时
   fail closed。
+- 增加 12 条空间专用轨共用的 dataset-blind persistent runner、五份从锁定上游/checkpoint 解析的
+  generation manifest，并把 HiSpatial 的 MoGe-2 checkpoint revision 纳入 profile binding；既有 MSMU
+  专用 adapter 仅新增显式 generation/token-cap 注入点，默认 MSMU 行为不变。
 - 为 GPT-5 与 Gemini 3.1 Pro 增加用户明确授权的 OpenRouter non-ZDR 独立 profile、inference protocol、
   run slug 和三阶段入口；仍锁定首方 provider、禁止 fallback、要求完整参数并设置
   `data_collection=deny`，不改写原 ZDR 轨或 scorer protocol。

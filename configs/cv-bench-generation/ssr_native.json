@@ -1,0 +1,16 @@
+{
+  "profile": "ssr_native",
+  "model_revision": "7bcb4636f1396325f27f7fbb2f2df121128931bf+8ed878fa16e3e440741ed8c1fedfcfe40710258d",
+  "upstream_commit": "52a21a14a84a98f07575721dd3200f76c11930d8",
+  "decoding": {
+    "do_sample": true,
+    "temperature": 0.1,
+    "top_p": 0.001,
+    "top_k": 1,
+    "repetition_penalty": 1.05,
+    "max_new_tokens": 128,
+    "use_cache": true,
+    "seed": 42,
+    "tor_count": 10
+  }
+}

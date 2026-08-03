@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 from pathlib import Path
 from typing import Any
@@ -146,6 +147,7 @@ class SpatialBotAdapter(InferenceAdapter):
         zoedepth_revision: str | None = None,
         zoedepth_checkpoint: str | None = None,
         device: str = "cuda",
+        max_new_tokens: int | None = None,
     ) -> None:
         if profile_key not in {"spatialbot", "spatialbot_native"}:
             raise ValueError("SpatialBot profile must be spatialbot or spatialbot_native")
@@ -181,6 +183,9 @@ class SpatialBotAdapter(InferenceAdapter):
         self.zoedepth_revision = str(zoedepth_revision) if zoedepth_revision else None
         self.zoedepth_checkpoint = str(Path(zoedepth_checkpoint).resolve()) if zoedepth_checkpoint else None
         self.device_name = str(device)
+        self.max_new_tokens = int(max_new_tokens or self.profile.max_new_tokens)
+        if self.max_new_tokens <= 0:
+            raise ValueError("SpatialBot max_new_tokens must be positive")
         if self.profile.key == "spatialbot_native":
             missing = [
                 name
@@ -242,7 +247,7 @@ class SpatialBotAdapter(InferenceAdapter):
             "decoding": {
                 "do_sample": False,
                 "num_beams": 1,
-                "max_new_tokens": self.profile.max_new_tokens,
+                "max_new_tokens": self.max_new_tokens,
                 "use_cache": True,
             },
             "upstream": {
@@ -394,7 +399,7 @@ class SpatialBotAdapter(InferenceAdapter):
                 images=images,
                 do_sample=False,
                 num_beams=1,
-                max_new_tokens=self.profile.max_new_tokens,
+                max_new_tokens=self.max_new_tokens,
                 use_cache=True,
                 stopping_criteria=[stopping],
             )
@@ -412,6 +417,7 @@ class SpatialBotAdapter(InferenceAdapter):
                 "input_rgb_count": 1,
                 "derived_depth_count": 1 if self.profile.key == "spatialbot_native" else 0,
                 "depth_derived_from_same_rgb": self.profile.key == "spatialbot_native",
+                "template_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
             },
             warnings=warnings,
         )

@@ -37,6 +37,10 @@ class CVBenchProfilesAndInferenceTest(unittest.TestCase):
         self.assertEqual(PROFILES["gemini31pro_openrouter_non_zdr"].decoding["temperature"], 0.0)
         self.assertNotIn("hispatial3b_rgb", PROFILES)
         self.assertIn("MoGe-2 XYZ", PROFILES["hispatial3b_moge2_xyz"].display_name)
+        self.assertEqual(
+            PROFILES["hispatial3b_moge2_xyz"].image_processing["derived_xyz_revision"],
+            "b135031bae30b5ac2ae141a0e68717795ce38340",
+        )
 
     def test_specialized_sampling_and_prompt_profiles_are_separate(self):
         mental = PROFILES["3dthinker_mental3d"]

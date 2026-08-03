@@ -167,6 +167,7 @@ class SSRAdapter(InferenceAdapter):
         depthpro_checkpoint_sha256: str = SSR_DEPTHPRO_CHECKPOINT_SHA256,
         depthpro_revision: str = SSR_DEPTHPRO_REVISION,
         device: str = "cuda",
+        generation_kwargs: dict[str, Any] | None = None,
     ) -> None:
         if profile_key not in {"ssr", "ssr_native"}:
             raise ValueError("SSR profile must be ssr or ssr_native")
@@ -211,6 +212,17 @@ class SSRAdapter(InferenceAdapter):
         self.depthpro_checkpoint_sha256 = str(depthpro_checkpoint_sha256)
         self.depthpro_revision = str(depthpro_revision)
         self.device_name = str(device)
+        self.generation_kwargs = dict(
+            generation_kwargs
+            or {
+                "do_sample": False,
+                "num_beams": 1,
+                "max_new_tokens": self.profile.max_new_tokens,
+                "use_cache": True,
+            }
+        )
+        if int(self.generation_kwargs.get("max_new_tokens", 0)) <= 0:
+            raise ValueError("SSR generation kwargs require a positive max_new_tokens")
         self.ssr_vlm_snapshot_revision_verified = verify_hf_snapshot_revision(
             self.ssr_vlm,
             self.ssr_vlm_revision,
@@ -355,13 +367,7 @@ class SSRAdapter(InferenceAdapter):
                 "siglip_model": self.siglip_model if switches["midi"] else None,
                 "model_image_tensor_count": switches["model_image_tensor_count"],
             },
-            "decoding": {
-                "do_sample": False,
-                "num_beams": 1,
-                "max_new_tokens": self.profile.max_new_tokens,
-                "use_cache": True,
-                "tor_count": switches["tor_count"],
-            },
+            "decoding": {**self.generation_kwargs, "tor_count": switches["tor_count"]},
             "components": switches,
             "upstream": {
                 "repository": self.profile.upstream_url,
@@ -555,12 +561,13 @@ class SSRAdapter(InferenceAdapter):
             "attention_mask": inputs.attention_mask.to(self.device),
             "pixel_values": inputs.pixel_values.to(self.device),
             "image_grid_thw": inputs.image_grid_thw.to(self.device),
-            "do_sample": False,
-            "num_beams": 1,
-            "max_new_tokens": self.profile.max_new_tokens,
-            "use_cache": True,
+            **self.generation_kwargs,
         }
-        generation_metadata: dict[str, Any] = {"num_model_image_tensors": 1, "tor_count": 0}
+        generation_metadata: dict[str, Any] = {
+            "num_model_image_tensors": 1,
+            "tor_count": 0,
+            "template_sha256": hashlib.sha256(rendered.encode("utf-8")).hexdigest(),
+        }
         if self.profile.key == "ssr_native":
             import numpy as np
 

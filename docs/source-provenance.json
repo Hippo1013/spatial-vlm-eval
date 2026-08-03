@@ -67,6 +67,7 @@
     "BAAI/RoboBrain2.5-8B-NV": "3d77a19a3ddd8616b3979e03de56096edfb12ff6",
     "BAAI/RoboBrain2.5-8B-MT": "01145b89a0fe49f78f5d677d25af7351088d7c7d",
     "lhzzzzzy/HiSpatial-3B": "75a5e3d65351d7602c492aa91533f62b8a252604",
-    "hongxingli/SpatialLadder-3B": "0819c3adf8827a2ea6c0348d49a23503ecb1f428"
+    "hongxingli/SpatialLadder-3B": "0819c3adf8827a2ea6c0348d49a23503ecb1f428",
+    "Ruicheng/moge-2-vitl-normal": "b135031bae30b5ac2ae141a0e68717795ce38340"
   }
 }

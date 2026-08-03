@@ -93,6 +93,8 @@ class ThreeDThinkerAdapter(InferenceAdapter):
         model_path: str,
         model_revision: str = THREEDTHINKER_REVISION,
         device_map: str = "auto",
+        generation_kwargs: dict[str, Any] | None = None,
+        control_prompt_already_present: bool = False,
     ) -> None:
         if profile_key not in {"3dthinker", "3dthinker_native"}:
             raise ValueError("3DThinker profile must be 3dthinker or 3dthinker_native")
@@ -115,10 +117,32 @@ class ThreeDThinkerAdapter(InferenceAdapter):
             "3DThinker",
         )
         self.device_map = str(device_map)
+        self.generation_kwargs = dict(
+            generation_kwargs
+            or {
+                "max_new_tokens": self.profile.max_new_tokens,
+                "do_sample": False,
+                "num_beams": 1,
+                "use_cache": True,
+            }
+        )
+        if int(self.generation_kwargs.get("max_new_tokens", 0)) <= 0:
+            raise ValueError("3DThinker generation kwargs require a positive max_new_tokens")
+        self.control_prompt_already_present = bool(control_prompt_already_present)
         self._loaded = False
 
     def metadata(self) -> dict[str, Any]:
         native = self.profile.key == "3dthinker_native"
+        generation_kwargs = getattr(
+            self,
+            "generation_kwargs",
+            {
+                "max_new_tokens": self.profile.max_new_tokens,
+                "do_sample": False,
+                "num_beams": 1,
+                "use_cache": True,
+            },
+        )
         return {
             "model": "jankin123/3DThinker-Mindcube (MindCube-trained stage-1 checkpoint)",
             "model_revision": self.model_revision,
@@ -140,10 +164,7 @@ class ThreeDThinkerAdapter(InferenceAdapter):
                 "mental_3d_is_model_generated": native,
             },
             "decoding": {
-                "do_sample": False,
-                "num_beams": 1,
-                "max_new_tokens": self.profile.max_new_tokens,
-                "use_cache": True,
+                **generation_kwargs,
                 "answer_extraction": "last complete <answer> tag" if native else None,
                 "missing_answer_tag": "preserve raw response with warning" if native else None,
             },
@@ -206,7 +227,11 @@ class ThreeDThinkerAdapter(InferenceAdapter):
         self._load()
         from qwen_vl_utils import process_vision_info
 
-        prompt = three_d_thinker_prompt(self.profile.key, model_input.question)
+        prompt = (
+            str(model_input.question)
+            if self.control_prompt_already_present
+            else three_d_thinker_prompt(self.profile.key, model_input.question)
+        )
         content = [
             {"type": "image", "image": model_input.image.convert("RGB")},
             {"type": "text", "text": "<image>" + prompt},
@@ -215,8 +240,9 @@ class ThreeDThinkerAdapter(InferenceAdapter):
         rendered = self.processor.apply_chat_template(conversations, tokenize=False)
         rendered = place_input_image(rendered)
         image_inputs, _ = process_vision_info(conversations)
+        rendered_for_model = rendered + "<|im_start|>assistant"
         inputs = self.processor(
-            text=[rendered + "<|im_start|>assistant"],
+            text=[rendered_for_model],
             images=image_inputs,
             return_tensors="pt",
             padding=True,
@@ -224,10 +250,7 @@ class ThreeDThinkerAdapter(InferenceAdapter):
         with self.torch.inference_mode():
             output_ids = self.model.generate(
                 **inputs,
-                max_new_tokens=self.profile.max_new_tokens,
-                do_sample=False,
-                num_beams=1,
-                use_cache=True,
+                **self.generation_kwargs,
                 tokenizer=self.processor.tokenizer,
             )
         generated_ids = output_ids[:, inputs.input_ids.shape[1] :]
@@ -254,6 +277,9 @@ class ThreeDThinkerAdapter(InferenceAdapter):
                 "raw_response_sha256": hashlib.sha256(raw_response.encode("utf-8")).hexdigest(),
                 "raw_response_characters": len(raw_response),
                 "transformers_version": self.transformers_version,
+                "template_sha256": hashlib.sha256(
+                    rendered_for_model.encode("utf-8")
+                ).hexdigest(),
             },
             warnings=warnings,
         )
