@@ -72,6 +72,9 @@ bash scripts/msmu/build_results_report.sh \
   --scorer-protocol SCORER_PROTOCOL
 ```
 
+不指定 `--profile` 时，表格按 API、通用开源、空间专项排列；同系列按参数量升序，专项同模型按纯
+RGB 到额外先验排列。显式重复 `--profile` 时保留调用方顺序。每个指标列及平均列的并列最高分均加粗。
+
 默认写入：
 
 ```text

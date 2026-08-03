@@ -268,8 +268,8 @@ class ResultsReportRenderingTest(unittest.TestCase):
         self.assertEqual(markdown.count("\n| ---"), 1)
         self.assertIn("| Model-With-Path |", lines[6])
         self.assertIn(
-            "| 10.00 | 20.00 | 30.00 | 40.00 | 50.00 | 60.00 | "
-            "70.00 | 80.00 | 45.00 |",
+            "| **10.00** | **20.00** | **30.00** | **40.00** | **50.00** | "
+            "**60.00** | **70.00** | **80.00** | **45.00** |",
             lines[6],
         )
         self.assertNotIn("strict official", markdown)
@@ -451,6 +451,88 @@ class ResultsReportRenderingTest(unittest.TestCase):
             [(result.profile, result.scorer_protocol) for result in selected],
             [("alpha", "new"), ("beta", "new")],
         )
+
+    def test_default_order_groups_api_open_source_and_specialized_profiles(self):
+        cases = [
+            ("spatialbot_native", "org/SpatialBot-3B"),
+            ("qwen3_vl_32b", "org/Qwen3-VL-32B-Instruct"),
+            ("internvl3_38b", "org/InternVL3-38B-hf"),
+            ("gpt5_openrouter_non_zdr", "openai/gpt-5"),
+            ("3dthinker_native", "org/3DThinker-Mindcube"),
+            ("qwen3_vl_2b", "org/Qwen3-VL-2B-Instruct"),
+            ("gemini31pro_openrouter_non_zdr", "google/gemini-3.1-pro-preview"),
+            ("spatialbot", "org/SpatialBot-3B"),
+            ("internvl3_8b", "org/InternVL3-8B-hf"),
+            ("3dthinker", "org/3DThinker-Mindcube"),
+        ]
+        for profile, model in cases:
+            write_result(
+                self.root,
+                run_name=profile,
+                profile=profile,
+                scorer_protocol="protocol-v1",
+                model=model,
+            )
+
+        selected = results_report.selected_results(
+            results_report.discover_results(self.root),
+            profiles=[],
+            scorer_protocols=["protocol-v1"],
+        )
+
+        self.assertEqual(
+            [result.profile for result in selected],
+            [
+                "gemini31pro_openrouter_non_zdr",
+                "gpt5_openrouter_non_zdr",
+                "internvl3_8b",
+                "internvl3_38b",
+                "qwen3_vl_2b",
+                "qwen3_vl_32b",
+                "3dthinker",
+                "3dthinker_native",
+                "spatialbot",
+                "spatialbot_native",
+            ],
+        )
+
+    def test_rendering_bolds_every_tied_column_maximum(self):
+        alpha_values = (0.1, 0.99, 0.8, 0.8, 0.8, 0.8, 0.8, 0.8)
+        beta_values = (0.2, 0.99, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2)
+        write_result(
+            self.root,
+            run_name="alpha",
+            profile="alpha",
+            scorer_protocol="protocol-v1",
+            model="org/Alpha",
+            accuracies=alpha_values,
+        )
+        write_result(
+            self.root,
+            run_name="beta",
+            profile="beta",
+            scorer_protocol="protocol-v1",
+            model="org/Beta",
+            accuracies=beta_values,
+        )
+        markdown = results_report.render_markdown(
+            results_report.selected_results(
+                results_report.discover_results(self.root),
+                profiles=[],
+                scorer_protocols=["protocol-v1"],
+            )
+        )
+        alpha_row = next(line for line in markdown.splitlines() if "| Alpha |" in line)
+        beta_row = next(line for line in markdown.splitlines() if "| Beta |" in line)
+
+        self.assertEqual(markdown.count("**99.00**"), 2)
+        self.assertIn("| 10.00 | **99.00** | **80.00** |", alpha_row)
+        self.assertIn("| **20.00** | **99.00** | 20.00 |", beta_row)
+        self.assertIn(
+            results_report.format_percentage(sum(alpha_values) / 8, bold=True),
+            alpha_row,
+        )
+        self.assertNotIn("**20.00** | **20.00**", beta_row)
 
     def test_unknown_filters_fail_closed(self):
         write_result(

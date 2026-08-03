@@ -129,7 +129,9 @@ GPU 进程或批次锁均 fail closed 并保持原状。每次控制器运行日
 列，因此一次只允许一个 scorer protocol，未指定时固定使用当前 canonical protocol，拒绝把历史和
 当前评分混入同一张表。诊断 summary 会在终端告警并跳过，筛选后没有合法评分时 fail closed。
 最终 Markdown 固定为 `# MSMU-Bench评测结果`、一行输入/提示配置说明和一张中文表；列为模型名称、
-官方论文顺序的八项指标和平均值。当前专用模型使用固定的 profile 级展示规则：SSR 的两轨标为
+官方论文顺序的八项指标和平均值，每列（含平均）所有并列最高分加粗。未显式指定 profile 时，模型
+默认按 API、通用开源、空间专项分组；同系列按参数量升序，专项同模型按纯 RGB 到额外先验排序。
+显式 `--profile` 仍严格保留调用方给定顺序。当前专用模型使用固定的 profile 级展示规则：SSR 的两轨标为
 `RGB` / `RGB + 深度估计`，SpatialRGPT 保持模型原名且不加注释，3DThinker 的两轨标为 `RGB` /
 `RGB + Mental-3D 提示词`，SpatialBot 的两轨标为 `RGB` / `RGB + 深度估计`。未知双轨 profile 若没有
 显式展示配置必须 fail closed，不能退回含混的“公平版/原生版”。完整 revision、inference protocol、

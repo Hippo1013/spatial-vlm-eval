@@ -8,6 +8,7 @@ import html
 import json
 import math
 import os
+import re
 import sys
 import tempfile
 from dataclasses import dataclass
@@ -31,8 +32,9 @@ from _score_pending_results import (  # noqa: E402
 
 REPORT_TITLE = "# MSMU-Bench评测结果"
 REPORT_NOTE = (
-    "注：括号内标明实际评测输入或提示配置；“RGB + 深度估计”中的深度由当前 MSMU RGB "
-    "图像估算，不使用 GT 深度、reference 或额外标注。"
+    "注：模型按 API、通用开源、空间专项排序；同系列按参数量升序，专项同模型按纯 RGB 到额外先验排序；"
+    "各指标列（含平均）最高分加粗。括号内标明实际评测输入或提示配置；“RGB + 深度估计”中的深度由"
+    "当前 MSMU RGB 图像估算，不使用 GT 深度、reference 或额外标注。"
 )
 DEFAULT_OUTPUT_NAME = "msmu-result.md"
 PROFILE_PRESENTATION_CONFIGS: dict[str, str | None] = {
@@ -59,6 +61,21 @@ OFFICIAL_METRICS = (
     ("refer_obj_estimation", "参照物估计"),
 )
 EXPECTED_RESULT_KIND = "official-compatible internal score"
+PROFILE_SORT_FAMILIES = (
+    ("gemini31pro", 0, 0),
+    ("gpt5", 0, 1),
+    ("internvl3", 1, 0),
+    ("llava_next", 1, 1),
+    ("qwen25_vl", 1, 2),
+    ("qwen3_vl", 1, 3),
+    ("3dthinker", 2, 0),
+    ("spatialbot", 2, 1),
+    ("spatialrgpt", 2, 2),
+    ("ssr", 2, 3),
+)
+PARAMETER_COUNT_PATTERN = re.compile(
+    r"(?<![\d.])(\d+(?:\.\d+)?)\s*[Bb](?![A-Za-z])"
+)
 
 
 class ConfigurationError(RuntimeError):
@@ -509,6 +526,28 @@ def selected_results(
         protocol: index for index, protocol in enumerate(scorer_protocols)
     }
 
+    def default_order(result: ScoreResult) -> tuple[Any, ...]:
+        category = 1
+        family_order = len(PROFILE_SORT_FAMILIES)
+        for family, candidate_category, candidate_order in PROFILE_SORT_FAMILIES:
+            if result.profile == family or result.profile.startswith(f"{family}_"):
+                category = candidate_category
+                family_order = candidate_order
+                break
+        parameter_match = PARAMETER_COUNT_PATTERN.search(result.model)
+        parameter_count = (
+            float(parameter_match.group(1)) if parameter_match else math.inf
+        )
+        prior_order = 1 if result.profile.endswith("_native") else 0
+        return (
+            category,
+            family_order,
+            parameter_count,
+            prior_order,
+            result.model.casefold(),
+            result.profile,
+        )
+
     def key(result: ScoreResult) -> tuple[Any, ...]:
         if profiles:
             primary: tuple[Any, ...] = (
@@ -516,7 +555,7 @@ def selected_results(
                 result.model.casefold(),
             )
         else:
-            primary = (result.model.casefold(), result.profile)
+            primary = default_order(result)
         return (
             *primary,
             protocol_order.get(result.scorer_protocol, len(protocol_order)),
@@ -535,8 +574,9 @@ def markdown_text(value: str, *, code: bool = False) -> str:
     return f"<code>{escaped}</code>" if code else escaped
 
 
-def format_percentage(value: float) -> str:
-    return f"{value * 100:.2f}"
+def format_percentage(value: float, *, bold: bool = False) -> str:
+    rendered = f"{value * 100:.2f}"
+    return f"**{rendered}**" if bold else rendered
 
 
 def presentation_model_names(results: list[ScoreResult]) -> list[str]:
@@ -568,6 +608,8 @@ def presentation_model_names(results: list[ScoreResult]) -> list[str]:
 
 
 def render_markdown(results: list[ScoreResult]) -> str:
+    if not results:
+        raise ConfigurationError("the concise report requires at least one result")
     scorer_protocols = {result.scorer_protocol for result in results}
     if len(scorer_protocols) != 1:
         raise ConfigurationError(
@@ -591,6 +633,13 @@ def render_markdown(results: list[ScoreResult]) -> str:
         )
         + " |",
     ]
+    metric_maxima = tuple(
+        max(result.accuracies[index] for result in results)
+        for index in range(len(OFFICIAL_METRICS))
+    )
+    average_maximum = max(
+        result.average for result in results if result.average is not None
+    )
     for result, model_name in zip(
         results,
         presentation_model_names(results),
@@ -599,8 +648,27 @@ def render_markdown(results: list[ScoreResult]) -> str:
         assert result.average is not None
         cells = [
             markdown_text(model_name),
-            *(format_percentage(value) for value in result.accuracies),
-            format_percentage(result.average),
+            *(
+                format_percentage(
+                    value,
+                    bold=math.isclose(
+                        value,
+                        metric_maxima[index],
+                        rel_tol=0.0,
+                        abs_tol=1e-12,
+                    ),
+                )
+                for index, value in enumerate(result.accuracies)
+            ),
+            format_percentage(
+                result.average,
+                bold=math.isclose(
+                    result.average,
+                    average_maximum,
+                    rel_tol=0.0,
+                    abs_tol=1e-12,
+                ),
+            ),
         ]
         lines.append("| " + " | ".join(cells) + " |")
     return "\n".join(lines) + "\n"
