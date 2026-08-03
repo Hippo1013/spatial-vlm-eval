@@ -81,11 +81,15 @@ def _model_generation(decoding: dict[str, Any]) -> dict[str, Any]:
     return values
 
 
-def _normalize_spatialladder_config(config: Any) -> Any:
-    if isinstance(getattr(config, "text_config", None), dict) and "text_config" not in (
-        getattr(type(config), "sub_configs", {}) or {}
-    ):
-        delattr(config, "text_config")
+def _validate_spatialladder_config(config: Any) -> Any:
+    text_config = getattr(config, "text_config", None)
+    if text_config is None or not callable(getattr(text_config, "to_dict", None)):
+        raise ValueError(
+            "SpatialLadder requires a Transformers build with composite "
+            "Qwen2.5-VL text_config support"
+        )
+    if not bool(getattr(text_config, "tie_word_embeddings", False)):
+        raise ValueError("SpatialLadder checkpoint requires tied text output embeddings")
     return config
 
 
@@ -367,12 +371,7 @@ class SpatialLadderAdapter(InferenceAdapter):
         from transformers import AutoConfig, AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
         config = AutoConfig.from_pretrained(self.model_path, local_files_only=True)
-        # Transformers 4.49 implements Qwen2.5-VL as a flat text config. Newer
-        # checkpoints also serialize a redundant nested text_config, which 4.49
-        # preserves as a plain dict and then mistakes for a PretrainedConfig in
-        # GenerationConfig.from_model_config. Remove only that unsupported,
-        # redundant representation; all official text fields remain top-level.
-        config = _normalize_spatialladder_config(config)
+        config = _validate_spatialladder_config(config)
 
         self.processor = AutoProcessor.from_pretrained(
             self.model_path,
@@ -385,7 +384,7 @@ class SpatialLadderAdapter(InferenceAdapter):
             self.model_path,
             config=config,
             torch_dtype=torch.bfloat16,
-            attn_implementation="flash_attention_2",
+            attn_implementation="sdpa",
             device_map="auto",
             local_files_only=True,
         ).eval()
@@ -426,6 +425,7 @@ class SpatialLadderAdapter(InferenceAdapter):
             text=text,
             metadata={
                 "num_model_image_tensors": 1,
+                "attention_implementation": "sdpa",
                 "template_sha256": hashlib.sha256(rendered.encode("utf-8")).hexdigest(),
             },
             warnings=("model returned an empty text completion",) if not text.strip() else (),

@@ -21,7 +21,7 @@ from spatial_vlm_eval.benchmarks.cv_bench.specialized_runner import (
     MOGE2_CHECKPOINT_FILENAME,
     MOGE2_UTILS3D_COMMIT,
     _build_backend,
-    _normalize_spatialladder_config,
+    _validate_spatialladder_config,
     adapter_digest,
 )
 from spatial_vlm_eval.models.spatialbot.infer import ZOEDEPTH_REVISION
@@ -134,20 +134,19 @@ class CVBenchCommandAdapterTest(unittest.TestCase):
         self.assertRegex(spatialbot, r"^[0-9a-f]{64}$")
         self.assertNotEqual(spatialrgpt, spatialbot)
 
-    def test_spatialladder_runner_keeps_flat_qwen25_config_compatible(self):
-        class FlatConfig(SimpleNamespace):
-            sub_configs = {"vision_config": object}
+    def test_spatialladder_runner_requires_composite_tied_qwen25_config(self):
+        with self.assertRaisesRegex(ValueError, "composite Qwen2.5-VL"):
+            _validate_spatialladder_config(SimpleNamespace(text_config={}))
 
-        flat = FlatConfig(text_config={"hidden_size": 2048}, hidden_size=2048)
-        self.assertIs(_normalize_spatialladder_config(flat), flat)
-        self.assertFalse(hasattr(flat, "text_config"))
+        text_config = SimpleNamespace(
+            tie_word_embeddings=True, to_dict=lambda: {"hidden_size": 2048}
+        )
+        config = SimpleNamespace(text_config=text_config)
+        self.assertIs(_validate_spatialladder_config(config), config)
 
-        class CompositeConfig(SimpleNamespace):
-            sub_configs = {"text_config": object, "vision_config": object}
-
-        nested = CompositeConfig(text_config={"hidden_size": 2048})
-        _normalize_spatialladder_config(nested)
-        self.assertEqual(nested.text_config, {"hidden_size": 2048})
+        text_config.tie_word_embeddings = False
+        with self.assertRaisesRegex(ValueError, "tied text output embeddings"):
+            _validate_spatialladder_config(config)
 
     def test_spatialbot_zoedepth_runner_binds_upstream_revision(self):
         profile = PROFILES["spatialbot_zoedepth"]

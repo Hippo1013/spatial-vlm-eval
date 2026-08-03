@@ -62,8 +62,8 @@ map，因此不建立虚假的 RGB-only 轨。实现 adapter 时分别
 | `robobrain25_8b_nv_rgb` | `RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | RGB | official processor；sampling 0.7/top-p 0.8/768/seed 42 | 已注册；runner 未验收 |
 | `robobrain25_8b_mt_rgb` | `RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | RGB | official processor；sampling 0.7/top-p 0.8/768/seed 42 | 已注册；runner 未验收 |
 | `hispatial3b_moge2_xyz` | `HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | RGB + MoGe-2 XYZ | official predictor；greedy/100 | 已注册；完整 2638 轨 runner 未验收 |
-| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB | official Qwen2.5-VL；128；generation manifest 必需 | 已注册；runner 未验收 |
-| `spatialladder3b_thinking` | 同上 | RGB + 官方思考提示词 | temp 0.01/1024/seed 42；generation manifest 必需 | 已注册；runner 未验收 |
+| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB | official Qwen2.5-VL；SDPA；128；generation manifest 必需 | 已注册；runner 未验收 |
+| `spatialladder3b_thinking` | 同上 | RGB + 官方思考提示词 | SDPA；temp 0.01/1024/seed 42；generation manifest 必需 | 已注册；runner 未验收 |
 
 通用开源轨的其余统一参数为 temperature 0、`top_p=None`、beam 1。sampling 专用轨的 seed、batch 和
 sharding 进入 inference protocol/gate。HiSpatial 上游 CV 脚本只覆盖 2D Relation 和 3D；本项目统一
