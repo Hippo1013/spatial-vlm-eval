@@ -15,6 +15,8 @@ from ..common.runtime import GenerationResult, InferenceAdapter
 from ..profiles import get_profile
 
 SPATIALBOT_REVISION = "41d3b52c642058dfb087885bec0b8e37e0e67f8d"
+SPATIALBOT_SIGLIP_MODEL_ID = "google/siglip-so400m-patch14-384"
+SPATIALBOT_SIGLIP_REVISION = "9fdffc58afc957d1a03a25b10dba0329ab15c2a3"
 ZOEDEPTH_REVISION = "d87f17b2f5fdcb174cf4fb115491f4a6c60de152"
 ZOEDEPTH_DERIVED_BUFFER_COUNT = 24
 MIDAS_RELATIVE_POSITION_MODULE_COUNT = 24
@@ -129,6 +131,19 @@ def spatialbot_prompt(profile_key: str, question: str) -> str:
     raise ValueError(f"Unknown SpatialBot profile: {profile_key}")
 
 
+def bind_spatialbot_vision_tower(config: Any, local_model_path: str) -> Any:
+    """Bind the checkpoint's locked SigLIP tower to a verified local snapshot."""
+
+    configured = getattr(config, "mm_vision_tower", None)
+    if configured != SPATIALBOT_SIGLIP_MODEL_ID:
+        raise RuntimeError(
+            "Unexpected SpatialBot vision tower: "
+            f"expected {SPATIALBOT_SIGLIP_MODEL_ID!r}, got {configured!r}"
+        )
+    config.mm_vision_tower = str(Path(local_model_path).resolve())
+    return config
+
+
 class SpatialBotAdapter(InferenceAdapter):
     batch_size = 1
     supports_concurrency = False
@@ -143,6 +158,8 @@ class SpatialBotAdapter(InferenceAdapter):
         model_base: str | None = None,
         model_type: str = "phi-2",
         conversation_mode: str = "bunny",
+        siglip_model: str | None = None,
+        siglip_revision: str = SPATIALBOT_SIGLIP_REVISION,
         zoedepth_root: str | None = None,
         zoedepth_revision: str | None = None,
         zoedepth_checkpoint: str | None = None,
@@ -179,6 +196,18 @@ class SpatialBotAdapter(InferenceAdapter):
         self.model_base = str(Path(model_base).resolve()) if model_base else None
         self.model_type = model_type
         self.conversation_mode = conversation_mode
+        self.siglip_model = Path(siglip_model).resolve() if siglip_model else None
+        self.siglip_revision = str(siglip_revision) if siglip_model else None
+        if self.siglip_model is not None:
+            if self.siglip_revision != SPATIALBOT_SIGLIP_REVISION:
+                raise ValueError(f"SpatialBot SigLIP is locked to {SPATIALBOT_SIGLIP_REVISION}")
+            self.siglip_snapshot_revision_verified = verify_hf_snapshot_revision(
+                self.siglip_model,
+                SPATIALBOT_SIGLIP_REVISION,
+                "SpatialBot SigLIP vision tower",
+            )
+        else:
+            self.siglip_snapshot_revision_verified = False
         self.zoedepth_root = Path(zoedepth_root).resolve() if zoedepth_root else None
         self.zoedepth_revision = str(zoedepth_revision) if zoedepth_revision else None
         self.zoedepth_checkpoint = str(Path(zoedepth_checkpoint).resolve()) if zoedepth_checkpoint else None
@@ -243,6 +272,9 @@ class SpatialBotAdapter(InferenceAdapter):
                     MIDAS_RELATIVE_POSITION_MODULE_COUNT if native else None
                 ),
                 "timm_layers_compat": "alias timm.models.layers when timm.layers is absent",
+                "vision_tower_model": SPATIALBOT_SIGLIP_MODEL_ID,
+                "vision_tower_revision": self.siglip_revision,
+                "vision_tower_path": str(self.siglip_model) if self.siglip_model else None,
             },
             "decoding": {
                 "do_sample": False,
@@ -256,6 +288,9 @@ class SpatialBotAdapter(InferenceAdapter):
                 "commit_verified": self.upstream_commit_verified,
                 "checkout": str(self.upstream_root),
                 "model_snapshot_revision_verified": self.model_snapshot_revision_verified,
+                "vision_tower_snapshot_revision_verified": (
+                    self.siglip_snapshot_revision_verified
+                ),
                 "entrypoint_equivalent": ("bunny/serve/cli_depth.py" if native else "bunny/serve/cli.py"),
                 "zoedepth_checkout": str(self.zoedepth_root) if self.zoedepth_root else None,
                 "zoedepth_commit_verified": self.zoedepth_commit_verified,
@@ -292,15 +327,21 @@ class SpatialBotAdapter(InferenceAdapter):
             tokenizer_multi_image_token,
         )
         from bunny.util.utils import disable_torch_init
+        from transformers import AutoConfig
 
         disable_torch_init()
         model_name = get_model_name_from_path(str(self.model_path))
+        load_kwargs: dict[str, Any] = {}
+        if self.siglip_model is not None:
+            config = AutoConfig.from_pretrained(str(self.model_path), local_files_only=True)
+            load_kwargs["config"] = bind_spatialbot_vision_tower(config, str(self.siglip_model))
         self.tokenizer, self.model, self.image_processor, self.context_len = load_pretrained_model(
             str(self.model_path),
             self.model_base,
             model_name,
             self.model_type,
             device=self.device_name,
+            **load_kwargs,
         )
         self.torch = torch
         self.DEFAULT_IMAGE_TOKEN = DEFAULT_IMAGE_TOKEN
@@ -432,6 +473,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--model-base", default=None)
     parser.add_argument("--model-type", default="phi-2")
     parser.add_argument("--conversation-mode", default="bunny")
+    parser.add_argument("--siglip-model", default=None)
+    parser.add_argument("--siglip-revision", default=SPATIALBOT_SIGLIP_REVISION)
     parser.add_argument("--zoedepth-root", default=None)
     parser.add_argument("--zoedepth-revision", default=ZOEDEPTH_REVISION)
     parser.add_argument("--zoedepth-checkpoint", default=None)
@@ -450,6 +493,8 @@ def main() -> None:
         model_base=args.model_base,
         model_type=args.model_type,
         conversation_mode=args.conversation_mode,
+        siglip_model=args.siglip_model,
+        siglip_revision=args.siglip_revision,
         zoedepth_root=args.zoedepth_root,
         zoedepth_revision=args.zoedepth_revision,
         zoedepth_checkpoint=args.zoedepth_checkpoint,

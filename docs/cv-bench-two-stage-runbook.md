@@ -78,6 +78,11 @@ HiSpatial 额外锁定 `Ruicheng/moge-2-vitl-normal@b135031bae30b5ac2ae141a0e687
 和 MoGe 上游 `925b8ed835a7a9cdb7578ba15c658a0afc969030`；runner 会同时验证 HiSpatial、
 MoGe-2 checkpoint 和两个上游 checkout，任一 revision 不符即停止。
 
+SpatialBot 还必须设置 `SPATIALBOT_SIGLIP_MODEL`，指向
+`google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3` 的本地快照。
+runner 会验证 revision，并仅在内存中把 checkpoint config 的同名 vision tower 改绑到该只读路径；
+不会修改 checkpoint，也不会在离线推理时隐式下载。
+
 ## 3. 测试阶段
 
 先按 backend/family 各选一轨；这些通过后再逐轨建立 gate：

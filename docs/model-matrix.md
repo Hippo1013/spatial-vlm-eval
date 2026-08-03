@@ -121,7 +121,9 @@ Qwen2.5-VL/PEFT 轨和其他历史注册 API 轨不进入本表；新增四个 S
   Qwen2.5 processor/model 是专用模型实现依赖，不是独立目标模型。
 - SpatialBot 使用 merged instruction checkpoint，而非 pretrain 或同权重的 LoRA 部署形态；上游锁定
   `BAAI-DCAI/SpatialBot@775ad8cf2f9251261dcd70b2639133d506ff583f`。原生轨 ZoeDepth 锁定
-  `d87f17b2f5fdcb174cf4fb115491f4a6c60de152`，只从当前 MSMU RGB 估计深度。
+  `d87f17b2f5fdcb174cf4fb115491f4a6c60de152`，只从当前 MSMU RGB 估计深度。两条轨的 vision tower
+  均锁定 `google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3`，
+  通过已验证的本地快照路径加载，禁止隐式网络回退。
 
 ## 公平轨与原生轨
 

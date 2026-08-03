@@ -129,6 +129,7 @@ class CVBenchCommandAdapterTest(unittest.TestCase):
         environment = {
             profile.model_path_env: "/locked/spatialbot",
             "SPATIALBOT_UPSTREAM_ROOT": "/locked/spatialbot-upstream",
+            "SPATIALBOT_SIGLIP_MODEL": "/locked/siglip",
             "ZOEDEPTH_ROOT": "/locked/zoedepth-upstream",
             "ZOEDEPTH_CHECKPOINT": "/locked/zoedepth.pt",
         }
@@ -137,6 +138,7 @@ class CVBenchCommandAdapterTest(unittest.TestCase):
         ) as adapter:
             _build_backend(profile, dict(profile.decoding))
         self.assertEqual(adapter.call_args.kwargs["zoedepth_revision"], ZOEDEPTH_REVISION)
+        self.assertEqual(adapter.call_args.kwargs["siglip_model"], "/locked/siglip")
 
 
 if __name__ == "__main__":

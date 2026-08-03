@@ -10,7 +10,10 @@ from PIL import Image
 from spatial_vlm_eval.models.profiles import PROFILES
 from spatial_vlm_eval.models.spatialbot.infer import (
     MIDAS_RELATIVE_POSITION_MODULE_COUNT,
+    SPATIALBOT_SIGLIP_MODEL_ID,
+    SPATIALBOT_SIGLIP_REVISION,
     ZOEDEPTH_DERIVED_BUFFER_COUNT,
+    bind_spatialbot_vision_tower,
     encode_spatialbot_depth,
     install_legacy_timm_layers_alias,
     load_zoedepth_checkpoint_compat,
@@ -49,6 +52,18 @@ from spatial_vlm_eval.models.three_d_thinker.infer import (
 
 
 class ProfileRegistryTest(unittest.TestCase):
+    def test_spatialbot_binds_only_the_locked_siglip_tower(self):
+        class Config:
+            mm_vision_tower = SPATIALBOT_SIGLIP_MODEL_ID
+
+        config = bind_spatialbot_vision_tower(Config(), "/locked/siglip")
+        self.assertEqual(config.mm_vision_tower, "/locked/siglip")
+        self.assertRegex(SPATIALBOT_SIGLIP_REVISION, r"^[0-9a-f]{40}$")
+
+        Config.mm_vision_tower = "unexpected/tower"
+        with self.assertRaisesRegex(RuntimeError, "Unexpected SpatialBot vision tower"):
+            bind_spatialbot_vision_tower(Config(), "/locked/siglip")
+
     def test_registry_contains_exactly_twenty_three_unique_protocols(self):
         self.assertEqual(len(PROFILES), 23)
         protocols = [profile.inference_protocol for profile in PROFILES.values()]
