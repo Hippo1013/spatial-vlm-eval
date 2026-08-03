@@ -43,6 +43,7 @@ from spatial_vlm_eval.models.three_d_thinker.infer import (
     ThreeDThinkerAdapter,
     ensure_processor_chat_template,
     extract_last_complete_answer,
+    select_three_d_thinker_prediction,
     three_d_thinker_prompt,
 )
 
@@ -321,6 +322,20 @@ class SpecializedProfileSwitchTest(unittest.TestCase):
         fallback, ok = extract_last_complete_answer("unfinished <answer>raw response")
         self.assertFalse(ok)
         self.assertEqual(fallback, "unfinished <answer>raw response")
+
+        raw = "<think>red circle top left; blue square bottom right</think><answer>C</answer>"
+        canary, extracted, warnings = select_three_d_thinker_prediction(
+            "3dthinker_native", raw, index=-1
+        )
+        self.assertEqual(canary, raw)
+        self.assertFalse(extracted)
+        self.assertEqual(warnings, ())
+        prediction, extracted, warnings = select_three_d_thinker_prediction(
+            "3dthinker_native", raw, index=0
+        )
+        self.assertEqual(prediction, "C")
+        self.assertTrue(extracted)
+        self.assertEqual(warnings, ())
 
     def test_3dthinker_uses_the_checkpoint_tokenizer_template_when_needed(self):
         class Tokenizer:

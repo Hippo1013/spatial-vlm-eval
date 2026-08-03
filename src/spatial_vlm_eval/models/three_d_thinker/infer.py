@@ -42,6 +42,27 @@ def extract_last_complete_answer(response: str) -> tuple[str, bool]:
     return matches[-1].group(1).strip(), True
 
 
+def select_three_d_thinker_prediction(
+    profile_key: str,
+    raw_response: str,
+    *,
+    index: int,
+) -> tuple[str, bool, tuple[str, ...]]:
+    """Keep canary evidence intact while preserving official answer extraction."""
+
+    if index == -1:
+        return str(raw_response).strip(), False, ()
+    if profile_key != "3dthinker_native":
+        return str(raw_response).strip(), False, ()
+    prediction, extracted = extract_last_complete_answer(raw_response)
+    warnings = (
+        ()
+        if extracted
+        else ("no complete <answer>...</answer> tag; raw response preserved as prediction",)
+    )
+    return prediction, extracted, warnings
+
+
 def place_input_image(
     text: str,
     *,
@@ -259,13 +280,11 @@ class ThreeDThinkerAdapter(InferenceAdapter):
             skip_special_tokens=False,
         )
         raw_response = self._strip_terminal_tokens(raw_response)
-        warnings: tuple[str, ...] = ()
-        extracted = False
-        prediction = raw_response
-        if self.profile.key == "3dthinker_native":
-            prediction, extracted = extract_last_complete_answer(raw_response)
-            if not extracted:
-                warnings = ("no complete <answer>...</answer> tag; raw response preserved as prediction",)
+        prediction, extracted, warnings = select_three_d_thinker_prediction(
+            self.profile.key,
+            raw_response,
+            index=model_input.index,
+        )
         if not prediction.strip():
             warnings += ("model returned an empty text completion",)
         return GenerationResult(

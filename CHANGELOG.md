@@ -91,6 +91,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Fixed
 
+- 3DThinker Mental-3D adapter 在保留 index `-1` 的视觉 canary 中验证完整 raw response，不再先抽取
+  `<answer>` 而丢失颜色/形状/位置证据；真实 benchmark index 继续只保留最后完整 answer tag，正式
+  prediction 语义不变。
 - 将组合视觉 canary 升级为 bbox-aware v4：用不泄露具体答案的 quadrant/corner 问句要求逐对象描述，
   在继续严格要求红圆/蓝方块与左上/右下正确关联的前提下，接受模型输出的合法归一化 bbox 作为位置
   证据，并拒绝交换、越界或与方位词冲突的框；CV-Bench test binding 现在显式包含 canary protocol，
