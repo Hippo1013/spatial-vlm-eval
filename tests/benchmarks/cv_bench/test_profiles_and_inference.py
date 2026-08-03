@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -10,18 +11,15 @@ from unittest.mock import patch
 from PIL import Image
 
 from spatial_vlm_eval.benchmarks.cv_bench.inference import (
+    _cvbench_color_canary_specs,
     _digest,
-    _vision_canary_spec,
+    _strict_legacy_gate_migration_errors,
     inspect_local_gpus,
     merge_prediction_shards,
     test_gate_errors,
 )
 from spatial_vlm_eval.benchmarks.cv_bench.processor_audit import validate_processor_audit
 from spatial_vlm_eval.benchmarks.cv_bench.profiles import PROFILE_SEQUENCE, PROFILES
-from spatial_vlm_eval.models.common.vision_canary import (
-    RED_IMAGE_CANARY_PROTOCOL,
-    VISION_CANARY_PROTOCOL,
-)
 
 
 class _Pixels:
@@ -32,11 +30,71 @@ class _Pixels:
 
 
 class CVBenchProfilesAndInferenceTest(unittest.TestCase):
-    def test_only_3dthinker_uses_the_minimum_red_image_canary(self):
+    def test_stricter_legacy_canary_can_migrate_without_model_reinvocation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            for name, value in {
+                "dataset.json": {"dataset_fingerprint": "dataset"},
+                "capacity.json": {"passed": True},
+                "validation.json": {"passed": True},
+                "input.json": {"passed": True},
+                "canary.json": {
+                    "passed": True,
+                    "endpoints": [
+                        {
+                            "canary_protocol": (
+                                "msmu_semantic_vision_canary_red_circle_top_left_"
+                                "blue_square_bottom_right_antialiased512_v2"
+                            ),
+                            "request_image_count": 1,
+                            "answer": "A red circle is top left and a blue square is bottom right.",
+                            "generation": {"num_media_prompt": 1},
+                        }
+                    ],
+                },
+            }.items():
+                (root / name).write_text(json.dumps(value), encoding="utf-8")
+            prediction = root / "predictions.jsonl"
+            prediction.write_text("{}\n", encoding="utf-8")
+            prediction.with_suffix(".jsonl.metadata.json").write_text("{}", encoding="utf-8")
+            profile = PROFILES["qwen3_vl_2b"]
+            current_binding = {
+                "dataset": {"fingerprint": "dataset"},
+                "profile": {"key": profile.key},
+                "adapter": {"backend": "vllm", "adapter_digest": "new", "processor_audit": None},
+                "sharding": {"strategy": "fixed_modulo"},
+            }
+            gate = {
+                "passed": True,
+                "profile": profile.key,
+                "binding": {
+                    **current_binding,
+                    "adapter": {**current_binding["adapter"], "adapter_digest": "old"},
+                },
+                "smoke_indices": [0, 633, 342, 1080, 1438, 1442, 2038, 2042],
+                "dataset_audit": str(root / "dataset.json"),
+                "capacity_probe": str(root / "capacity.json"),
+                "smoke_validation": str(root / "validation.json"),
+                "input_audit_gate": str(root / "input.json"),
+                "vision_canary": str(root / "canary.json"),
+                "smoke_predictions": str(prediction),
+            }
+            self.assertEqual(
+                _strict_legacy_gate_migration_errors(gate, profile, current_binding),
+                [],
+            )
+            canary = json.loads((root / "canary.json").read_text(encoding="utf-8"))
+            canary["endpoints"][0]["answer"] = "I cannot see the image."
+            (root / "canary.json").write_text(json.dumps(canary), encoding="utf-8")
+            self.assertTrue(
+                _strict_legacy_gate_migration_errors(gate, profile, current_binding)
+            )
+
+    def test_every_profile_uses_the_same_red_and_blue_color_canaries(self):
+        specs = _cvbench_color_canary_specs()
+        self.assertEqual([color for color, _ in specs], ["red", "blue"])
         for key in PROFILE_SEQUENCE:
-            protocol = _vision_canary_spec(PROFILES[key])[0]
-            expected = RED_IMAGE_CANARY_PROTOCOL if PROFILES[key].family == "3dthinker" else VISION_CANARY_PROTOCOL
-            self.assertEqual(protocol, expected, key)
+            self.assertEqual([color for color, _ in _cvbench_color_canary_specs()], ["red", "blue"], key)
 
     def test_target_registry_has_exactly_23_distinct_tracks(self):
         self.assertEqual(len(PROFILE_SEQUENCE), 23)

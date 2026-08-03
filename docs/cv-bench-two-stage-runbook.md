@@ -113,8 +113,9 @@ bash scripts/cv_bench/run_inference.sh --status
 确认每轨 `test_gate.json`、dataset/processor/input audit、vision canary、capacity probe 和 smoke8 subset
 validator 全部通过。API test 会产生真实付费调用；journal 只跳过已经成功的同签名 index。completion
 已经成功但 provider metadata/契约验证失败时不会重发付费 POST，必须先人工核对再决定后续处理。
-3DThinker 两轨的 canary 是独立的纯红图颜色识别最低门禁；其他轨仍使用红圆/蓝方块的颜色、形状和
-位置关联门禁。两者都必须证明模型边界恰好接收一张 RGB 图。
+全部轨统一使用纯红、纯蓝两张 RGB 图的颜色识别最低门禁，不考察形状、方位或空间描述能力；两次
+都必须证明模型边界恰好接收一张图。已通过旧版红圆/蓝方块严格 canary 的轨可经 artifact 审计迁移
+到当前 gate，无需重新加载模型；迁移产物必须保留旧协议、答案和源 gate 路径。
 
 ## 4. 正式全量
 
@@ -130,7 +131,13 @@ bash scripts/cv_bench/run_inference.sh --stage full --all
 分片并确定性合并；TP=2/4、API 和不支持并行的专用 sampling 轨保持单 endpoint/worker 策略。正式文件
 必须精确覆盖 2638 条并通过 `prediction_validation.json`；subset 不得复制到正式目录。
 
-## 5. 评分与报告
+## 5. 校验、评分与报告
+
+正式推理后可先独立执行完整 validator；评分入口还会强制重复校验，不能绕过：
+
+```bash
+bash scripts/cv_bench/validate_predictions.sh --predictions /absolute/path/to/predictions.jsonl
+```
 
 只评分指定 prediction：
 

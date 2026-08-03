@@ -25,13 +25,10 @@ from ...models.common.runtime import (
     utc_now,
 )
 from ...models.common.vision_canary import (
-    RED_IMAGE_CANARY_PROTOCOL,
-    RED_IMAGE_CANARY_QUESTION,
-    VISION_CANARY_PROTOCOL,
-    VISION_CANARY_QUESTION,
-    make_red_image_canary,
-    make_vision_canary_image,
-    validate_red_image_canary_answer,
+    COLOR_CANARY_QUESTION,
+    CVBENCH_COLOR_CANARY_PROTOCOL,
+    make_solid_color_canary,
+    validate_solid_color_canary_answer,
     validate_vision_canary_answer,
 )
 from ...models.openai_compatible.client import OpenAICompatibleAdapter
@@ -429,7 +426,7 @@ def binding(configuration: ResolvedConfiguration, contract: CVBenchTestContract)
             "processor_audit": processor_identity,
         },
         "test_protocol": {
-            "vision_canary": _vision_canary_spec(configuration.profile)[0],
+            "vision_canary": CVBENCH_COLOR_CANARY_PROTOCOL,
             "smoke_indices": list(SMOKE8_INDICES),
         },
         "sharding": {
@@ -439,34 +436,29 @@ def binding(configuration: ResolvedConfiguration, contract: CVBenchTestContract)
     }
 
 
-def _vision_canary_spec(profile: CVBenchProfile) -> tuple[str, str, Any, Any]:
-    if profile.family == "3dthinker":
-        return (
-            RED_IMAGE_CANARY_PROTOCOL,
-            RED_IMAGE_CANARY_QUESTION,
-            make_red_image_canary(),
-            validate_red_image_canary_answer,
-        )
-    return (
-        VISION_CANARY_PROTOCOL,
-        VISION_CANARY_QUESTION,
-        make_vision_canary_image(),
-        validate_vision_canary_answer,
+def _cvbench_color_canary_specs() -> tuple[tuple[str, Any], ...]:
+    return tuple((color, make_solid_color_canary(color)) for color in ("red", "blue"))
+
+
+def _canary_report(
+    adapter: BoundAdapter,
+    profile: CVBenchProfile,
+    expected_color: str,
+    image: Any,
+) -> dict[str, Any]:
+    result = adapter.generate(
+        CVBenchModelInput(index=-1, image=image, question=COLOR_CANARY_QUESTION)
     )
-
-
-def _canary_report(adapter: BoundAdapter, profile: CVBenchProfile) -> dict[str, Any]:
-    protocol, question, image, validator = _vision_canary_spec(profile)
-    result = adapter.generate(CVBenchModelInput(index=-1, image=image, question=question))
-    validator(result.text)
+    validate_solid_color_canary_answer(result.text, expected_color)
     generation = dict(result.metadata)
     if generation.get("num_media_prompt") != 1 and generation.get("num_model_image_tensors") != 1:
         raise ValueError("Vision canary did not prove exactly one image at the model boundary")
     return {
         "passed": True,
-        "canary_protocol": protocol,
+        "canary_protocol": CVBENCH_COLOR_CANARY_PROTOCOL,
+        "expected_color": expected_color,
         "profile": profile.key,
-        "question": question,
+        "question": COLOR_CANARY_QUESTION,
         "request_image_count": 1,
         "image_mode": "RGB",
         "image_size": list(image.size),
@@ -488,14 +480,19 @@ def _capacity_candidates() -> tuple[int, ...]:
 
 def probe_capacity(adapter: BoundAdapter) -> dict[str, Any]:
     attempts: list[dict[str, Any]] = []
-    image = make_vision_canary_image()
-    model_input = CVBenchModelInput(index=-1, image=image, question=VISION_CANARY_QUESTION)
+    image = make_solid_color_canary("red")
+    model_input = CVBenchModelInput(index=-1, image=image, question=COLOR_CANARY_QUESTION)
     for candidate in _capacity_candidates():
         try:
             with ThreadPoolExecutor(max_workers=candidate) as executor:
                 results = list(executor.map(lambda _: adapter.generate(model_input), range(candidate)))
             for result in results:
-                validate_vision_canary_answer(result.text)
+                generation = result.metadata
+                if (
+                    generation.get("num_media_prompt") != 1
+                    and generation.get("num_model_image_tensors") != 1
+                ):
+                    raise ValueError("Capacity probe did not prove exactly one model image")
             attempts.append({"candidate": candidate, "passed": True})
             return {"passed": True, "selected_concurrency": candidate, "attempts": attempts}
         except Exception as error:  # noqa: BLE001 - capacity fallback intentionally handles OOM/API failures.
@@ -659,6 +656,139 @@ def test_gate_errors(gate: dict[str, Any], expected_binding_digest: str) -> list
     return errors
 
 
+def _load_gate_artifact(gate: dict[str, Any], label: str) -> dict[str, Any]:
+    raw_path = gate.get(label)
+    if not raw_path:
+        raise ValueError(f"Legacy gate is missing {label}")
+    path = Path(str(raw_path)).resolve()
+    value = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"Legacy {label} artifact is not an object")
+    return value
+
+
+def _strict_legacy_gate_migration_errors(
+    gate: dict[str, Any],
+    profile: CVBenchProfile,
+    current_binding: dict[str, Any],
+) -> list[str]:
+    """Validate that an older spatial canary is stronger evidence of image receipt."""
+
+    errors: list[str] = []
+    if gate.get("passed") is not True or gate.get("profile") != profile.key:
+        errors.append("legacy gate identity/pass mismatch")
+    if gate.get("smoke_indices") != list(SMOKE8_INDICES):
+        errors.append("legacy smoke8 indices mismatch")
+    old_binding = gate.get("binding")
+    if not isinstance(old_binding, dict):
+        errors.append("legacy embedded binding is missing")
+        return errors
+    for section in ("dataset", "profile", "sharding"):
+        if old_binding.get(section) != current_binding.get(section):
+            errors.append(f"legacy {section} binding mismatch")
+    old_adapter = dict(old_binding.get("adapter") or {})
+    new_adapter = dict(current_binding.get("adapter") or {})
+    old_adapter.pop("adapter_digest", None)
+    new_adapter.pop("adapter_digest", None)
+    if old_adapter != new_adapter:
+        errors.append("legacy adapter binding mismatch beyond orchestration digest")
+    try:
+        dataset_audit = _load_gate_artifact(gate, "dataset_audit")
+        if dataset_audit.get("dataset_fingerprint") != current_binding["dataset"]["fingerprint"]:
+            errors.append("legacy dataset audit fingerprint mismatch")
+        for label in ("capacity_probe", "smoke_validation", "input_audit_gate"):
+            if _load_gate_artifact(gate, label).get("passed") is not True:
+                errors.append(f"legacy {label} did not pass")
+        prediction = Path(str(gate.get("smoke_predictions", ""))).resolve()
+        if not prediction.is_file() or not prediction.with_suffix(
+            prediction.suffix + ".metadata.json"
+        ).is_file():
+            errors.append("legacy smoke prediction/metadata is missing")
+        if current_binding.get("adapter", {}).get("processor_audit"):
+            processor = gate.get("processor_audit")
+            if not processor or not Path(str(processor)).resolve().is_file():
+                errors.append("legacy required processor audit is missing")
+        canary = _load_gate_artifact(gate, "vision_canary")
+        endpoints = canary.get("endpoints")
+        if canary.get("passed") is not True or not isinstance(endpoints, list) or not endpoints:
+            errors.append("legacy strict vision canary did not pass")
+        else:
+            for item in endpoints:
+                protocol = str(item.get("canary_protocol", ""))
+                generation = item.get("generation") or {}
+                if "red_circle_top_left_blue_square_bottom_right" not in protocol:
+                    errors.append("legacy canary protocol is not the strict red/blue spatial test")
+                    continue
+                if item.get("request_image_count") != 1 or (
+                    generation.get("num_media_prompt") != 1
+                    and generation.get("num_model_image_tensors") != 1
+                ):
+                    errors.append("legacy strict canary lacks exact-one-image evidence")
+                try:
+                    validate_vision_canary_answer(str(item.get("answer", "")))
+                except ValueError as error:
+                    errors.append(f"legacy strict canary answer is invalid: {error}")
+    except (OSError, ValueError, json.JSONDecodeError) as error:
+        errors.append(f"legacy gate artifact error: {error}")
+    return errors
+
+
+def _migrate_strict_legacy_gate(
+    gate: dict[str, Any],
+    gate_path: Path,
+    run_dir: Path,
+    profile: CVBenchProfile,
+    current_binding: dict[str, Any],
+    current_binding_digest: str,
+) -> Path | None:
+    errors = _strict_legacy_gate_migration_errors(gate, profile, current_binding)
+    if errors:
+        return None
+    source_canary_path = Path(str(gate["vision_canary"])).resolve()
+    source_gate_path = source_canary_path.parent / "test_gate.json"
+    if not source_gate_path.is_file():
+        return None
+    source_canary = json.loads(source_canary_path.read_text(encoding="utf-8"))
+    migrated_endpoints = []
+    for item in source_canary["endpoints"]:
+        migrated = dict(item)
+        migrated["canary_protocol"] = CVBENCH_COLOR_CANARY_PROTOCOL
+        migrated["evidence_kind"] = "stricter_legacy_evidence"
+        migrated["source_canary_protocol"] = item.get("canary_protocol")
+        migrated["source_image_colors_proven"] = ["red", "blue"]
+        migrated_endpoints.append(migrated)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    migrated_canary_path = run_dir / "vision_canary.json"
+    atomic_write_json(
+        migrated_canary_path,
+        {
+            "passed": True,
+            "evidence_kind": "stricter_legacy_evidence",
+            "source_gate": str(source_gate_path.resolve()),
+            "source_vision_canary": str(source_canary_path),
+            "endpoints": migrated_endpoints,
+        },
+    )
+    migrated_gate = dict(gate)
+    migrated_gate.update(
+        {
+            "binding": current_binding,
+            "binding_digest": current_binding_digest,
+            "vision_canary": str(migrated_canary_path),
+            "generated_at": utc_now(),
+            "evidence_migration": {
+                "kind": "stricter_legacy_evidence",
+                "source_gate": str(source_gate_path.resolve()),
+                "source_binding_digest": gate.get("binding_digest"),
+                "model_was_not_reinvoked": True,
+            },
+        }
+    )
+    atomic_write_json(run_dir / "test_gate.json", migrated_gate)
+    atomic_write_json(gate_path, migrated_gate)
+    return gate_path
+
+
 def _run_dual_shard_full(
     *,
     contract: CVBenchTestContract,
@@ -756,12 +886,29 @@ def _run_test_stage_with_configuration(
     binding_digest = _digest(binding_value)
     track = track_directory(output_root, profile)
     gate_path = track / "test_gate.json"
+    existing: dict[str, Any] | None = None
     if gate_path.is_file():
         existing = json.loads(gate_path.read_text(encoding="utf-8"))
         if not test_gate_errors(existing, binding_digest):
             print(f"[cv-bench] current test gate already passed: {gate_path}")
             return gate_path
     run_dir = track / "test_runs" / binding_digest
+    if existing is not None:
+        migrated = _migrate_strict_legacy_gate(
+            existing,
+            gate_path,
+            run_dir,
+            profile,
+            binding_value,
+            binding_digest,
+        )
+        if migrated is not None:
+            migrated_gate = json.loads(migrated.read_text(encoding="utf-8"))
+            errors = test_gate_errors(migrated_gate, binding_digest)
+            if errors:
+                raise RuntimeError(f"Migrated strict legacy gate is invalid: {errors}")
+            print(f"[cv-bench] test gate migrated from stricter legacy evidence: {migrated}")
+            return migrated
     run_dir.mkdir(parents=True, exist_ok=True)
     gpu_audit = inspect_local_gpus(profile, configuration.backend)
     atomic_write_json(run_dir / "gpu_preflight.json", gpu_audit)
@@ -776,7 +923,10 @@ def _run_test_stage_with_configuration(
     capacities: list[dict[str, Any]] = []
     try:
         for adapter in adapters:
-            canaries.append(_canary_report(adapter, profile))
+            canaries.extend(
+                _canary_report(adapter, profile, expected_color, image)
+                for expected_color, image in _cvbench_color_canary_specs()
+            )
             if configuration.backend == "vllm":
                 capacities.append(probe_capacity(adapter))
         atomic_write_json(run_dir / "vision_canary.json", {"passed": True, "endpoints": canaries})

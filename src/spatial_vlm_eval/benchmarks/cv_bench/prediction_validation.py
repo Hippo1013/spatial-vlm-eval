@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 from collections import Counter
 from pathlib import Path
 from typing import Any
@@ -116,7 +117,7 @@ def validate_predictions(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--predictions", required=True)
-    parser.add_argument("--dataset-root", required=True)
+    parser.add_argument("--dataset-root", default=os.environ.get("CVBENCH_DATASET_ROOT"))
     parser.add_argument("--allow-subset", action="store_true")
     parser.add_argument("--report", default=None)
     return parser.parse_args()
@@ -126,6 +127,8 @@ def main() -> None:
     from ...models.common.runtime import atomic_write_json
 
     args = parse_args()
+    if not args.dataset_root:
+        raise ValueError("Set CVBENCH_DATASET_ROOT or pass --dataset-root")
     _, report = validate_predictions(
         args.predictions,
         args.dataset_root,

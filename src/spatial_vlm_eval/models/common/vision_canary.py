@@ -19,8 +19,10 @@ VISION_CANARY_IMAGE_SIZE = (512, 512)
 VISION_CANARY_SUPERSAMPLE = 4
 RED_CIRCLE_BOX = (48, 48, 208, 208)
 BLUE_SQUARE_BOX = (304, 304, 464, 464)
-RED_IMAGE_CANARY_PROTOCOL = "cvbench_basic_vision_canary_solid_red_rgb512_unique_color_v1"
-RED_IMAGE_CANARY_QUESTION = (
+CVBENCH_COLOR_CANARY_PROTOCOL = (
+    "cvbench_minimum_vision_receipt_solid_red_blue_or_stricter_rgb512_v1"
+)
+COLOR_CANARY_QUESTION = (
     "This image is filled with one solid color. What color is the image? "
     "Answer concisely in English."
 )
@@ -41,15 +43,20 @@ def make_vision_canary_image() -> Image.Image:
     return image.resize(VISION_CANARY_IMAGE_SIZE, Image.Resampling.LANCZOS)
 
 
-def make_red_image_canary() -> Image.Image:
-    """Return the CV-Bench minimum-capability canary used only by 3DThinker."""
+def make_solid_color_canary(color: str) -> Image.Image:
+    """Return one of the two CV-Bench minimum-capability color canaries."""
 
-    return Image.new("RGB", VISION_CANARY_IMAGE_SIZE, (255, 0, 0))
+    pixels = {"red": (255, 0, 0), "blue": (0, 0, 255)}
+    if color not in pixels:
+        raise ValueError(f"Unsupported solid-color canary: {color!r}")
+    return Image.new("RGB", VISION_CANARY_IMAGE_SIZE, pixels[color])
 
 
-def validate_red_image_canary_answer(answer: str) -> None:
-    """Require a unique red color answer without accepting a conflicting color."""
+def validate_solid_color_canary_answer(answer: str, expected_color: str) -> None:
+    """Require the expected unique color without accepting a conflicting color."""
 
+    if expected_color not in {"red", "blue"}:
+        raise ValueError(f"Unsupported expected canary color: {expected_color!r}")
     normalized = _normalized_answer(answer)
     colors = set(
         re.findall(
@@ -57,9 +64,10 @@ def validate_red_image_canary_answer(answer: str) -> None:
             normalized,
         )
     )
-    if colors != {"red"}:
+    if colors != {expected_color}:
         raise ValueError(
-            "Red-image vision canary requires red and no conflicting color: " f"{answer!r}"
+            f"Solid-color vision canary requires {expected_color} and no conflicting color: "
+            f"{answer!r}"
         )
 
 

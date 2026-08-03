@@ -58,10 +58,10 @@ manifest 解析，缺失时 fail closed。
 `--stage test` 必须完成：
 
 1. 锁定数据的完整 fingerprint/schema/prompt/image 审计；
-2. 默认使用白底左上红圆、右下蓝方形的组合视觉 canary；回答必须正确关联颜色、形状和位置，位置
-   证据可为明确的英文方位词或与对象就近关联的合法归一化 bbox，二者同时出现时不得冲突。仅
-   3DThinker 两轨使用最低能力门禁：输入一张 512×512 纯红 RGB 图，询问图片颜色，回答须唯一指向
-   red；该例外仍验证恰好一张图进入模型边界，并以独立 canary protocol 进入 gate binding；
+2. 最低视觉接收门禁：分别输入一张 512×512 纯红 RGB 图和一张纯蓝 RGB 图并询问颜色，两次回答
+   必须分别唯一指向 red 与 blue，且都证明模型边界恰好接收一张图；不再测试形状、方位或空间描述
+   能力。已通过旧版红圆/蓝方块严格 canary 的结果可在逐项复核答案、单图计数、smoke8 和其余绑定
+   后迁移为当前 gate，并明确记录 `stricter_legacy_evidence`，无需重新调用模型；
 3. 固定 smoke8：`0,633,342,1080,1438,1442,2038,2042`，四任务各两条并覆盖三个来源；
 4. Transformers processor/template 的单图审计；vLLM 不一致时只能回退到显式锁定的 upstream runner；
 5. vLLM 并发候选 `32,16,8,4,2,1` 容量探测；

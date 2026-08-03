@@ -8,14 +8,14 @@ from unittest.mock import patch
 from spatial_vlm_eval.models.common.runtime import GenerationResult
 from spatial_vlm_eval.models.common.vision_canary import (
     BLUE_SQUARE_BOX,
-    RED_IMAGE_CANARY_PROTOCOL,
-    RED_IMAGE_CANARY_QUESTION,
+    COLOR_CANARY_QUESTION,
+    CVBENCH_COLOR_CANARY_PROTOCOL,
     RED_CIRCLE_BOX,
     VISION_CANARY_IMAGE_SIZE,
     VISION_CANARY_QUESTION,
-    make_red_image_canary,
+    make_solid_color_canary,
     make_vision_canary_image,
-    validate_red_image_canary_answer,
+    validate_solid_color_canary_answer,
     validate_vision_canary_answer,
 )
 from spatial_vlm_eval.models.openai_compatible.client import (
@@ -26,17 +26,19 @@ from spatial_vlm_eval.models.openai_compatible.vision_canary import run_vision_c
 
 
 class VisionCanaryTest(unittest.TestCase):
-    def test_basic_red_image_canary_is_unambiguous(self):
-        image = make_red_image_canary()
-        self.assertEqual(image.size, VISION_CANARY_IMAGE_SIZE)
-        self.assertEqual(image.getpixel((0, 0)), (255, 0, 0))
-        self.assertEqual(image.getpixel((511, 511)), (255, 0, 0))
-        self.assertIn("solid color", RED_IMAGE_CANARY_QUESTION)
-        self.assertIn("v1", RED_IMAGE_CANARY_PROTOCOL)
-        validate_red_image_canary_answer("The image is red.")
-        for answer in ("", "blue", "red and blue", "The image could be green or red"):
-            with self.subTest(answer=answer), self.assertRaises(ValueError):
-                validate_red_image_canary_answer(answer)
+    def test_basic_red_and_blue_image_canaries_are_unambiguous(self):
+        for color, pixel in (("red", (255, 0, 0)), ("blue", (0, 0, 255))):
+            with self.subTest(color=color):
+                image = make_solid_color_canary(color)
+                self.assertEqual(image.size, VISION_CANARY_IMAGE_SIZE)
+                self.assertEqual(image.getpixel((0, 0)), pixel)
+                self.assertEqual(image.getpixel((511, 511)), pixel)
+                validate_solid_color_canary_answer(f"The image is {color}.", color)
+        self.assertIn("solid color", COLOR_CANARY_QUESTION)
+        self.assertIn("solid_red_blue", CVBENCH_COLOR_CANARY_PROTOCOL)
+        for answer, expected in (("", "red"), ("blue", "red"), ("red and blue", "blue")):
+            with self.subTest(answer=answer, expected=expected), self.assertRaises(ValueError):
+                validate_solid_color_canary_answer(answer, expected)
 
     def test_image_has_canonical_geometry_without_prompt_answer_leakage(self):
         image = make_vision_canary_image()

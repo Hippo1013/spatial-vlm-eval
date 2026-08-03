@@ -21,6 +21,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   空闲状态，按 profile 锁定 revision、served name、TP、BF16、单图上限与 seed 42。
 - 增加 CV-Bench OpenRouter key 的交互式隐藏输入工具：只写入未跟踪的 `.env.server`，原子替换旧值并
   固定 mode 600，避免 key 出现在 shell history、命令参数或运行日志中。
+- 将 CV-Bench 独立完整 prediction validator 明确为推理与评分之间的公开阶段；CLI 默认读取
+  `CVBENCH_DATASET_ROOT`，评分入口仍强制重复校验且不提供绕过参数。
 - 增加 12 条空间专用轨共用的 dataset-blind persistent runner、五份从锁定上游/checkpoint 解析的
   generation manifest，并把 HiSpatial 的 MoGe-2 checkpoint revision 与上游 commit 纳入 profile
   binding；既有 MSMU 专用 adapter 仅新增显式 generation/token-cap 注入点，默认 MSMU 行为不变。
@@ -52,8 +54,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
-- 按目标测试策略将 CV-Bench 的两条 3DThinker 轨改为独立的纯红 RGB 图颜色识别最低视觉 canary；
-  其他 21 条轨继续使用组合空间语义 canary，3DThinker 的 smoke8、单图边界审计及其他 gate 保持不变。
+- 按目标测试策略将 CV-Bench 全部 23 条轨统一改为纯红、纯蓝 RGB 图颜色识别最低视觉 canary，取消
+  形状、方位和空间描述能力门槛；smoke8、单图边界审计及其他 provenance gate 保持不变。已通过旧版
+  组合空间语义 canary 的轨可在严格 artifact 审计后迁移当前 gate，避免重复模型调用。
 - CV-Bench 本地实现阶段完成；服务器 test gate 和 full-2638 尚未运行。RoboBrain2.5 NV/MT、HiSpatial
   和 SpatialLadder 的 CV-Bench revision/input track 已锁定，Q-Spatial Bench 与 SPBench-SI 顺序仍待定。
 - OpenAI-compatible 可恢复 runner 仅对 429/5xx 执行指数退避；非重试型 HTTP 错误不重复请求，成功

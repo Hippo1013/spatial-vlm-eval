@@ -59,7 +59,15 @@ bash scripts/cv_bench/run_inference.sh --stage full --all
 
 多模型按 registry 顺序串行；本轮实施不自动执行这些 full 命令。
 
-## 5. 评分
+## 5. 校验
+
+正式结果必须先通过完整 2638 条校验；`score_results.sh` 也会在评分前强制重复这一步：
+
+```bash
+bash scripts/cv_bench/validate_predictions.sh --predictions /absolute/path/to/predictions.jsonl
+```
+
+## 6. 评分
 
 只评分一个刚完成的结果：
 
@@ -74,7 +82,7 @@ bash scripts/cv_bench/score_results.sh --list
 bash scripts/cv_bench/score_results.sh
 ```
 
-## 6. 汇总
+## 7. 汇总
 
 ```bash
 bash scripts/cv_bench/build_results_report.sh --check
