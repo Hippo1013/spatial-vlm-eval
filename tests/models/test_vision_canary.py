@@ -34,9 +34,11 @@ class VisionCanaryTest(unittest.TestCase):
                 self.assertEqual(image.getpixel((0, 0)), pixel)
                 self.assertEqual(image.getpixel((511, 511)), pixel)
                 validate_solid_color_canary_answer(f"The image is {color}.", color)
+        validate_solid_color_canary_answer("The color is blue-purple.", "blue")
+        validate_solid_color_canary_answer("It looks red-orange.", "red")
         self.assertIn("solid color", COLOR_CANARY_QUESTION)
         self.assertIn("solid_red_blue", CVBENCH_COLOR_CANARY_PROTOCOL)
-        for answer, expected in (("", "red"), ("blue", "red"), ("red and blue", "blue")):
+        for answer, expected in (("", "red"), ("blue", "red"), ("green", "blue")):
             with self.subTest(answer=answer, expected=expected), self.assertRaises(ValueError):
                 validate_solid_color_canary_answer(answer, expected)
 
