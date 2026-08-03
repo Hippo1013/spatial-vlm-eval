@@ -17,6 +17,8 @@ from ..profiles import get_profile
 SPATIALBOT_REVISION = "41d3b52c642058dfb087885bec0b8e37e0e67f8d"
 SPATIALBOT_SIGLIP_MODEL_ID = "google/siglip-so400m-patch14-384"
 SPATIALBOT_SIGLIP_REVISION = "9fdffc58afc957d1a03a25b10dba0329ab15c2a3"
+SPATIALBOT_MIDAS_REPOSITORY = "intel-isl/MiDaS"
+SPATIALBOT_MIDAS_COMMIT = "454597711a62eabcbf7d1e89f3fb9f569051ac9b"
 ZOEDEPTH_REVISION = "d87f17b2f5fdcb174cf4fb115491f4a6c60de152"
 ZOEDEPTH_DERIVED_BUFFER_COUNT = 24
 MIDAS_RELATIVE_POSITION_MODULE_COUNT = 24
@@ -144,6 +146,31 @@ def bind_spatialbot_vision_tower(config: Any, local_model_path: str) -> Any:
     return config
 
 
+def build_zoedepth_with_local_midas(
+    build_model: Any,
+    config: Any,
+    torch_module: Any,
+    midas_root: Path,
+) -> Any:
+    """Route ZoeDepth's exact MiDaS hub request to a verified local checkout."""
+
+    original_load = torch_module.hub.load
+
+    def local_load(repo_or_dir: str, *args: Any, **kwargs: Any) -> Any:
+        if repo_or_dir != SPATIALBOT_MIDAS_REPOSITORY:
+            raise RuntimeError(f"Unexpected ZoeDepth torch.hub repository: {repo_or_dir!r}")
+        if "source" in kwargs:
+            raise RuntimeError("ZoeDepth unexpectedly supplied torch.hub source")
+        kwargs["source"] = "local"
+        return original_load(str(midas_root), *args, **kwargs)
+
+    torch_module.hub.load = local_load
+    try:
+        return build_model(config)
+    finally:
+        torch_module.hub.load = original_load
+
+
 class SpatialBotAdapter(InferenceAdapter):
     batch_size = 1
     supports_concurrency = False
@@ -160,6 +187,8 @@ class SpatialBotAdapter(InferenceAdapter):
         conversation_mode: str = "bunny",
         siglip_model: str | None = None,
         siglip_revision: str = SPATIALBOT_SIGLIP_REVISION,
+        midas_root: str | None = None,
+        midas_commit: str = SPATIALBOT_MIDAS_COMMIT,
         zoedepth_root: str | None = None,
         zoedepth_revision: str | None = None,
         zoedepth_checkpoint: str | None = None,
@@ -208,6 +237,18 @@ class SpatialBotAdapter(InferenceAdapter):
             )
         else:
             self.siglip_snapshot_revision_verified = False
+        self.midas_root = Path(midas_root).resolve() if midas_root else None
+        self.midas_commit = str(midas_commit) if midas_root else None
+        if self.midas_root is not None:
+            if self.midas_commit != SPATIALBOT_MIDAS_COMMIT:
+                raise ValueError(f"SpatialBot MiDaS is locked to {SPATIALBOT_MIDAS_COMMIT}")
+            self.midas_commit_verified = verify_git_checkout(
+                self.midas_root,
+                SPATIALBOT_MIDAS_COMMIT,
+                "SpatialBot MiDaS",
+            )
+        else:
+            self.midas_commit_verified = False
         self.zoedepth_root = Path(zoedepth_root).resolve() if zoedepth_root else None
         self.zoedepth_revision = str(zoedepth_revision) if zoedepth_revision else None
         self.zoedepth_checkpoint = str(Path(zoedepth_checkpoint).resolve()) if zoedepth_checkpoint else None
@@ -222,6 +263,7 @@ class SpatialBotAdapter(InferenceAdapter):
                     "zoedepth_root": self.zoedepth_root,
                     "zoedepth_revision": self.zoedepth_revision,
                     "zoedepth_checkpoint": self.zoedepth_checkpoint,
+                    "midas_root": self.midas_root,
                 }.items()
                 if not value
             ]
@@ -275,6 +317,9 @@ class SpatialBotAdapter(InferenceAdapter):
                 "vision_tower_model": SPATIALBOT_SIGLIP_MODEL_ID,
                 "vision_tower_revision": self.siglip_revision,
                 "vision_tower_path": str(self.siglip_model) if self.siglip_model else None,
+                "midas_repository": SPATIALBOT_MIDAS_REPOSITORY if native else None,
+                "midas_commit": self.midas_commit if native else None,
+                "midas_checkout": str(self.midas_root) if native and self.midas_root else None,
             },
             "decoding": {
                 "do_sample": False,
@@ -291,6 +336,7 @@ class SpatialBotAdapter(InferenceAdapter):
                 "vision_tower_snapshot_revision_verified": (
                     self.siglip_snapshot_revision_verified
                 ),
+                "midas_commit_verified": self.midas_commit_verified if native else False,
                 "entrypoint_equivalent": ("bunny/serve/cli_depth.py" if native else "bunny/serve/cli.py"),
                 "zoedepth_checkout": str(self.zoedepth_root) if self.zoedepth_root else None,
                 "zoedepth_commit_verified": self.zoedepth_commit_verified,
@@ -368,7 +414,13 @@ class SpatialBotAdapter(InferenceAdapter):
         config = get_config("zoedepth_nk", "infer")
         if hasattr(config, "pretrained_resource"):
             config.pretrained_resource = None
-        self.zoedepth = build_model(config).to(self.device_name).eval()
+        assert self.midas_root is not None
+        self.zoedepth = build_zoedepth_with_local_midas(
+            build_model,
+            config,
+            self.torch,
+            self.midas_root,
+        ).to(self.device_name).eval()
         load_zoedepth_checkpoint_compat(
             self.zoedepth,
             Path(self.zoedepth_checkpoint),
@@ -475,6 +527,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--conversation-mode", default="bunny")
     parser.add_argument("--siglip-model", default=None)
     parser.add_argument("--siglip-revision", default=SPATIALBOT_SIGLIP_REVISION)
+    parser.add_argument("--midas-root", default=None)
+    parser.add_argument("--midas-commit", default=SPATIALBOT_MIDAS_COMMIT)
     parser.add_argument("--zoedepth-root", default=None)
     parser.add_argument("--zoedepth-revision", default=ZOEDEPTH_REVISION)
     parser.add_argument("--zoedepth-checkpoint", default=None)
@@ -495,6 +549,8 @@ def main() -> None:
         conversation_mode=args.conversation_mode,
         siglip_model=args.siglip_model,
         siglip_revision=args.siglip_revision,
+        midas_root=args.midas_root,
+        midas_commit=args.midas_commit,
         zoedepth_root=args.zoedepth_root,
         zoedepth_revision=args.zoedepth_revision,
         zoedepth_checkpoint=args.zoedepth_checkpoint,

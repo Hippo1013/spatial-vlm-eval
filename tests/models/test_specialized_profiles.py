@@ -10,10 +10,13 @@ from PIL import Image
 from spatial_vlm_eval.models.profiles import PROFILES
 from spatial_vlm_eval.models.spatialbot.infer import (
     MIDAS_RELATIVE_POSITION_MODULE_COUNT,
+    SPATIALBOT_MIDAS_COMMIT,
+    SPATIALBOT_MIDAS_REPOSITORY,
     SPATIALBOT_SIGLIP_MODEL_ID,
     SPATIALBOT_SIGLIP_REVISION,
     ZOEDEPTH_DERIVED_BUFFER_COUNT,
     bind_spatialbot_vision_tower,
+    build_zoedepth_with_local_midas,
     encode_spatialbot_depth,
     install_legacy_timm_layers_alias,
     load_zoedepth_checkpoint_compat,
@@ -52,6 +55,34 @@ from spatial_vlm_eval.models.three_d_thinker.infer import (
 
 
 class ProfileRegistryTest(unittest.TestCase):
+    def test_spatialbot_routes_only_locked_midas_hub_request_locally(self):
+        calls = []
+
+        class Hub:
+            @staticmethod
+            def load(repo_or_dir, *args, **kwargs):
+                calls.append((repo_or_dir, args, kwargs))
+                return "midas"
+
+        class Torch:
+            hub = Hub()
+
+        def build(_config):
+            return Torch.hub.load(SPATIALBOT_MIDAS_REPOSITORY, "DPT_BEiT_L_384")
+
+        original = Torch.hub.load
+        result = build_zoedepth_with_local_midas(
+            build,
+            object(),
+            Torch,
+            Path("/locked/midas"),
+        )
+        self.assertEqual(result, "midas")
+        self.assertEqual(calls[0][0], "/locked/midas")
+        self.assertEqual(calls[0][2]["source"], "local")
+        self.assertIs(Torch.hub.load, original)
+        self.assertRegex(SPATIALBOT_MIDAS_COMMIT, r"^[0-9a-f]{40}$")
+
     def test_spatialbot_binds_only_the_locked_siglip_tower(self):
         class Config:
             mm_vision_tower = SPATIALBOT_SIGLIP_MODEL_ID

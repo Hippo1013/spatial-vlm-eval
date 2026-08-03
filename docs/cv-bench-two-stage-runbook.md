@@ -82,6 +82,9 @@ SpatialBot 还必须设置 `SPATIALBOT_SIGLIP_MODEL`，指向
 `google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3` 的本地快照。
 runner 会验证 revision，并仅在内存中把 checkpoint config 的同名 vision tower 改绑到该只读路径；
 不会修改 checkpoint，也不会在离线推理时隐式下载。
+ZoeDepth 轨还必须把 `SPATIALBOT_MIDAS_ROOT` 指向
+`isl-org/MiDaS@454597711a62eabcbf7d1e89f3fb9f569051ac9b` 的本地 checkout；runner 验证 commit 后，
+只把上游精确的 `intel-isl/MiDaS` torch.hub 请求改绑到该 checkout，禁止网络回退。
 
 ## 3. 测试阶段
 

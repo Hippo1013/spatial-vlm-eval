@@ -418,6 +418,7 @@ def _build_backend(profile: CVBenchProfile, decoding: dict[str, Any]) -> Inferen
         )
     if profile.family == "spatialbot":
         from ...models.spatialbot.infer import (
+            SPATIALBOT_MIDAS_COMMIT,
             SPATIALBOT_SIGLIP_REVISION,
             SpatialBotAdapter,
             ZOEDEPTH_REVISION,
@@ -430,6 +431,8 @@ def _build_backend(profile: CVBenchProfile, decoding: dict[str, Any]) -> Inferen
             model_path=_required_env(profile.model_path_env),
             siglip_model=_required_env("SPATIALBOT_SIGLIP_MODEL"),
             siglip_revision=SPATIALBOT_SIGLIP_REVISION,
+            midas_root=_required_env("SPATIALBOT_MIDAS_ROOT") if native else None,
+            midas_commit=SPATIALBOT_MIDAS_COMMIT,
             zoedepth_root=_required_env("ZOEDEPTH_ROOT") if native else None,
             zoedepth_revision=ZOEDEPTH_REVISION if native else None,
             zoedepth_checkpoint=_required_env("ZOEDEPTH_CHECKPOINT") if native else None,
