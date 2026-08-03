@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from PIL import Image
 
@@ -14,7 +16,11 @@ from spatial_vlm_eval.benchmarks.cv_bench.command_adapter import (
 )
 from spatial_vlm_eval.benchmarks.cv_bench.data import CVBenchModelInput
 from spatial_vlm_eval.benchmarks.cv_bench.profiles import PROFILES
-from spatial_vlm_eval.benchmarks.cv_bench.specialized_runner import adapter_digest
+from spatial_vlm_eval.benchmarks.cv_bench.specialized_runner import (
+    _build_backend,
+    adapter_digest,
+)
+from spatial_vlm_eval.models.spatialbot.infer import ZOEDEPTH_REVISION
 
 
 RUNNER_SOURCE = r'''import json, sys
@@ -117,6 +123,20 @@ class CVBenchCommandAdapterTest(unittest.TestCase):
         self.assertRegex(spatialrgpt, r"^[0-9a-f]{64}$")
         self.assertRegex(spatialbot, r"^[0-9a-f]{64}$")
         self.assertNotEqual(spatialrgpt, spatialbot)
+
+    def test_spatialbot_zoedepth_runner_binds_upstream_revision(self):
+        profile = PROFILES["spatialbot_zoedepth"]
+        environment = {
+            profile.model_path_env: "/locked/spatialbot",
+            "SPATIALBOT_UPSTREAM_ROOT": "/locked/spatialbot-upstream",
+            "ZOEDEPTH_ROOT": "/locked/zoedepth-upstream",
+            "ZOEDEPTH_CHECKPOINT": "/locked/zoedepth.pt",
+        }
+        with patch.dict(os.environ, environment, clear=False), patch(
+            "spatial_vlm_eval.models.spatialbot.infer.SpatialBotAdapter"
+        ) as adapter:
+            _build_backend(profile, dict(profile.decoding))
+        self.assertEqual(adapter.call_args.kwargs["zoedepth_revision"], ZOEDEPTH_REVISION)
 
 
 if __name__ == "__main__":

@@ -417,7 +417,7 @@ def _build_backend(profile: CVBenchProfile, decoding: dict[str, Any]) -> Inferen
             control_prompt_already_present=mental,
         )
     if profile.family == "spatialbot":
-        from ...models.spatialbot.infer import SpatialBotAdapter
+        from ...models.spatialbot.infer import SpatialBotAdapter, ZOEDEPTH_REVISION
 
         native = profile.key == "spatialbot_zoedepth"
         return SpatialBotAdapter(
@@ -425,6 +425,7 @@ def _build_backend(profile: CVBenchProfile, decoding: dict[str, Any]) -> Inferen
             upstream_root=_required_env("SPATIALBOT_UPSTREAM_ROOT"),
             model_path=_required_env(profile.model_path_env),
             zoedepth_root=_required_env("ZOEDEPTH_ROOT") if native else None,
+            zoedepth_revision=ZOEDEPTH_REVISION if native else None,
             zoedepth_checkpoint=_required_env("ZOEDEPTH_CHECKPOINT") if native else None,
             max_new_tokens=int(decoding["max_new_tokens"]),
         )
