@@ -135,3 +135,6 @@ runs/PROFILE/MODEL_REVISION/INFERENCE_PROTOCOL/
 HiSpatial 上游 CV 脚本只覆盖 2D Relation 和 3D；本项目为了统一矩阵，对合法 RGB 派生 XYZ 输入运行
 完整 2638 条并明确记录这一偏差。专用 runner 的实现不由 benchmark 模块猜测：服务器必须提供锁定
 上游环境中的 persistent JSONL runner、实现 SHA-256 和（需要时）generation manifest。
+HiSpatial 的 MoGe-2 路径还必须验证 MoGe requirements 锁定的
+`EasternJournalist/utils3d@3fab839f0be9931dac7c8488eb0e1600c236e183` checkout，并核对环境中实际
+导入的兼容实现；不允许用缺少 `utils3d.pt` 的新版包静默替代。

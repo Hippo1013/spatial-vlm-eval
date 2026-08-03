@@ -76,7 +76,9 @@ profile/revision/protocol/decoding、原始输出、模板 SHA-256，并证明�
 
 HiSpatial 额外锁定 `Ruicheng/moge-2-vitl-normal@b135031bae30b5ac2ae141a0e68717795ce38340`
 和 MoGe 上游 `925b8ed835a7a9cdb7578ba15c658a0afc969030`；runner 会同时验证 HiSpatial、
-MoGe-2 checkpoint 和两个上游 checkout，任一 revision 不符即停止。
+MoGe-2 checkpoint、两个模型上游 checkout，以及 MoGe requirements 锁定的
+`EasternJournalist/utils3d@3fab839f0be9931dac7c8488eb0e1600c236e183`，任一 revision 或已安装
+`utils3d` 内容不符即停止。`MOGE2_UTILS3D_ROOT` 必须指向该 checkout。
 MoGe-2 的锁定 snapshot 内必须存在 `model.pt`；HiSpatial runner 将该文件而不是 snapshot 目录传给
 上游 `MoGeModel.from_pretrained`，避免目录被误当作 torch checkpoint。
 

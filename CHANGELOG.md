@@ -98,6 +98,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Fixed
 
+- HiSpatial/MoGe-2 runner 现在锁定并核验 MoGe requirements 指定的 `utils3d` commit，同时比对环境中
+  实际导入的关键文件与 checkout，避免新版包移除 `utils3d.pt` 兼容别名后在推理中途失败。
 - HiSpatial runner 现在把锁定 MoGe-2 snapshot 内的 `model.pt` 文件传给上游 loader，不再把目录误作
   torch checkpoint；revision、upstream commit 和文件名均 fail-closed。
 - CV-Bench SpatialBot runner 现在验证并显式绑定锁定的本地 SigLIP vision tower，避免上游 checkpoint

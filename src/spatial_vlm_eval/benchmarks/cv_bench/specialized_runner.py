@@ -29,6 +29,7 @@ MOGE2_MODEL_ID = "Ruicheng/moge-2-vitl-normal"
 MOGE2_REVISION = "b135031bae30b5ac2ae141a0e68717795ce38340"
 MOGE2_UPSTREAM_COMMIT = "925b8ed835a7a9cdb7578ba15c658a0afc969030"
 MOGE2_CHECKPOINT_FILENAME = "model.pt"
+MOGE2_UTILS3D_COMMIT = "3fab839f0be9931dac7c8488eb0e1600c236e183"
 _REQUEST_KEYS = {
     "schema_version",
     "action",
@@ -65,6 +66,10 @@ def _required_env(name: str) -> str:
     if not value:
         raise ValueError(f"Set {name} for the CV-Bench specialized runner")
     return value
+
+
+def _sha256_file(path: str | Path) -> str:
+    return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
 def _model_generation(decoding: dict[str, Any]) -> dict[str, Any]:
@@ -245,6 +250,7 @@ class HiSpatialAdapter(InferenceAdapter):
         self.model_path = _required_env(profile.model_path_env)
         self.moge_path = _required_env("MOGE2_MODEL")
         self.moge_upstream_root = _required_env("MOGE2_UPSTREAM_ROOT")
+        self.moge_utils3d_root = _required_env("MOGE2_UTILS3D_ROOT")
         self.upstream_root = _required_env("HISPATIAL_UPSTREAM_ROOT")
         if not verify_hf_snapshot_revision(self.model_path, profile.revision, profile.model):
             raise ValueError("HiSpatial local checkpoint revision is not verifiable")
@@ -259,6 +265,10 @@ class HiSpatialAdapter(InferenceAdapter):
             self.moge_upstream_root, MOGE2_UPSTREAM_COMMIT, "MoGe-2"
         ):
             raise ValueError("MoGe-2 upstream checkout is not a verifiable Git checkout")
+        if not verify_git_checkout(
+            self.moge_utils3d_root, MOGE2_UTILS3D_COMMIT, "MoGe-2 utils3d"
+        ):
+            raise ValueError("MoGe-2 utils3d checkout is not a verifiable Git checkout")
         if not verify_git_checkout(self.upstream_root, profile.upstream_commit or "", "HiSpatial"):
             raise ValueError("HiSpatial upstream checkout is not a verifiable Git checkout")
         self._loaded = False
@@ -269,8 +279,25 @@ class HiSpatialAdapter(InferenceAdapter):
         if self.upstream_root not in sys.path:
             sys.path.insert(0, self.upstream_root)
         import torch
+        import utils3d
         from hispatial.inference import HiSpatialPredictor, MoGeProcessor
         from moge.model.v2 import MoGeModel
+
+        installed_root = Path(utils3d.__file__).resolve().parent
+        source_root = Path(self.moge_utils3d_root).resolve() / "utils3d"
+        for relative in (Path("__init__.py"), Path("torch/__init__.py")):
+            installed = installed_root / relative
+            source = source_root / relative
+            if not installed.is_file() or not source.is_file():
+                raise FileNotFoundError(
+                    f"Locked MoGe-2 utils3d file is missing: {relative}"
+                )
+            if _sha256_file(installed) != _sha256_file(source):
+                raise ValueError(
+                    f"Installed utils3d does not match locked checkout: {relative}"
+                )
+        if not hasattr(utils3d, "pt"):
+            raise ValueError("Locked MoGe-2 utils3d must expose the utils3d.pt compatibility alias")
 
         self.moge = MoGeProcessor.__new__(MoGeProcessor)
         self.moge.device = torch.device("cuda")
@@ -304,6 +331,7 @@ class HiSpatialAdapter(InferenceAdapter):
                 "derived_xyz_revision": MOGE2_REVISION,
                 "derived_xyz_upstream_commit": MOGE2_UPSTREAM_COMMIT,
                 "derived_xyz_checkpoint_filename": MOGE2_CHECKPOINT_FILENAME,
+                "derived_xyz_utils3d_commit": MOGE2_UTILS3D_COMMIT,
                 "template_sha256": hashlib.sha256(rendered.encode("utf-8")).hexdigest(),
             },
             warnings=("model returned an empty text completion",) if not text.strip() else (),

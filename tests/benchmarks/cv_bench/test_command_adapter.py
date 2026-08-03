@@ -18,6 +18,7 @@ from spatial_vlm_eval.benchmarks.cv_bench.data import CVBenchModelInput
 from spatial_vlm_eval.benchmarks.cv_bench.profiles import PROFILES
 from spatial_vlm_eval.benchmarks.cv_bench.specialized_runner import (
     MOGE2_CHECKPOINT_FILENAME,
+    MOGE2_UTILS3D_COMMIT,
     _build_backend,
     adapter_digest,
 )
@@ -48,6 +49,9 @@ for line in sys.stdin:
 class CVBenchCommandAdapterTest(unittest.TestCase):
     def test_moge_checkpoint_filename_is_locked(self):
         self.assertEqual(MOGE2_CHECKPOINT_FILENAME, "model.pt")
+        self.assertEqual(
+            MOGE2_UTILS3D_COMMIT, "3fab839f0be9931dac7c8488eb0e1600c236e183"
+        )
 
     def test_bridge_request_contains_one_image_and_no_scoring_fields(self):
         with tempfile.TemporaryDirectory() as directory:
