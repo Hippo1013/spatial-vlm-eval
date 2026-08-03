@@ -13,6 +13,12 @@ export CVBENCH_ENV_FILE="$PWD/.env.cvbench.server"
 核对模板中的 legacy `CVBENCH_DATASET_ROOT`，再填好模型/endpoint 或专用 runner 配置。
 专用 runner 的一次性 digest/command 配置示例见[两阶段 runbook 的第 2 节](cv-bench-two-stage-runbook.md#2-专用模型-runner)。
 
+OpenRouter 两条轨的 key 用隐藏输入工具写入服务器的未跟踪 `.env.server`，不要把 key 放进命令参数：
+
+```bash
+ssh -t msmu-a800 'cd /media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval && bash scripts/cv_bench/set_openrouter_key.sh'
+```
+
 ## 2. 查看与检查
 
 ```bash

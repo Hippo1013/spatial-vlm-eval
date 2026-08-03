@@ -42,6 +42,13 @@ bash scripts/cv_bench/serve_vllm_profile.sh --model qwen3_vl_32b --gpu-ids 0,1 -
 bash scripts/cv_bench/run_inference.sh --check --model qwen3_vl_8b
 ```
 
+OpenRouter API key 通过交互式隐藏输入写入未跟踪的共享环境文件；脚本原子替换旧值、设置 mode 600，
+不会把 key 放入 shell history、命令参数或日志：
+
+```bash
+ssh -t msmu-a800 'cd /media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval && bash scripts/cv_bench/set_openrouter_key.sh'
+```
+
 InternVL3-78B 必须显式设置：
 
 ```bash
