@@ -18,8 +18,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   确定性分片和专用上游 persistent JSONL bridge。专用 runner 缺实现 SHA 或 generation manifest 时
   fail closed。
 - 增加 12 条空间专用轨共用的 dataset-blind persistent runner、五份从锁定上游/checkpoint 解析的
-  generation manifest，并把 HiSpatial 的 MoGe-2 checkpoint revision 纳入 profile binding；既有 MSMU
-  专用 adapter 仅新增显式 generation/token-cap 注入点，默认 MSMU 行为不变。
+  generation manifest，并把 HiSpatial 的 MoGe-2 checkpoint revision 与上游 commit 纳入 profile
+  binding；既有 MSMU 专用 adapter 仅新增显式 generation/token-cap 注入点，默认 MSMU 行为不变。
 - 为 GPT-5 与 Gemini 3.1 Pro 增加用户明确授权的 OpenRouter non-ZDR 独立 profile、inference protocol、
   run slug 和三阶段入口；仍锁定首方 provider、禁止 fallback、要求完整参数并设置
   `data_collection=deny`，不改写原 ZDR 轨或 scorer protocol。

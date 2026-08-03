@@ -460,6 +460,7 @@ _SPECIALIZED = [
             "derived_xyz": "MoGe-2",
             "derived_xyz_model": "Ruicheng/moge-2-vitl-normal",
             "derived_xyz_revision": "b135031bae30b5ac2ae141a0e68717795ce38340",
+            "derived_xyz_upstream_commit": "925b8ed835a7a9cdb7578ba15c658a0afc969030",
         },
         chat_template="HiSpatial official predictor template",
         known_deviation=(

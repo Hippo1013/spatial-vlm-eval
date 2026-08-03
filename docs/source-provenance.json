@@ -34,7 +34,8 @@
     "QwenLM/Qwen3-VL": "96588727e44c78b25ba03ea03b8e12f7e64fd0da",
     "FlagOpen/RoboBrain2.5": "af98c932aac9ff715d70da177088d7bb95573ff7",
     "microsoft/HiSpatial": "9b0a5718ed0fb3b8bd9d9e0b36b6192bd3e99be1",
-    "ZJU-REAL/SpatialLadder": "7a0d2ee85c28728835300310a349a53a15967f2e"
+    "ZJU-REAL/SpatialLadder": "7a0d2ee85c28728835300310a349a53a15967f2e",
+    "microsoft/MoGe": "925b8ed835a7a9cdb7578ba15c658a0afc969030"
   },
   "checkpoint_sha256": {
     "apple/ml-depth-pro/depth_pro.pt": "3eb35ca68168ad3d14cb150f8947a4edf85589941661fdb2686259c80685c0ce"

@@ -27,6 +27,7 @@ SPECIALIZED_PROFILE_KEYS = tuple(
 )
 MOGE2_MODEL_ID = "Ruicheng/moge-2-vitl-normal"
 MOGE2_REVISION = "b135031bae30b5ac2ae141a0e68717795ce38340"
+MOGE2_UPSTREAM_COMMIT = "925b8ed835a7a9cdb7578ba15c658a0afc969030"
 _REQUEST_KEYS = {
     "schema_version",
     "action",
@@ -242,11 +243,16 @@ class HiSpatialAdapter(InferenceAdapter):
         self.decoding = dict(decoding)
         self.model_path = _required_env(profile.model_path_env)
         self.moge_path = _required_env("MOGE2_MODEL")
+        self.moge_upstream_root = _required_env("MOGE2_UPSTREAM_ROOT")
         self.upstream_root = _required_env("HISPATIAL_UPSTREAM_ROOT")
         if not verify_hf_snapshot_revision(self.model_path, profile.revision, profile.model):
             raise ValueError("HiSpatial local checkpoint revision is not verifiable")
         if not verify_hf_snapshot_revision(self.moge_path, MOGE2_REVISION, MOGE2_MODEL_ID):
             raise ValueError("MoGe-2 local checkpoint revision is not verifiable")
+        if not verify_git_checkout(
+            self.moge_upstream_root, MOGE2_UPSTREAM_COMMIT, "MoGe-2"
+        ):
+            raise ValueError("MoGe-2 upstream checkout is not a verifiable Git checkout")
         if not verify_git_checkout(self.upstream_root, profile.upstream_commit or "", "HiSpatial"):
             raise ValueError("HiSpatial upstream checkout is not a verifiable Git checkout")
         self._loaded = False
@@ -288,6 +294,7 @@ class HiSpatialAdapter(InferenceAdapter):
                 "derived_xyz_tensors": 1,
                 "derived_xyz_model": MOGE2_MODEL_ID,
                 "derived_xyz_revision": MOGE2_REVISION,
+                "derived_xyz_upstream_commit": MOGE2_UPSTREAM_COMMIT,
                 "template_sha256": hashlib.sha256(rendered.encode("utf-8")).hexdigest(),
             },
             warnings=("model returned an empty text completion",) if not text.strip() else (),

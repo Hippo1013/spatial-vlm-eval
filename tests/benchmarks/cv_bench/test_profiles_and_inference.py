@@ -41,6 +41,12 @@ class CVBenchProfilesAndInferenceTest(unittest.TestCase):
             PROFILES["hispatial3b_moge2_xyz"].image_processing["derived_xyz_revision"],
             "b135031bae30b5ac2ae141a0e68717795ce38340",
         )
+        self.assertEqual(
+            PROFILES["hispatial3b_moge2_xyz"].image_processing[
+                "derived_xyz_upstream_commit"
+            ],
+            "925b8ed835a7a9cdb7578ba15c658a0afc969030",
+        )
 
     def test_specialized_sampling_and_prompt_profiles_are_separate(self):
         mental = PROFILES["3dthinker_mental3d"]

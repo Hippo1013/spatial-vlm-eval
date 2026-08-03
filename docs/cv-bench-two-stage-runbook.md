@@ -55,8 +55,9 @@ runner 每行只接收 index、最终 prompt、一个 PNG data URI 和锁定 pro
 profile/revision/protocol/decoding、原始输出、模板 SHA-256，并证明一个 media 或 image tensor。缺少
 任一证明时测试 gate 失败。不得通过 runner 读取原始 Parquet 或答案/任务/来源字段。
 
-HiSpatial 额外锁定 `Ruicheng/moge-2-vitl-normal@b135031bae30b5ac2ae141a0e68717795ce38340`；
-runner 会同时验证 HiSpatial、MoGe-2 和上游 checkout，任一 revision 不符即停止。
+HiSpatial 额外锁定 `Ruicheng/moge-2-vitl-normal@b135031bae30b5ac2ae141a0e68717795ce38340`
+和 MoGe 上游 `925b8ed835a7a9cdb7578ba15c658a0afc969030`；runner 会同时验证 HiSpatial、
+MoGe-2 checkpoint 和两个上游 checkout，任一 revision 不符即停止。
 
 ## 3. 测试阶段
 
