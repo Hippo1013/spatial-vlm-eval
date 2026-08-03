@@ -28,6 +28,7 @@ SPECIALIZED_PROFILE_KEYS = tuple(
 MOGE2_MODEL_ID = "Ruicheng/moge-2-vitl-normal"
 MOGE2_REVISION = "b135031bae30b5ac2ae141a0e68717795ce38340"
 MOGE2_UPSTREAM_COMMIT = "925b8ed835a7a9cdb7578ba15c658a0afc969030"
+MOGE2_CHECKPOINT_FILENAME = "model.pt"
 _REQUEST_KEYS = {
     "schema_version",
     "action",
@@ -249,6 +250,11 @@ class HiSpatialAdapter(InferenceAdapter):
             raise ValueError("HiSpatial local checkpoint revision is not verifiable")
         if not verify_hf_snapshot_revision(self.moge_path, MOGE2_REVISION, MOGE2_MODEL_ID):
             raise ValueError("MoGe-2 local checkpoint revision is not verifiable")
+        self.moge_checkpoint = str(Path(self.moge_path) / MOGE2_CHECKPOINT_FILENAME)
+        if not Path(self.moge_checkpoint).is_file():
+            raise FileNotFoundError(
+                f"Locked MoGe-2 checkpoint is missing: {self.moge_checkpoint}"
+            )
         if not verify_git_checkout(
             self.moge_upstream_root, MOGE2_UPSTREAM_COMMIT, "MoGe-2"
         ):
@@ -268,7 +274,9 @@ class HiSpatialAdapter(InferenceAdapter):
 
         self.moge = MoGeProcessor.__new__(MoGeProcessor)
         self.moge.device = torch.device("cuda")
-        self.moge.model = MoGeModel.from_pretrained(self.moge_path).to(self.moge.device).eval()
+        self.moge.model = MoGeModel.from_pretrained(self.moge_checkpoint).to(
+            self.moge.device
+        ).eval()
         self.moge.img_size = 448
         self.predictor = HiSpatialPredictor(model_load_path=self.model_path, gpu_rank=0)
         self._loaded = True
@@ -295,6 +303,7 @@ class HiSpatialAdapter(InferenceAdapter):
                 "derived_xyz_model": MOGE2_MODEL_ID,
                 "derived_xyz_revision": MOGE2_REVISION,
                 "derived_xyz_upstream_commit": MOGE2_UPSTREAM_COMMIT,
+                "derived_xyz_checkpoint_filename": MOGE2_CHECKPOINT_FILENAME,
                 "template_sha256": hashlib.sha256(rendered.encode("utf-8")).hexdigest(),
             },
             warnings=("model returned an empty text completion",) if not text.strip() else (),

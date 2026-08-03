@@ -11,6 +11,7 @@ from unittest.mock import patch
 from PIL import Image
 
 from spatial_vlm_eval.benchmarks.cv_bench.inference import (
+    _adapter_digest_only_change,
     _cvbench_color_canary_specs,
     _digest,
     _strict_legacy_gate_migration_errors,
@@ -30,6 +31,13 @@ class _Pixels:
 
 
 class CVBenchProfilesAndInferenceTest(unittest.TestCase):
+    def test_adapter_digest_only_migration_rejects_any_protocol_change(self):
+        old = {"adapter": {"adapter_digest": "old", "backend": "vllm"}, "profile": "p"}
+        new = {"adapter": {"adapter_digest": "new", "backend": "vllm"}, "profile": "p"}
+        self.assertTrue(_adapter_digest_only_change(old, new))
+        new["adapter"]["backend"] = "transformers"
+        self.assertFalse(_adapter_digest_only_change(old, new))
+
     def test_stricter_legacy_canary_can_migrate_without_model_reinvocation(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

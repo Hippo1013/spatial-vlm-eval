@@ -77,6 +77,8 @@ profile/revision/protocol/decoding、原始输出、模板 SHA-256，并证明�
 HiSpatial 额外锁定 `Ruicheng/moge-2-vitl-normal@b135031bae30b5ac2ae141a0e68717795ce38340`
 和 MoGe 上游 `925b8ed835a7a9cdb7578ba15c658a0afc969030`；runner 会同时验证 HiSpatial、
 MoGe-2 checkpoint 和两个上游 checkout，任一 revision 不符即停止。
+MoGe-2 的锁定 snapshot 内必须存在 `model.pt`；HiSpatial runner 将该文件而不是 snapshot 目录传给
+上游 `MoGeModel.from_pretrained`，避免目录被误当作 torch checkpoint。
 
 SpatialBot 还必须设置 `SPATIALBOT_SIGLIP_MODEL`，指向
 `google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3` 的本地快照。
@@ -116,6 +118,8 @@ validator 全部通过。API test 会产生真实付费调用；journal 只跳�
 全部轨统一使用纯红、纯蓝两张 RGB 图的颜色识别最低门禁，不考察形状、方位或空间描述能力；两次
 都必须证明模型边界恰好接收一张图。已通过旧版红圆/蓝方块严格 canary 的轨可经 artifact 审计迁移
 到当前 gate，无需重新加载模型；迁移产物必须保留旧协议、答案和源 gate 路径。
+当前 protocol gate 若仅组合 adapter source digest 改变、其他 binding 逐字段完全相同，也可自动生成
+`adapter_digest_only` 迁移记录；任何模型 revision、decoding、input track、backend 或 sharding 变化仍须重测。
 
 ## 4. 正式全量
 

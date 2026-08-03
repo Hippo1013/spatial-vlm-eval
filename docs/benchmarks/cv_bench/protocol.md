@@ -61,8 +61,8 @@ manifest 解析，缺失时 fail closed。
 2. 最低视觉接收门禁：分别输入一张 512×512 纯红 RGB 图和一张纯蓝 RGB 图并询问颜色，两次回答
    必须分别明确包含 red 与 blue（允许 blue-purple、red-orange 等近色措辞），且都证明模型边界恰好
    接收一张图；不再测试形状、方位或空间描述
-   能力。已通过旧版红圆/蓝方块严格 canary 的结果可在逐项复核答案、单图计数、smoke8 和其余绑定
-   后迁移为当前 gate，并明确记录 `stricter_legacy_evidence`，无需重新调用模型；
+能力。已通过旧版红圆/蓝方块严格 canary 的结果可在逐项复核答案、单图计数、smoke8 和其余绑定
+后迁移为当前 gate，并明确记录 `stricter_legacy_evidence`，无需重新调用模型；
 3. 固定 smoke8：`0,633,342,1080,1438,1442,2038,2042`，四任务各两条并覆盖三个来源；
 4. Transformers processor/template 的单图审计；vLLM 不一致时只能回退到显式锁定的 upstream runner；
 5. vLLM 并发候选 `32,16,8,4,2,1` 容量探测；
@@ -71,6 +71,8 @@ manifest 解析，缺失时 fail closed。
 测试 gate 绑定 dataset revision/fingerprint、模型 revision、profile registry digest、adapter digest、
 upstream commit、processor 摘要、decoding、sharding 和显式 GPU selection。任一字段改变，full 阶段拒绝
 旧 gate。InternVL3-78B 只能在明确枚举四张至少 79000 MiB 的 GPU 后以 TP=4 运行，不做量化替代。
+若当前 protocol 的完整 gate 仅因组合 source digest 变化而失效，且除 `adapter_digest` 外的完整 binding
+逐字段相同，允许生成 `adapter_digest_only` 迁移 gate；必须保留源 gate/digest 且明确记录未重新调用模型。
 
 ## Prediction 与 validator
 

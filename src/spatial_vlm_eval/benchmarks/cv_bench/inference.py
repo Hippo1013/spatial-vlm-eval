@@ -789,6 +789,67 @@ def _migrate_strict_legacy_gate(
     return gate_path
 
 
+def _adapter_digest_only_change(
+    old_binding: dict[str, Any], current_binding: dict[str, Any]
+) -> bool:
+    old_comparable = json.loads(json.dumps(old_binding))
+    new_comparable = json.loads(json.dumps(current_binding))
+    old_adapter = old_comparable.get("adapter")
+    new_adapter = new_comparable.get("adapter")
+    if not isinstance(old_adapter, dict) or not isinstance(new_adapter, dict):
+        return False
+    source_adapter_digest = old_adapter.pop("adapter_digest", None)
+    new_adapter_digest = new_adapter.pop("adapter_digest", None)
+    return bool(
+        source_adapter_digest
+        and new_adapter_digest
+        and source_adapter_digest != new_adapter_digest
+        and old_comparable == new_comparable
+    )
+
+
+def _migrate_adapter_digest_only_gate(
+    gate: dict[str, Any],
+    gate_path: Path,
+    run_dir: Path,
+    current_binding: dict[str, Any],
+    current_binding_digest: str,
+) -> Path | None:
+    """Reuse a valid current-protocol gate when only the composite source digest changed."""
+
+    old_binding = gate.get("binding")
+    old_digest = gate.get("binding_digest")
+    if not isinstance(old_binding, dict) or not isinstance(old_digest, str):
+        return None
+    if test_gate_errors(gate, old_digest):
+        return None
+    if not _adapter_digest_only_change(old_binding, current_binding):
+        return None
+    source_adapter_digest = old_binding["adapter"]["adapter_digest"]
+    source_gate_path = Path(str(gate["vision_canary"])).resolve().parent / "test_gate.json"
+    if not source_gate_path.is_file():
+        return None
+    migrated_gate = dict(gate)
+    migrated_gate.update(
+        {
+            "binding": current_binding,
+            "binding_digest": current_binding_digest,
+            "generated_at": utc_now(),
+            "evidence_migration": {
+                "kind": "adapter_digest_only",
+                "source_gate": str(source_gate_path),
+                "source_binding_digest": old_digest,
+                "source_adapter_digest": source_adapter_digest,
+                "model_was_not_reinvoked": True,
+            },
+        }
+    )
+    run_dir.mkdir(parents=True, exist_ok=True)
+    atomic_write_json(run_dir / "test_gate.json", migrated_gate)
+    atomic_write_json(gate_path, migrated_gate)
+    return gate_path
+
+
 def _run_dual_shard_full(
     *,
     contract: CVBenchTestContract,
@@ -894,6 +955,20 @@ def _run_test_stage_with_configuration(
             return gate_path
     run_dir = track / "test_runs" / binding_digest
     if existing is not None:
+        migrated = _migrate_adapter_digest_only_gate(
+            existing,
+            gate_path,
+            run_dir,
+            binding_value,
+            binding_digest,
+        )
+        if migrated is not None:
+            migrated_gate = json.loads(migrated.read_text(encoding="utf-8"))
+            errors = test_gate_errors(migrated_gate, binding_digest)
+            if errors:
+                raise RuntimeError(f"Adapter-digest-only migrated gate is invalid: {errors}")
+            print(f"[cv-bench] test gate migrated after adapter digest-only change: {migrated}")
+            return migrated
         migrated = _migrate_strict_legacy_gate(
             existing,
             gate_path,
