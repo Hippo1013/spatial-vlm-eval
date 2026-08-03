@@ -98,6 +98,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Fixed
 
+- SpatialLadder runner 在锁定的 Transformers 4.49 环境中会移除 checkpoint 里冗余且不受该版本支持的
+  字典型 `text_config` 表示，继续使用同文件的官方顶层 Qwen2.5-VL 配置字段，避免模型初始化失败。
 - HiSpatial/MoGe-2 runner 现在锁定并核验 MoGe requirements 指定的 `utils3d` commit，同时比对环境中
   实际导入的关键文件与 checkout，避免新版包移除 `utils3d.pt` 兼容别名后在推理中途失败。
 - HiSpatial runner 现在把锁定 MoGe-2 snapshot 内的 `model.pt` 文件传给上游 loader，不再把目录误作

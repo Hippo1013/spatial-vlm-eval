@@ -81,6 +81,14 @@ def _model_generation(decoding: dict[str, Any]) -> dict[str, Any]:
     return values
 
 
+def _normalize_spatialladder_config(config: Any) -> Any:
+    if isinstance(getattr(config, "text_config", None), dict) and "text_config" not in (
+        getattr(type(config), "sub_configs", {}) or {}
+    ):
+        delattr(config, "text_config")
+    return config
+
+
 def _seed(decoding: dict[str, Any]) -> None:
     seed = int(decoding.get("seed", 42))
     random.seed(seed)
@@ -356,7 +364,15 @@ class SpatialLadderAdapter(InferenceAdapter):
         if self._loaded:
             return
         import torch
-        from transformers import AutoProcessor, Qwen2_5_VLForConditionalGeneration
+        from transformers import AutoConfig, AutoProcessor, Qwen2_5_VLForConditionalGeneration
+
+        config = AutoConfig.from_pretrained(self.model_path, local_files_only=True)
+        # Transformers 4.49 implements Qwen2.5-VL as a flat text config. Newer
+        # checkpoints also serialize a redundant nested text_config, which 4.49
+        # preserves as a plain dict and then mistakes for a PretrainedConfig in
+        # GenerationConfig.from_model_config. Remove only that unsupported,
+        # redundant representation; all official text fields remain top-level.
+        config = _normalize_spatialladder_config(config)
 
         self.processor = AutoProcessor.from_pretrained(
             self.model_path,
@@ -367,6 +383,7 @@ class SpatialLadderAdapter(InferenceAdapter):
         )
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             self.model_path,
+            config=config,
             torch_dtype=torch.bfloat16,
             attn_implementation="flash_attention_2",
             device_map="auto",
