@@ -21,7 +21,7 @@ from spatial_vlm_eval.benchmarks.cv_bench.specialized_runner import (
     MOGE2_CHECKPOINT_FILENAME,
     MOGE2_UTILS3D_COMMIT,
     _build_backend,
-    _validate_spatialladder_config,
+    _prepare_spatialladder_config,
     adapter_digest,
 )
 from spatial_vlm_eval.models.spatialbot.infer import ZOEDEPTH_REVISION
@@ -134,19 +134,27 @@ class CVBenchCommandAdapterTest(unittest.TestCase):
         self.assertRegex(spatialbot, r"^[0-9a-f]{64}$")
         self.assertNotEqual(spatialrgpt, spatialbot)
 
-    def test_spatialladder_runner_requires_composite_tied_qwen25_config(self):
-        with self.assertRaisesRegex(ValueError, "composite Qwen2.5-VL"):
-            _validate_spatialladder_config(SimpleNamespace(text_config={}))
-
+    def test_spatialladder_runner_propagates_tied_qwen25_text_config(self):
         text_config = SimpleNamespace(
             tie_word_embeddings=True, to_dict=lambda: {"hidden_size": 2048}
         )
-        config = SimpleNamespace(text_config=text_config)
-        self.assertIs(_validate_spatialladder_config(config), config)
+        config = SimpleNamespace(text_config=text_config, tie_word_embeddings=False)
+        self.assertIs(_prepare_spatialladder_config(config), config)
+        self.assertTrue(config.tie_word_embeddings)
 
         text_config.tie_word_embeddings = False
         with self.assertRaisesRegex(ValueError, "tied text output embeddings"):
-            _validate_spatialladder_config(config)
+            _prepare_spatialladder_config(config)
+
+        class FlatConfig(SimpleNamespace):
+            sub_configs = {"vision_config": object}
+
+        flat = FlatConfig(
+            text_config={"tie_word_embeddings": True}, tie_word_embeddings=False
+        )
+        _prepare_spatialladder_config(flat)
+        self.assertTrue(flat.tie_word_embeddings)
+        self.assertFalse(hasattr(flat, "text_config"))
 
     def test_spatialbot_zoedepth_runner_binds_upstream_revision(self):
         profile = PROFILES["spatialbot_zoedepth"]

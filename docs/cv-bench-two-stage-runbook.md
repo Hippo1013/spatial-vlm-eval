@@ -82,9 +82,9 @@ MoGe-2 checkpoint、两个模型上游 checkout，以及 MoGe requirements 锁�
 MoGe-2 的锁定 snapshot 内必须存在 `model.pt`；HiSpatial runner 将该文件而不是 snapshot 目录传给
 上游 `MoGeModel.from_pretrained`，避免目录被误当作 torch checkpoint。
 
-SpatialLadder 的解释器必须能把 checkpoint 的 `text_config` 解析为 composite Qwen2.5-VL config，并
-保留其 tied output embeddings；runner 锁定 PyTorch SDPA。旧版 Transformers 若把 `text_config` 保留
-为普通字典会 fail closed，不能接受其随机初始化缺失 `lm_head` 后产生的输出。
+SpatialLadder checkpoint 在嵌套 `text_config` 中声明 tied output embeddings，但外层兼容字段为
+false；runner 会把该锁定声明传播到模型外层 config，并在加载后使用同一共享输出权重，避免随机初始化
+缺失 `lm_head`。runner 锁定 PyTorch SDPA；嵌套声明缺失或不是 true 时 fail closed。
 
 SpatialBot 还必须设置 `SPATIALBOT_SIGLIP_MODEL`，指向
 `google/siglip-so400m-patch14-384@9fdffc58afc957d1a03a25b10dba0329ab15c2a3` 的本地快照。

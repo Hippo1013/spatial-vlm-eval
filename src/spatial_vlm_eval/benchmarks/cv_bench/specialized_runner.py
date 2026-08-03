@@ -81,15 +81,20 @@ def _model_generation(decoding: dict[str, Any]) -> dict[str, Any]:
     return values
 
 
-def _validate_spatialladder_config(config: Any) -> Any:
+def _prepare_spatialladder_config(config: Any) -> Any:
     text_config = getattr(config, "text_config", None)
-    if text_config is None or not callable(getattr(text_config, "to_dict", None)):
-        raise ValueError(
-            "SpatialLadder requires a Transformers build with composite "
-            "Qwen2.5-VL text_config support"
-        )
-    if not bool(getattr(text_config, "tie_word_embeddings", False)):
+    tied = (
+        text_config.get("tie_word_embeddings", False)
+        if isinstance(text_config, dict)
+        else getattr(text_config, "tie_word_embeddings", False)
+    )
+    if not bool(tied):
         raise ValueError("SpatialLadder checkpoint requires tied text output embeddings")
+    config.tie_word_embeddings = True
+    if isinstance(text_config, dict) and "text_config" not in (
+        getattr(type(config), "sub_configs", {}) or {}
+    ):
+        delattr(config, "text_config")
     return config
 
 
@@ -371,7 +376,7 @@ class SpatialLadderAdapter(InferenceAdapter):
         from transformers import AutoConfig, AutoProcessor, Qwen2_5_VLForConditionalGeneration
 
         config = AutoConfig.from_pretrained(self.model_path, local_files_only=True)
-        config = _validate_spatialladder_config(config)
+        config = _prepare_spatialladder_config(config)
 
         self.processor = AutoProcessor.from_pretrained(
             self.model_path,

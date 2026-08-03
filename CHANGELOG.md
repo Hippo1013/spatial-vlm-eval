@@ -98,8 +98,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Fixed
 
-- SpatialLadder runner 现在要求能正确解析 composite/tied Qwen2.5-VL `text_config` 的 Transformers
-  环境，并锁定 PyTorch SDPA；拒绝旧版把缺失 `lm_head` 随机初始化后继续生成的不可信状态。
+- SpatialLadder runner 现在把 checkpoint 嵌套 `text_config` 中的 tied-output 声明传播到模型外层
+  config，并锁定 PyTorch SDPA；避免缺失 `lm_head` 被随机初始化后继续生成的不可信状态。
 - HiSpatial/MoGe-2 runner 现在锁定并核验 MoGe requirements 指定的 `utils3d` commit，同时比对环境中
   实际导入的关键文件与 checkout，避免新版包移除 `utils3d.pt` 兼容别名后在推理中途失败。
 - HiSpatial runner 现在把锁定 MoGe-2 snapshot 内的 `model.pt` 文件传给上游 loader，不再把目录误作
