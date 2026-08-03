@@ -6,7 +6,7 @@
 不可发布。固定写入：
 
 ```text
-/media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/02_smoke8/
+/media/datasets/lihaoran/latent_reasoning/msmu-outputs/manual-three-stage-v1/02_smoke8/
 ```
 
 只有阶段一通过的模型才能进入本阶段。脚本会自动加载 `.env.server`、重新选择 benchmark-owned 的固定
@@ -106,7 +106,7 @@ bash scripts/msmu/run_manual_stage2.sh --list
 查看本阶段产物：
 
 ```bash
-find /media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/02_smoke8 \
+find /media/datasets/lihaoran/latent_reasoning/msmu-outputs/manual-three-stage-v1/02_smoke8 \
   -type f \
   \( -name 'prediction_validation.json' -o -name 'predictions.jsonl.metadata.json' \) \
   -print | sort

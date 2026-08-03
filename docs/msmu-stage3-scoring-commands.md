@@ -6,7 +6,7 @@
 
 ```bash
 ssh msmu-a800
-cd /media/datasets/tangzecong/latent_reasoning/spatial-vlm-eval
+cd /media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval
 ```
 
 ## 终端 A：启动 judge
@@ -78,7 +78,7 @@ RGB 到额外先验排列。显式重复 `--profile` 时保留调用方顺序。
 默认写入：
 
 ```text
-/media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987/msmu-result.md
+/media/datasets/lihaoran/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987/msmu-result.md
 ```
 
 ## 使用其他结果根目录

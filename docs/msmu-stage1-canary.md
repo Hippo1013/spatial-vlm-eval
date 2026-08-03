@@ -5,7 +5,7 @@
 确认模型能正确加载并收到图片。本阶段不产生 benchmark 分数，固定写入：
 
 ```text
-/media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/01_canary/
+/media/datasets/lihaoran/latent_reasoning/msmu-outputs/manual-three-stage-v1/01_canary/
 ```
 
 脚本会自动加载 `.env.server`。先查看可用模型名：

@@ -15,17 +15,49 @@
 5. API key 只通过未跟踪环境变量提供；CLI 不接收 key 值。
 6. SpatialBot gated license 未接受时停止，不绕过权限。
 
-建议服务器路径模板在 `configs/msmu-server.env.example`。其中 repo、dataset、models 默认分别是：
+建议服务器路径模板在 `configs/msmu-server.env.example`。当前存储分为“新 namespace”和“既有依赖”
+两层：
 
-```text
-/media/datasets/tangzecong/latent_reasoning/spatial-vlm-eval
-/media/datasets/tangzecong/huggingface/latent_reasoning/MSMU
-/media/datasets/tangzecong/huggingface/models
+| 用途 | 路径或变量 | 规则 |
+|---|---|---|
+| 项目 | `/media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval` | 唯一日常工作副本 |
+| 正式输出根 | `/media/datasets/lihaoran/latent_reasoning/msmu-outputs` | `OUTPUT_ROOT`；三阶段根在其下 |
+| Hugging Face 总根 | `/media/datasets/lihaoran/huggingface` | `HF_HOME` |
+| 新 dataset 本地目录 | `/media/datasets/lihaoran/huggingface/datasets` | `DATA_DOWNLOAD_ROOT` |
+| 新 model 本地目录 | `/media/datasets/lihaoran/huggingface/models` | `MODEL_ROOT` |
+| Hugging Face hub/datasets/assets cache | `HF_HUB_CACHE` / `HF_DATASETS_CACHE` / `HF_ASSETS_CACHE` | 均在新 `HF_HOME` 下 |
+| 新 Conda env/package | `/media/datasets/lihaoran/conda/envs` / `conda/pkgs` | 新 env root 是 `CONDA_ENVS_PATH` 第一项 |
+| pip/uv/PyTorch/通用 cache | `/media/datasets/lihaoran/cache` | 由对应标准环境变量分流 |
+| 新 upstream/checkpoint | `/media/datasets/lihaoran/upstreams` / `checkpoints` | `UPSTREAM_ROOT` / `CHECKPOINT_ROOT` |
+
+现有 MSMU dataset、锁定模型、隔离解释器和 upstream checkout 仍在
+`/media/datasets/tangzecong/`，不复制、不移动、不删除。模板让 `DATASET_ROOT`、当前各模型变量、
+family-specific interpreter 和当前 upstream 变量继续显式引用这些 legacy 资产；`MODEL_ROOT`、
+`DATA_DOWNLOAD_ROOT`、cache、Conda、通用 upstream/checkpoint 根只服务今后的新下载。新增资产后应新增
+或修改对应的精确变量，不要把新文件写回 `LEGACY_STORAGE_ROOT`。
+
+这些路径只存在于服务器配置与 runbook，不写入 Python 源码或 shell 编排逻辑。模板还给每个隔离
+环境提供独立 interpreter 变量；脚本会按 family 自动选择，显式 `PYTHON=...` 仍具有最高优先级。
+
+执行新下载或创建环境前，先从新项目导出配置：
+
+```bash
+cd /media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval
+set -a
+source .env.server
+set +a
 ```
 
-这些路径只存在于配置示例，不写入 Python 源码。
-模板还给每个隔离环境提供独立 interpreter 变量；脚本会按 family 自动选择，显式 `PYTHON=...`
-仍具有最高优先级。
+新 Conda 环境必须显式创建到第一项新 env root，避免把包或环境写回 legacy 路径：
+
+```bash
+NEW_ENV_ROOT="${CONDA_ENVS_PATH%%:*}"
+conda create --prefix "$NEW_ENV_ROOT/ENV_NAME" python=3.10 -y
+```
+
+下载 dataset/model 时分别把本地目标指定到 `DATA_DOWNLOAD_ROOT` / `MODEL_ROOT`；不显式本地目录的
+Hugging Face 下载也会由已导出的 `HF_*` 变量进入新 cache。新上游仓库与独立 checkpoint 分别写入
+`UPSTREAM_ROOT` / `CHECKPOINT_ROOT`。
 
 ## 2. 环境隔离
 
@@ -96,7 +128,7 @@ unset INDICES LIMIT
 
 ```bash
 PROFILE=internvl3_8b \
-MODEL_PATH="$MODEL_ROOT/OpenGVLab--InternVL3-8B-hf/snapshots/259a3b64a14623c0ec91a045cb43f7c5af5fa6af" \
+MODEL_PATH="$INTERNVL3_8B_MODEL" \
 PREFLIGHT_REPORT=/absolute/path/to/processor_preflight.json \
   bash scripts/msmu/preflight_vllm_processor.sh
 ```
@@ -107,7 +139,7 @@ PREFLIGHT_REPORT=/absolute/path/to/processor_preflight.json \
 
 ```bash
 PROFILE=internvl3_38b \
-MODEL_PATH="$MODEL_ROOT/OpenGVLab--InternVL3-38B-hf/snapshots/b2a05c0c325235f7530d8274c313a1d01082e069" \
+MODEL_PATH="$INTERNVL3_38B_MODEL" \
   bash scripts/msmu/serve_internvl3.sh
 ```
 
@@ -118,7 +150,7 @@ MODEL_PATH="$MODEL_ROOT/OpenGVLab--InternVL3-38B-hf/snapshots/b2a05c0c325235f753
 
 ```bash
 PROFILE=internvl3_78b \
-MODEL_PATH="$MODEL_ROOT/InternVL3-78B-hf" \
+MODEL_PATH="$INTERNVL3_78B_MODEL" \
 CUDA_VISIBLE_DEVICES=0,1,2,3 \
   bash scripts/msmu/serve_internvl3.sh
 ```

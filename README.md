@@ -21,6 +21,12 @@ profile inventory、锁定 revision 和注明日期的已验证状态只在[模�
 仓库外的 `OUTPUT_ROOT`。仓库根禁止创建 `output/` 或 `outputs/`；可再生成的人工抽查和临时导出
 同样写入仓库外，不能作为 canonical 发布或恢复来源。
 
+当前服务器项目与输出分别位于
+`/media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval` 和
+`/media/datasets/lihaoran/latent_reasoning/msmu-outputs`。新下载的数据、模型、Conda 环境和各类缓存也
+统一写入 `/media/datasets/lihaoran/`；既有 `tangzecong` 数据、模型与环境不迁移，由 `.env.server`
+中的 legacy 路径继续显式引用。完整目录表见[推理手册的服务器存储约定](docs/msmu-inference.md#1-运行前边界)。
+
 人工测试从[三阶段入口](docs/msmu-all-model-test-commands.md)开始；每个阶段均有统一入口脚本，会自动
 加载 `.env.server`。阶段三默认范围与 Qwen3 补测顺序以
 [`run_stage3_serial_inference.sh`](scripts/msmu/run_stage3_serial_inference.sh)的 `--list` /
@@ -103,10 +109,10 @@ export INDICES
 红圆、右下蓝方块）：
 
 ```bash
-PROFILE=llava_next_mistral_7b MODEL_PATH="$MODEL_ROOT/llava-v1.6-mistral-7b-hf" \
+PROFILE=llava_next_mistral_7b MODEL_PATH="$LLAVA_MISTRAL_7B_MODEL" \
   bash scripts/msmu/preflight_vllm_processor.sh
 
-PROFILE=llava_next_mistral_7b MODEL_PATH="$MODEL_ROOT/llava-v1.6-mistral-7b-hf" \
+PROFILE=llava_next_mistral_7b MODEL_PATH="$LLAVA_MISTRAL_7B_MODEL" \
   bash scripts/msmu/serve_llava_next.sh
 
 PROFILE=llava_next_mistral_7b SERVED_MODEL_NAME=llava-next-mistral-7b-msmu \

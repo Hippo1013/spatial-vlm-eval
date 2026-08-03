@@ -6,7 +6,7 @@
 publication gates 的 summary 才能进入结果表。固定写入：
 
 ```text
-/media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987/
+/media/datasets/lihaoran/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987/
 ```
 
 只有阶段二通过的模型才能进入本阶段。脚本会自动清除 `LIMIT`、`INDICES` 和
@@ -49,7 +49,7 @@ bash scripts/msmu/run_stage3_serial_inference.sh --qwen3 --status
 ```bash
 tmux new-window -t msmu -n 30-full-batch
 tmux send-keys -t msmu:30-full-batch \
-  "cd /media/datasets/tangzecong/latent_reasoning/spatial-vlm-eval && bash scripts/msmu/run_stage3_serial_inference.sh" C-m
+  "cd /media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval && bash scripts/msmu/run_stage3_serial_inference.sh" C-m
 ```
 
 先查看实际顺序或做不占 GPU 的 dry-run：
@@ -269,7 +269,7 @@ serial-score  # 目录驱动的串行评分
 查看正式产物：
 
 ```bash
-find /media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987 \
+find /media/datasets/lihaoran/latent_reasoning/msmu-outputs/manual-three-stage-v1/03_full987 \
   -type f \
   \( -name 'prediction_validation.json' -o -name 'predictions.jsonl.metadata.json' \
      -o -name 'summary.json' \) \

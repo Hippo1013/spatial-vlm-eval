@@ -21,6 +21,9 @@
 - PyTorch 必须依据服务器 CUDA/驱动选择安装源；不要盲目执行通用 requirements 安装命令。
 - 必要的测试、验证或开发环节需要服务器环境时，必须优先通过 SSH 在服务器上执行；若不知道
   当前连接方式，必须向用户询问，不得自行猜测。
+- 服务器项目、正式输出及任何新下载的 dataset/model/environment/cache/upstream/checkpoint 均写入
+  `/media/datasets/lihaoran/`；`/media/datasets/tangzecong/` 现有资产只通过配置中的 legacy 变量引用，
+  不移动、不删除，也不得继续向其中下载新资产。
 
 ## 代码边界
 

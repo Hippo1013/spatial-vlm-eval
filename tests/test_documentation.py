@@ -201,6 +201,107 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertNotIn("$REPO_ROOT/outputs", stage3)
         self.assertIn("$OUTPUT_ROOT/_answer_audit", stage3)
 
+    def test_server_storage_template_separates_new_downloads_from_legacy_assets(self) -> None:
+        config = self.repository / "configs" / "msmu-server.env.example"
+        variable_names = [
+            "SERVER_STORAGE_ROOT",
+            "LEGACY_STORAGE_ROOT",
+            "REPO_ROOT",
+            "OUTPUT_ROOT",
+            "MANUAL_TEST_OUTPUT_ROOT",
+            "HF_HOME",
+            "HF_HUB_CACHE",
+            "HF_DATASETS_CACHE",
+            "HF_ASSETS_CACHE",
+            "DATA_DOWNLOAD_ROOT",
+            "MODEL_ROOT",
+            "CONDA_ENVS_PATH",
+            "CONDA_PKGS_DIRS",
+            "XDG_CACHE_HOME",
+            "PIP_CACHE_DIR",
+            "UV_CACHE_DIR",
+            "TORCH_HOME",
+            "UPSTREAM_ROOT",
+            "CHECKPOINT_ROOT",
+            "DATASET_ROOT",
+            "JUDGE_MODEL",
+            "LLAVA_MISTRAL_7B_MODEL",
+        ]
+        shell_names = " ".join(variable_names)
+        completed = subprocess.run(
+            [
+                "bash",
+                "-c",
+                'set -a; source "$1"; set +a; '
+                f'for name in {shell_names}; do printf "%s=%s\\n" "$name" "${{!name}}"; done',
+                "storage-template-test",
+                str(config),
+            ],
+            cwd=self.repository,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        values = dict(line.split("=", 1) for line in completed.stdout.splitlines())
+        new_root = "/media/datasets/lihaoran"
+        legacy_root = "/media/datasets/tangzecong"
+
+        self.assertEqual(values["SERVER_STORAGE_ROOT"], new_root)
+        self.assertEqual(values["LEGACY_STORAGE_ROOT"], legacy_root)
+        agents = (self.repository / "AGENTS.md").read_text(encoding="utf-8")
+        self.assertIn(f"`{new_root}/`", agents)
+        self.assertIn(f"`{legacy_root}/`", agents)
+        self.assertIn("不得继续向其中下载新资产", agents)
+        for name in [
+            "REPO_ROOT",
+            "OUTPUT_ROOT",
+            "MANUAL_TEST_OUTPUT_ROOT",
+            "HF_HOME",
+            "HF_HUB_CACHE",
+            "HF_DATASETS_CACHE",
+            "HF_ASSETS_CACHE",
+            "DATA_DOWNLOAD_ROOT",
+            "MODEL_ROOT",
+            "CONDA_PKGS_DIRS",
+            "XDG_CACHE_HOME",
+            "PIP_CACHE_DIR",
+            "UV_CACHE_DIR",
+            "TORCH_HOME",
+            "UPSTREAM_ROOT",
+            "CHECKPOINT_ROOT",
+        ]:
+            with self.subTest(name=name):
+                self.assertTrue(values[name].startswith(f"{new_root}/"))
+        self.assertEqual(values["CONDA_ENVS_PATH"].split(":", 1)[0], f"{new_root}/conda/envs")
+        for name in ["DATASET_ROOT", "JUDGE_MODEL", "LLAVA_MISTRAL_7B_MODEL"]:
+            with self.subTest(name=name):
+                self.assertTrue(values[name].startswith(f"{legacy_root}/"))
+
+    def test_server_scripts_do_not_hardcode_storage_namespaces(self) -> None:
+        hardcoded: list[str] = []
+        scripts = self.repository / "scripts"
+        for path in sorted(scripts.rglob("*")):
+            if path.is_file() and path.suffix in {".py", ".sh"}:
+                if "/media/datasets/" in path.read_text(encoding="utf-8"):
+                    hardcoded.append(path.relative_to(self.repository).as_posix())
+        self.assertEqual(hardcoded, [])
+
+        old_project = "/media/datasets/tangzecong/latent_reasoning/spatial-vlm-eval"
+        old_outputs = "/media/datasets/tangzecong/latent_reasoning/msmu-outputs"
+        operational_docs = [
+            self.repository / "README.md",
+            self.docs / "msmu-all-model-test-commands.md",
+            self.docs / "msmu-stage1-canary.md",
+            self.docs / "msmu-stage2-smoke8.md",
+            self.docs / "msmu-stage3-full-eval.md",
+            self.docs / "msmu-stage3-scoring-commands.md",
+        ]
+        for document in operational_docs:
+            text = document.read_text(encoding="utf-8")
+            with self.subTest(document=document.name):
+                self.assertNotIn(old_project, text)
+                self.assertNotIn(old_outputs, text)
+
     def test_agents_routes_document_reading_and_updates(self) -> None:
         agents = (self.repository / "AGENTS.md").read_text(encoding="utf-8")
         for required in [

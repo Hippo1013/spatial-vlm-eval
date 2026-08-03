@@ -35,6 +35,10 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- 将服务器项目与正式输出根迁移到 `/media/datasets/lihaoran/`；服务器配置将未来 Hugging Face
+  data/model、Conda env/package、pip/uv/PyTorch cache、upstream 与 checkpoint 下载统一路由到新
+  namespace，同时让当前已验证的 dataset、模型、解释器和 upstream 继续显式引用未改动的
+  `tangzecong` 资产。shell 编排仍只读取环境变量，不硬编码任一服务器 namespace。
 - OpenAI-compatible API inference 在首轮遍历结束后固定对仍缺失的 index 再执行一轮；已成功 journal
   项不会重复请求，补跑后仍不完整则继续拒绝 finalization，并允许相同命令从 journal 续跑。
 - OpenRouter generation metadata 的默认查询窗口扩为 10 次 metadata-only 重试，并让 canary 与

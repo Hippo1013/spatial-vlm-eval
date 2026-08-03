@@ -12,7 +12,7 @@
 只在服务器仓库第一次使用且 `.env.server` 不存在时运行：
 
 ```bash
-cd /media/datasets/tangzecong/latent_reasoning/spatial-vlm-eval
+cd /media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval
 test -f .env.server || cp configs/msmu-server.env.example .env.server
 ```
 
@@ -48,8 +48,12 @@ MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh internvl3_78b serve
 `.env.server` 中的 `MANUAL_TEST_OUTPUT_ROOT` 默认是：
 
 ```text
-/media/datasets/tangzecong/latent_reasoning/msmu-outputs/manual-three-stage-v1
+/media/datasets/lihaoran/latent_reasoning/msmu-outputs/manual-three-stage-v1
 ```
+
+该配置同时把所有新下载与 cache 根设置在 `/media/datasets/lihaoran/`；现有 dataset、model、
+interpreter 与 upstream 仍通过精确 legacy 变量读取原位置。目录分工见
+[推理手册](msmu-inference.md#1-运行前边界)。
 
 ```text
 manual-three-stage-v1/
