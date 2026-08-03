@@ -66,6 +66,7 @@ class VisionCanaryTest(unittest.TestCase):
             "A red circle is in the lower right and a blue square is in the upper left.",
             "A red square is top left and a blue circle is bottom right.",
             "A red circle and a blue square.",
+            "A red circle is above a blue square.",
             "A blue square [0.1,0.1,0.4,0.4] and a red circle [0.6,0.6,0.9,0.9].",
             "A red circle is top left [0.6,0.6,0.9,0.9] and a blue square is bottom right [0.1,0.1,0.4,0.4].",
             "A red circle [48,48,208,208] and a blue square [304,304,464,464].",

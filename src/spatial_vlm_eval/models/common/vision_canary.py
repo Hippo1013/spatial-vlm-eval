@@ -8,11 +8,12 @@ from PIL import Image, ImageDraw
 
 VISION_CANARY_PROTOCOL = (
     "msmu_semantic_vision_canary_red_circle_top_left_blue_square_"
-    "bottom_right_words_or_normalized_bbox_antialiased512_v3"
+    "bottom_right_quadrant_prompt_words_or_normalized_bbox_antialiased512_v4"
 )
 VISION_CANARY_QUESTION = (
-    "Describe every colored shape in this image and state where each one is located. "
-    "Answer concisely in English."
+    "Identify every colored shape in this image. For each one, state its color, shape, "
+    "and which image quadrant or corner area contains it. Do not answer only with a "
+    "relative relation between the shapes. Answer concisely in English."
 )
 VISION_CANARY_IMAGE_SIZE = (512, 512)
 VISION_CANARY_SUPERSAMPLE = 4
