@@ -13,8 +13,9 @@ judge v4 scorer。模型适配与 benchmark 评分分层，任何模型都不能
 - 评分：八类非加权 `official_macro8_accuracy`，目录驱动串行评分和 publication gates。
 - 结果性质：official-compatible internal score，不是 GPT-4-Turbo strict official score。
 
-profile inventory、锁定 revision 和注明日期的已验证状态只在[模型矩阵](docs/model-matrix.md)维护；服务器
-当前状态以结果目录中的 `status.tsv`、validator、metadata 和 `summary.json` 为准，不从 README 推断。
+注册 profile、当前目标范围、锁定 revision 和注明日期的已验证状态只在
+[模型矩阵](docs/model-matrix.md)维护；服务器当前状态以结果目录中的 `status.tsv`、validator、metadata
+和 `summary.json` 为准，不从 README 推断。
 完整文档分类与更新规则见[文档地图](docs/README.md)，语义变更见 [CHANGELOG](CHANGELOG.md)。
 
 正式推理、评分和汇总产物以 `.env.server` 配置的 `MANUAL_TEST_OUTPUT_ROOT` 为准；该路径应位于

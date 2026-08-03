@@ -297,6 +297,30 @@ PROFILES = {
 }
 
 
+# Current MSMU comparison scope. Registered profiles outside this tuple remain
+# available for historical reproduction but are not part of the target matrix.
+CURRENT_TARGET_PROFILE_KEYS = (
+    "gpt5_openrouter_non_zdr",
+    "gemini31pro_openrouter_non_zdr",
+    "llava_next_mistral_7b",
+    "llava_next_yi_34b",
+    "internvl3_8b",
+    "internvl3_38b",
+    "internvl3_78b",
+    "qwen3_vl_2b",
+    "qwen3_vl_4b",
+    "qwen3_vl_8b",
+    "qwen3_vl_32b",
+    "ssr",
+    "ssr_native",
+    "spatialrgpt",
+    "3dthinker",
+    "3dthinker_native",
+    "spatialbot",
+    "spatialbot_native",
+)
+
+
 def get_profile(key: str) -> InferenceProfile:
     try:
         return PROFILES[str(key)]

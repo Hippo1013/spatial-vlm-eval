@@ -35,6 +35,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- 将当前 MSMU 目标测试矩阵固化为 18 条已经通过 full-987 validator 与 publication gates 的结果轨；
+  目标范围由 `CURRENT_TARGET_PROFILE_KEYS` 统一维护，历史 adapter、注册 profile 与结果继续保留用于
+  复现，但不再混入当前目标矩阵。
 - 将服务器项目与正式输出根迁移到 `/media/datasets/lihaoran/`；服务器配置将未来 Hugging Face
   data/model、Conda env/package、pip/uv/PyTorch cache、upstream 与 checkpoint 下载统一路由到新
   namespace，同时让当前已验证的 dataset、模型、解释器和 upstream 继续显式引用未改动的

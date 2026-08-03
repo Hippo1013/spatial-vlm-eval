@@ -8,7 +8,7 @@
 | 信息 | 机器事实源 | 人类文档 |
 |---|---|---|
 | MSMU 输入、校验、judge、阈值与聚合 | `src/spatial_vlm_eval/benchmarks/msmu/` | [canonical protocol](benchmarks/msmu/protocol.md) |
-| 模型 profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` | [模型矩阵](model-matrix.md) |
+| 注册 profile、当前目标范围、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` | [模型矩阵](model-matrix.md) |
 | 阶段三默认/Qwen3 补测轨与顺序 | `run_stage3_serial_inference.sh --list` / `--qwen3 --list` | [阶段三 runbook](msmu-stage3-full-eval.md) |
 | 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata 和 `summary.json` | 模型矩阵只保存注明日期的已验证快照 |
 | CLI、环境变量与输出布局 | 脚本 `--help`、`configs/msmu-server.env.example` | 对应 runbook |
@@ -43,7 +43,7 @@
 
 ### 状态与参考
 
-- [模型矩阵](model-matrix.md)：profile inventory、锁定身份、已知偏差和注明日期的验证状态快照。
+- [模型矩阵](model-matrix.md)：当前目标 profile、锁定身份、已知偏差和注明日期的验证状态快照。
 - [Judge 提示词中文参考](msmu-judge-prompts-zh-reference.md)：人工阅读译文；英文 scorer 源码仍是
   唯一运行真值。
 - [MSMU 遗留小问题](benchmarks/msmu/known-minor-issues.md)：仅供以后人工复核的暂缓问题清单。

@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import unquote
 
 from spatial_vlm_eval.benchmarks.msmu.scorer import SCORER_PROTOCOL
-from spatial_vlm_eval.models.profiles import PROFILES
+from spatial_vlm_eval.models.profiles import CURRENT_TARGET_PROFILE_KEYS, PROFILES
 
 
 class DocumentationConsistencyTest(unittest.TestCase):
@@ -85,13 +85,27 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("/tmp/", gitignore.splitlines())
         self.assertFalse((self.repository / "DEVLOG.md").exists())
 
-    def test_model_matrix_matches_profile_registry(self) -> None:
+    def test_model_matrix_matches_current_target_profiles(self) -> None:
         matrix = (self.docs / "model-matrix.md").read_text(encoding="utf-8")
-        documented = set(re.findall(r"^\| `([^`]+)` \|", matrix, flags=re.MULTILINE))
-        self.assertEqual(documented, set(PROFILES))
-        count = re.search(r"^## 当前 (\d+) 个 inference profile$", matrix, flags=re.MULTILINE)
+        documented = re.findall(r"^\| `([^`]+)` \|", matrix, flags=re.MULTILINE)
+        self.assertEqual(documented, list(CURRENT_TARGET_PROFILE_KEYS))
+        count = re.search(
+            r"^## 当前 (\d+) 条目标 inference profile$", matrix, flags=re.MULTILINE
+        )
         self.assertIsNotNone(count)
-        self.assertEqual(int(count.group(1)), len(PROFILES))
+        self.assertEqual(int(count.group(1)), len(CURRENT_TARGET_PROFILE_KEYS))
+        self.assertEqual(
+            len(set(CURRENT_TARGET_PROFILE_KEYS)), len(CURRENT_TARGET_PROFILE_KEYS)
+        )
+        self.assertTrue(set(CURRENT_TARGET_PROFILE_KEYS) <= set(PROFILES))
+        self.assertNotIn("gpt5", CURRENT_TARGET_PROFILE_KEYS)
+        self.assertNotIn("gemini31pro", CURRENT_TARGET_PROFILE_KEYS)
+        self.assertFalse(
+            any(
+                PROFILES[key].family == "qwen25_vl"
+                for key in CURRENT_TARGET_PROFILE_KEYS
+            )
+        )
 
     def test_stage3_runbook_matches_serial_script_plan(self) -> None:
         runbook = (self.docs / "msmu-stage3-full-eval.md").read_text(encoding="utf-8")
