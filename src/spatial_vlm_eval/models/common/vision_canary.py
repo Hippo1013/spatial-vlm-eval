@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 VISION_CANARY_PROTOCOL = (
     "msmu_semantic_vision_canary_red_circle_top_left_blue_square_"
-    "bottom_right_antialiased512_v2"
+    "bottom_right_words_or_normalized_bbox_antialiased512_v3"
 )
 VISION_CANARY_QUESTION = (
     "Describe every colored shape in this image and state where each one is located. "
@@ -51,6 +51,46 @@ def _match_centers(pattern: str, answer: str) -> list[float]:
     return [(match.start() + match.end()) / 2 for match in re.finditer(pattern, answer)]
 
 
+def _normalized_bbox_matches(answer: str) -> list[tuple[float, tuple[float, float]]]:
+    number = r"[+-]?(?:\d+(?:\.\d*)?|\.\d+)"
+    pattern = re.compile(
+        rf"\[\s*({number})\s*,\s*({number})\s*,\s*({number})\s*,\s*({number})\s*\]"
+    )
+    boxes: list[tuple[float, tuple[float, float]]] = []
+    for match in pattern.finditer(answer):
+        x1, y1, x2, y2 = (float(value) for value in match.groups())
+        if not (0.0 <= x1 < x2 <= 1.0 and 0.0 <= y1 < y2 <= 1.0):
+            continue
+        boxes.append(
+            (
+                (match.start() + match.end()) / 2,
+                ((x1 + x2) / 2, (y1 + y2) / 2),
+            )
+        )
+    return boxes
+
+
+def _bbox_locations_are_correct(
+    red_object_center: float,
+    blue_object_center: float,
+    boxes: list[tuple[float, tuple[float, float]]],
+) -> bool:
+    _, red_box, blue_box = min(
+        (
+            abs(red_object_center - boxes[red_index][0])
+            + abs(blue_object_center - boxes[blue_index][0]),
+            boxes[red_index][1],
+            boxes[blue_index][1],
+        )
+        for red_index in range(len(boxes))
+        for blue_index in range(len(boxes))
+        if red_index != blue_index
+    )
+    red_x, red_y = red_box
+    blue_x, blue_y = blue_box
+    return red_x < 0.5 and red_y < 0.5 and blue_x > 0.5 and blue_y > 0.5
+
+
 def validate_vision_canary_answer(answer: str) -> None:
     """Require the two expected color/shape/location associations.
 
@@ -66,27 +106,42 @@ def validate_vision_canary_answer(answer: str) -> None:
         "bottom_right": r"(?:(?:\bbottom\b|\blower\b)(?:\s+\w+){0,1}\s+\bright\b|\bright\b(?:\s+\w+){0,1}\s+(?:\bbottom\b|\blower\b))",
     }
     matches = {name: _match_centers(pattern, normalized) for name, pattern in patterns.items()}
-    missing = [name for name, centers in matches.items() if not centers]
-    if missing:
+    missing_objects = [name for name in ("red_circle", "blue_square") if not matches[name]]
+    if missing_objects:
         raise ValueError(
-            "Vision canary answer is missing required color/shape/location semantics "
-            f"{missing}: {answer!r}"
+            "Vision canary answer is missing required color/shape semantics "
+            f"{missing_objects}: {answer!r}"
         )
 
     red_center = matches["red_circle"][0]
     blue_center = matches["blue_square"][0]
-    correct_cost = min(
-        abs(red_center - top_left) + abs(blue_center - bottom_right)
-        for top_left in matches["top_left"]
-        for bottom_right in matches["bottom_right"]
-    )
-    swapped_cost = min(
-        abs(red_center - bottom_right) + abs(blue_center - top_left)
-        for top_left in matches["top_left"]
-        for bottom_right in matches["bottom_right"]
-    )
-    if correct_cost >= swapped_cost:
+    has_verbal_locations = bool(matches["top_left"] and matches["bottom_right"])
+    if has_verbal_locations:
+        correct_cost = min(
+            abs(red_center - top_left) + abs(blue_center - bottom_right)
+            for top_left in matches["top_left"]
+            for bottom_right in matches["bottom_right"]
+        )
+        swapped_cost = min(
+            abs(red_center - bottom_right) + abs(blue_center - top_left)
+            for top_left in matches["top_left"]
+            for bottom_right in matches["bottom_right"]
+        )
+        if correct_cost >= swapped_cost:
+            raise ValueError(
+                "Vision canary did not associate the red circle with top-left and the blue square "
+                f"with bottom-right: {answer!r}"
+            )
+
+    boxes = _normalized_bbox_matches(normalized)
+    has_bbox_locations = len(boxes) >= 2
+    if has_bbox_locations and not _bbox_locations_are_correct(red_center, blue_center, boxes):
         raise ValueError(
-            "Vision canary did not associate the red circle with top-left and the blue square "
-            f"with bottom-right: {answer!r}"
+            "Vision canary normalized boxes did not place the red circle in top-left and the "
+            f"blue square in bottom-right: {answer!r}"
+        )
+    if not has_verbal_locations and not has_bbox_locations:
+        raise ValueError(
+            "Vision canary answer is missing complete top-left/bottom-right words or two valid "
+            f"normalized bounding boxes: {answer!r}"
         )

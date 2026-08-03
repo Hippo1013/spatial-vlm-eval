@@ -58,7 +58,8 @@ manifest 解析，缺失时 fail closed。
 `--stage test` 必须完成：
 
 1. 锁定数据的完整 fingerprint/schema/prompt/image 审计；
-2. 白底左上红圆、右下蓝方形的组合视觉 canary；
+2. 白底左上红圆、右下蓝方形的组合视觉 canary；回答必须正确关联颜色、形状和位置，位置证据可为
+   明确的英文方位词或与对象就近关联的合法归一化 bbox，二者同时出现时不得冲突；
 3. 固定 smoke8：`0,633,342,1080,1438,1442,2038,2042`，四任务各两条并覆盖三个来源；
 4. Transformers processor/template 的单图审计；vLLM 不一致时只能回退到显式锁定的 upstream runner；
 5. vLLM 并发候选 `32,16,8,4,2,1` 容量探测；

@@ -121,6 +121,7 @@ reasoning 并产生空文本。non-ZDR v2 曾保留 low reasoning、将总 compl
 inference protocol、run slug、journal 和输出目录，不得恢复或覆盖其他 decoding 轨的 journal。
 
 阶段一的非 MSMU 组合视觉 canary 固定使用一张 512×512 抗锯齿白底 RGB：左上红圆、右下蓝方块；
+位置证据可使用正确关联的英文方位词或合法归一化 bbox，二者同时出现时不得冲突；
 图像由 4× 超采样后 LANCZOS 缩小确定性生成。问题只要求描述每个彩色形状及位置，不包含正确答案。
 回答必须同时建立 red-circle/top-left 与
 blue-square/bottom-right 两个语义对应，否则 fail closed。该诊断对每个模型只做一次 generation，不写入

@@ -91,6 +91,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Fixed
 
+- 将组合视觉 canary 升级为 bbox-aware v3：在继续严格要求红圆/蓝方块与左上/右下正确关联的前提下，
+  接受模型输出的合法归一化 bbox 作为位置证据，并拒绝交换、越界或与方位词冲突的框；CV-Bench
+  test binding 现在显式包含 canary protocol，旧 gate 自动失效并必须重测。
 - 移除 MSMU 单模型/串行 stage-3 控制器对系统 `curl` 的非必要硬依赖；本地 OpenAI-compatible 服务
   readiness 现在由配置的 `LATENT_PYTHON` 标准库探针检查，并精确匹配 `/v1/models` 中的 model ID。
 

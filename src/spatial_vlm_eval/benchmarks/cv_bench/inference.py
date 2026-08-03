@@ -424,6 +424,10 @@ def binding(configuration: ResolvedConfiguration, contract: CVBenchTestContract)
             "decoding": configuration.decoding,
             "processor_audit": processor_identity,
         },
+        "test_protocol": {
+            "vision_canary": VISION_CANARY_PROTOCOL,
+            "smoke_indices": list(SMOKE8_INDICES),
+        },
         "sharding": {
             **configuration.sharding,
             "configured_gpu_ids": list(_configured_gpu_ids(configuration.profile)),
@@ -604,6 +608,22 @@ def test_gate_errors(gate: dict[str, Any], expected_binding_digest: str) -> list
     capacity = loaded_artifacts.get("capacity_probe", {})
     if capacity and gate.get("selected_concurrency") != capacity.get("selected_concurrency"):
         errors.append("selected concurrency differs from capacity probe")
+    vision_canary = loaded_artifacts.get("vision_canary", {})
+    expected_canary_protocol = (
+        gate.get("binding", {}).get("test_protocol", {}).get("vision_canary")
+    )
+    canary_endpoints = vision_canary.get("endpoints")
+    if vision_canary and (
+        not expected_canary_protocol
+        or not isinstance(canary_endpoints, list)
+        or not canary_endpoints
+        or any(
+            not isinstance(item, dict)
+            or item.get("canary_protocol") != expected_canary_protocol
+            for item in canary_endpoints
+        )
+    ):
+        errors.append("vision canary protocol mismatch")
     prediction_raw = gate.get("smoke_predictions")
     prediction = Path(str(prediction_raw)).resolve() if prediction_raw else None
     if prediction is None or not prediction.is_file():
