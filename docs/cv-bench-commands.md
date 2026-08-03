@@ -23,6 +23,18 @@ bash scripts/cv_bench/run_inference.sh --status
 
 ## 3. 测试阶段
 
+通用开源模型先启动 endpoint。TP=1 在两个终端各启动一个；TP=2/4 只启动一个：
+
+```bash
+# TP=1：另一个终端把 GPU/PORT 改为 1/18102
+bash scripts/cv_bench/serve_vllm_profile.sh --model qwen3_vl_8b --gpu-ids 0 --port 18101
+
+# TP=2
+bash scripts/cv_bench/serve_vllm_profile.sh --model qwen3_vl_32b --gpu-ids 0,1 --port 18101
+```
+
+确认服务就绪后，在新终端运行 test：
+
 ```bash
 bash scripts/cv_bench/run_inference.sh --stage test --model PROFILE
 bash scripts/cv_bench/run_inference.sh --stage test --models PROFILE1,PROFILE2

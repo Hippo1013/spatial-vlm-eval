@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from dataclasses import dataclass
@@ -9,6 +11,7 @@ from unittest.mock import patch
 
 from PIL import Image
 
+from spatial_vlm_eval.benchmarks.cv_bench.profiles import PROFILES
 from spatial_vlm_eval.models.common.runtime import (
     GenerationResult,
     InferenceAdapter,
@@ -126,6 +129,50 @@ class CVBenchRuntimeAndScriptsTest(unittest.TestCase):
         for path in sorted((self.repository / "scripts" / "cv_bench").glob("*.sh")):
             with self.subTest(path=path.name):
                 subprocess.run(["bash", "-n", str(path)], check=True)
+
+    def test_vllm_launcher_uses_registry_revision_tp_and_served_name(self):
+        script = self.repository / "scripts" / "cv_bench" / "serve_vllm_profile.sh"
+        for profile in [value for value in PROFILES.values() if value.group == "general_open"]:
+            with self.subTest(profile=profile.key):
+                environment = dict(os.environ)
+                environment.update(
+                    {
+                        "CVBENCH_ENV_FILE": "/dev/null",
+                        "CVBENCH_PYTHON": sys.executable,
+                        "CVBENCH_VLLM": "/locked/vllm",
+                        profile.model_path_env: "/locked/model",
+                    }
+                )
+                gpu_ids = ",".join(
+                    str(index) for index in range(profile.default_tensor_parallel_size)
+                )
+                completed = subprocess.run(
+                    [
+                        "bash",
+                        str(script),
+                        "--model",
+                        profile.key,
+                        "--gpu-ids",
+                        gpu_ids,
+                        "--port",
+                        "18101",
+                        "--dry-run",
+                    ],
+                    cwd=self.repository,
+                    env=environment,
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                )
+                self.assertIn(f"--revision {profile.revision}", completed.stdout)
+                self.assertIn(
+                    f"--served-model-name {profile.served_model_name}", completed.stdout
+                )
+                self.assertIn(
+                    f"--tensor-parallel-size {profile.default_tensor_parallel_size}",
+                    completed.stdout,
+                )
+                self.assertIn("--limit-mm-per-prompt.image 1", completed.stdout)
 
     def test_retry_backoff_and_resume_do_not_repeat_successful_paid_call(self):
         with tempfile.TemporaryDirectory() as directory:

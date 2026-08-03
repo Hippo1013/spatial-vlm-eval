@@ -24,7 +24,19 @@ bash scripts/cv_bench/run_inference.sh --stage test --model qwen3_vl_8b --dry-ru
 ```
 
 vLLM 模型需先在已协调 GPU 上启动 OpenAI-compatible endpoint；TP=1 轨配置两个 endpoint，TP=2/4 轨
-配置一个 endpoint。`--check` 会加载锁定数据、执行官方 processor/template 审计并核对全部绑定字段：
+配置一个 endpoint。统一启动器会从 registry 读取 model revision、served name、TP 和显存门槛，并在
+加载权重前拒绝忙碌 GPU：
+
+```bash
+# TP=1：分别在 GPU 0/1 启动 18101/18102
+bash scripts/cv_bench/serve_vllm_profile.sh --model qwen3_vl_8b --gpu-ids 0 --port 18101
+bash scripts/cv_bench/serve_vllm_profile.sh --model qwen3_vl_8b --gpu-ids 1 --port 18102
+
+# TP=2：一个 endpoint
+bash scripts/cv_bench/serve_vllm_profile.sh --model qwen3_vl_32b --gpu-ids 0,1 --port 18101
+```
+
+`--check` 会加载锁定数据、执行官方 processor/template 审计并核对全部绑定字段：
 
 ```bash
 bash scripts/cv_bench/run_inference.sh --check --model qwen3_vl_8b

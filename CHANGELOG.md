@@ -17,6 +17,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   Transformers processor/template 审计、组合视觉 canary、固定 smoke8、vLLM 容量探测、双 endpoint
   确定性分片和专用上游 persistent JSONL bridge。专用 runner 缺实现 SHA 或 generation manifest 时
   fail closed。
+- 增加 CV-Bench 通用开源轨的 registry-driven vLLM 0.19 单 endpoint 启动器；启动前检查所选 GPU
+  空闲状态，按 profile 锁定 revision、served name、TP、BF16、单图上限与 seed 42。
 - 增加 12 条空间专用轨共用的 dataset-blind persistent runner、五份从锁定上游/checkpoint 解析的
   generation manifest，并把 HiSpatial 的 MoGe-2 checkpoint revision 与上游 commit 纳入 profile
   binding；既有 MSMU 专用 adapter 仅新增显式 generation/token-cap 注入点，默认 MSMU 行为不变。
