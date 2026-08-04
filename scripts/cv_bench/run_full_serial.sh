@@ -261,8 +261,11 @@ while IFS=$'\t' read -r profile group tp served; do
   printf '%s\t%s\tSTART\t%s\n' "${run_id}" "${profile}" "$(date -u +%FT%TZ)" >>"${status_file}"
   echo "[cv-bench-full-serial] START profile=${profile}"
   if [[ "${group}" == "general_open" ]]; then
+    export CUDA_VISIBLE_DEVICES=0,1
     wait_for_gpu_release
     start_vllm "${profile}" "${tp}" "${served}"
+  else
+    export CUDA_VISIBLE_DEVICES=0
   fi
   if ! run_profile "${profile}"; then
     printf '%s\t%s\tFAIL\t%s\n' "${run_id}" "${profile}" "$(date -u +%FT%TZ)" >>"${status_file}"

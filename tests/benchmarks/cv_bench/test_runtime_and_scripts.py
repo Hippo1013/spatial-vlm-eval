@@ -110,6 +110,8 @@ class CVBenchRuntimeAndScriptsTest(unittest.TestCase):
         self.assertIn("serve_vllm_profile.sh", text)
         self.assertIn("_probe_openai_models.py", text)
         self.assertIn("flock -n", text)
+        self.assertIn("export CUDA_VISIBLE_DEVICES=0,1", text)
+        self.assertIn("export CUDA_VISIBLE_DEVICES=0", text)
         self.assertNotIn("llava_next_mistral_7b,llava_next_yi_34b", text)
 
     def test_dry_run_preserves_registry_order_for_unsorted_selection(self):
