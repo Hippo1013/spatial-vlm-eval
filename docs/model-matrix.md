@@ -35,11 +35,12 @@ map，因此不建立虚假的 RGB-only 轨。实现 adapter 时分别
 
 ## CV-Bench 当前 23 条目标 inference profile
 
-以下 23 条轨已在 registry、CLI、validator、scorer 和报告发现中注册。截至 2026-08-03，服务器曾现场
-审计 22 条 v1 test gate；prompt 修复后的两条 reasoning gate 已于 2026-08-04 通过 v2 test，其他轨的
-最终 prompt 不变并可在仅 adapter digest 变化时审计迁移。InternVL3-78B 因当前只有两张 A800 而无法满足四卡门禁。
-截至 2026-08-04，前两条 LLaVA-NeXT 轨已完成 full-2638 validator，但尚未评分，不能把本表解释为已有分数。通用轨先审计
-官方 Transformers processor/template，再使用 vLLM 0.19；不一致时只能显式回退到锁定 runner。
+以下 23 条轨已在 registry、CLI、validator、scorer 和报告发现中注册。22/23 条轨已完成 test 阶段门禁；
+prompt 修复后的两条 reasoning gate 使用 v2，其他轨可在仅 adapter digest 变化时审计迁移。
+InternVL3-78B 因当前只有两张 A800 而无法满足四卡门禁。截至 2026-08-04，其余 22 条轨正在按 registry
+顺序进行 full-2638 串行推理，尚未评分，不能把本表解释为已有分数。下表保留逐轨已验证的
+静态状态；实时完成情况必须读取服务器 `status.tsv`、validator 和 metadata。通用轨先审计官方
+Transformers processor/template，再使用 vLLM 0.19；不一致时只能显式回退到锁定 runner。
 
 | Profile | Model / locked revision | Input track | Backend / decoding | 当前状态 |
 |---|---|---|---|---|

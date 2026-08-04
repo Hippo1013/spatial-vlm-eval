@@ -156,7 +156,7 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("**下一项待定**", scope)
         self.assertIn("不是本项目复现结果", scope)
         self.assertIn("CV-Bench 的 23 条目标轨由独立 registry 维护", scope)
-        self.assertIn("2/23 full-2638 已通过 validator，尚未评分", scope)
+        self.assertIn("22 条轨正在进行 full-2638 串行推理，尚未评分", scope)
         self.assertIn("/media/datasets/tangzecong/huggingface/", scope)
         self.assertIn("/media/datasets/lihaoran/huggingface/", scope)
 

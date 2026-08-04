@@ -51,6 +51,9 @@ test 会依次完成 GPU/processor、视觉 canary、smoke8、输入审计和绑
 
 ## 4. 正式 2638 条
 
+截至 2026-08-04，排除四卡 InternVL3-78B 后的串行批次正在运行。控制器存活时不要重复执行启动命令；
+先用 `--status` 和 `$CVBENCH_OUTPUT_ROOT/_serial_full/status.tsv` 查看现场状态。
+
 ```bash
 bash scripts/cv_bench/run_inference.sh --stage full --model PROFILE
 bash scripts/cv_bench/run_inference.sh --stage full --models PROFILE1,PROFILE2

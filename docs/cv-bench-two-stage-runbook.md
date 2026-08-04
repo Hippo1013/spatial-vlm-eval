@@ -1,8 +1,10 @@
 # CV-Bench 两阶段推理、评分与汇总
 
 本手册只保留操作者需要的命令。协议与产物定义见
-[CV-Bench canonical protocol](benchmarks/cv_bench/protocol.md)。本轮只实现和验证链路，不自动启动
-2638 条正式推理。只需复制命令时直接看 [CV-Bench 简明运行指令](cv-bench-commands.md)。
+[CV-Bench canonical protocol](benchmarks/cv_bench/protocol.md)。截至 2026-08-04，排除四卡
+InternVL3-78B 后的 22 条目标轨正在进行 full-2638 串行推理，尚未启动评分；不要在控制器存活时重复
+启动批次。只需复制命令时直接看 [CV-Bench 简明运行指令](cv-bench-commands.md)，实时状态以服务器
+`_serial_full/status.tsv`、validator 和 metadata 为准。
 
 ## 1. 环境与只读检查
 

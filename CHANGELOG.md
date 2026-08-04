@@ -64,8 +64,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   明确包含目标色，允许 `blue-purple`、`red-orange` 等近色措辞。当前 protocol 的 gate 若仅组合
   adapter source digest 改变、其余 binding 完全相同，也可审计迁移而不重复调用模型。
 - CV-Bench 服务器 test stage 已现场完成 22/23 条轨的红/蓝视觉接收、smoke8 和单图审计 gate；
-  InternVL3-78B 因当前服务器仅有 2×A800、协议要求 4×80GB GPU 而保持阻塞。LLaVA-NeXT-Mistral-7B
-  与 LLaVA-NeXT-Yi-34B 已完成 full-2638 validator，尚未评分；其余轨改由操作者逐模型运行。
+  InternVL3-78B 因当前服务器仅有 2×A800、协议要求 4×80GB GPU 而保持阻塞。排除该轨后的 22 条目标轨
+  已于 2026-08-04 启动 registry-driven full-2638 串行推理；已验证完成轨由 validator 复核后跳过，
+  当前未启动评分。
 - CV-Bench prompt 冲突修复后的 `3dthinker_mental3d` 与 `spatialladder3b_thinking` 已现场重跑并通过
   v2 test gate；逐条 journal 审计确认 smoke8 均为单图、包含 reasoning answer tags，且不再含
   direct-answer 后缀。
