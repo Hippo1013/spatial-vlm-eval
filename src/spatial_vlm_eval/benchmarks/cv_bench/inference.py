@@ -368,6 +368,26 @@ def resolve_configuration(profile: CVBenchProfile) -> ResolvedConfiguration:
     )
 
 
+def _request_timeout_seconds(backend: str) -> float:
+    if backend == "vllm":
+        return float(os.environ.get("CVBENCH_VLLM_API_TIMEOUT", "600"))
+    return float(os.environ.get("CVBENCH_API_TIMEOUT", "180"))
+
+
+def _runtime_retry_policy(backend: str) -> dict[str, int]:
+    if backend == "vllm":
+        return {
+            "retries": int(os.environ.get("CVBENCH_VLLM_INFERENCE_RETRIES", "0")),
+            "retry_missing_passes": int(
+                os.environ.get("CVBENCH_VLLM_RETRY_MISSING_PASSES", "1")
+            ),
+        }
+    return {
+        "retries": int(os.environ.get("CVBENCH_INFERENCE_RETRIES", "2")),
+        "retry_missing_passes": 1 if backend == "openrouter" else 0,
+    }
+
+
 def build_adapter(configuration: ResolvedConfiguration, endpoint_index: int = 0) -> BoundAdapter:
     profile = configuration.profile
     if configuration.command:
@@ -391,7 +411,7 @@ def build_adapter(configuration: ResolvedConfiguration, endpoint_index: int = 0)
             base_url=configuration.base_urls[endpoint_index],
             api_key=api_key,
             served_model_name=profile.served_model_name,
-            timeout=float(os.environ.get("CVBENCH_API_TIMEOUT", "180")),
+            timeout=_request_timeout_seconds(configuration.backend),
             metadata_retries=int(os.environ.get("CVBENCH_OPENROUTER_METADATA_RETRIES", "10")),
             policy_key=profile.api_policy_key,
             image_source="CV-Bench RGB only",
@@ -895,8 +915,7 @@ def _run_dual_shard_full(
             official_size=OFFICIAL_TEST_SIZE,
             scorer_protocol=SCORER_PROTOCOL,
             workers=capacity,
-            retries=int(os.environ.get("CVBENCH_INFERENCE_RETRIES", "2")),
-            retry_missing_passes=0,
+            **_runtime_retry_policy(configuration.backend),
         )
 
     with ThreadPoolExecutor(max_workers=2) as executor:
@@ -1053,8 +1072,7 @@ def _run_test_stage_with_configuration(
             official_size=OFFICIAL_TEST_SIZE,
             scorer_protocol=SCORER_PROTOCOL,
             workers=min(selected_capacity, len(SMOKE8_INDICES)),
-            retries=int(os.environ.get("CVBENCH_INFERENCE_RETRIES", "2")),
-            retry_missing_passes=1 if configuration.backend == "openrouter" else 0,
+            **_runtime_retry_policy(configuration.backend),
         )
     except BaseException:
         for adapter in adapters:
@@ -1198,8 +1216,7 @@ def run_full_stage(
             official_size=OFFICIAL_TEST_SIZE,
             scorer_protocol=SCORER_PROTOCOL,
             workers=capacity,
-            retries=int(os.environ.get("CVBENCH_INFERENCE_RETRIES", "2")),
-            retry_missing_passes=1 if configuration.backend == "openrouter" else 0,
+            **_runtime_retry_policy(configuration.backend),
         )
         metadata_path = output.with_suffix(output.suffix + ".metadata.json")
         metadata = _enrich_metadata(

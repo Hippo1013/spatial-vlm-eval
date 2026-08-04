@@ -57,6 +57,9 @@ bash scripts/cv_bench/run_inference.sh --stage full --models PROFILE1,PROFILE2
 bash scripts/cv_bench/run_inference.sh --stage full --all
 ```
 
+单模型失败后可在服务恢复就绪时原样重跑同一个 `--model PROFILE`；同签名 journal 会跳过成功项并只补
+缺失 index。模型名称和顺序继续通过 `--list` 查询，本页不重复维护逐 profile 命令。
+
 多模型按 registry 顺序串行。需要自动轮换通用模型 vLLM 服务并跳过四卡 InternVL3-78B 时：
 
 ```bash

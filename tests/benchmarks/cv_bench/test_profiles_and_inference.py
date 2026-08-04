@@ -14,6 +14,8 @@ from spatial_vlm_eval.benchmarks.cv_bench.inference import (
     _adapter_digest_only_change,
     _cvbench_color_canary_specs,
     _digest,
+    _request_timeout_seconds,
+    _runtime_retry_policy,
     _strict_legacy_gate_migration_errors,
     inspect_local_gpus,
     merge_prediction_shards,
@@ -36,6 +38,36 @@ class _Pixels:
 
 
 class CVBenchProfilesAndInferenceTest(unittest.TestCase):
+    def test_local_vllm_uses_long_timeout_and_deferred_missing_retry(self):
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(_request_timeout_seconds("vllm"), 600.0)
+            self.assertEqual(
+                _runtime_retry_policy("vllm"),
+                {"retries": 0, "retry_missing_passes": 1},
+            )
+            self.assertEqual(_request_timeout_seconds("openrouter"), 180.0)
+            self.assertEqual(
+                _runtime_retry_policy("openrouter"),
+                {"retries": 2, "retry_missing_passes": 1},
+            )
+
+    def test_local_vllm_timeout_and_retry_policy_are_independently_overridable(self):
+        with patch.dict(
+            os.environ,
+            {
+                "CVBENCH_VLLM_API_TIMEOUT": "720",
+                "CVBENCH_VLLM_INFERENCE_RETRIES": "1",
+                "CVBENCH_VLLM_RETRY_MISSING_PASSES": "2",
+                "CVBENCH_INFERENCE_RETRIES": "9",
+            },
+            clear=True,
+        ):
+            self.assertEqual(_request_timeout_seconds("vllm"), 720.0)
+            self.assertEqual(
+                _runtime_retry_policy("vllm"),
+                {"retries": 1, "retry_missing_passes": 2},
+            )
+
     def test_adapter_digest_only_migration_rejects_any_protocol_change(self):
         old = {"adapter": {"adapter_digest": "old", "backend": "vllm"}, "profile": "p"}
         new = {"adapter": {"adapter_digest": "new", "backend": "vllm"}, "profile": "p"}

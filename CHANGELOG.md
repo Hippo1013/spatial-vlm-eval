@@ -103,6 +103,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Fixed
 
+- 修复 CV-Bench 本地 vLLM full 的长尾恢复：将本地请求超时与 OpenRouter 超时解耦，默认延长为 600
+  秒，并把即时重复请求改为首轮结束后仅补 journal 缺失 index，避免官方 512-token 配置下极少数长
+  输出连续超时导致完整 2638 条无法原子落盘。
 - 将 CV-Bench 最终回答格式从全局数据层移到 profile 层：普通轨继续追加 direct-letter 后缀，
   `3dthinker_mental3d` 与 `spatialladder3b_thinking` 只保留各自官方 `<think>/<answer>` prompt，避免
   “直接回答”与“先推理再回答”同时出现。两条 reasoning inference protocol 升为 v2，旧 test gate

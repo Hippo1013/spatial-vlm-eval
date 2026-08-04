@@ -146,6 +146,12 @@ bash scripts/cv_bench/run_inference.sh --stage full --all
 分片并确定性合并；TP=2/4、API 和不支持并行的专用 sampling 轨保持单 endpoint/worker 策略。正式文件
 必须精确覆盖 2638 条并通过 `prediction_validation.json`；subset 不得复制到正式目录。
 
+本地 vLLM 默认允许单请求最多 600 秒，并在首轮结束后只补一次 journal 缺失 index；不要把
+`CVBENCH_INFERENCE_RETRIES` 用作本地 vLLM 的即时重试。确需现场覆盖时分别使用
+`CVBENCH_VLLM_API_TIMEOUT`、`CVBENCH_VLLM_INFERENCE_RETRIES` 和
+`CVBENCH_VLLM_RETRY_MISSING_PASSES`。重新执行同一 profile 的 full 会复用同签名 journal 中已经成功的
+index，只补缺失项。
+
 自动轮换每条通用模型的 vLLM 服务并明确跳过当前无法运行的 InternVL3-78B：
 
 ```bash

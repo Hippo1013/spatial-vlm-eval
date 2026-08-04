@@ -77,6 +77,11 @@ manifest 解析，缺失时 fail closed。
 5. vLLM 并发候选 `32,16,8,4,2,1` 容量探测；
 6. subset validator、模型边界单图计数和只读 GPU inventory/process 审计。
 
+本地 vLLM 请求默认使用 600 秒长尾超时。单次失败不立即向仍可能继续生成的本地服务重复提交；首轮
+遍历结束后只对 journal 中缺失的 index 再运行一轮。这样既保留官方 512-token 上限和测试阶段选出的
+并发度，也避免极少数长输出在 180 秒客户端超时后形成多个并行重复请求。OpenRouter 仍使用独立的
+180 秒 API 超时、逐请求重试和 missing pass 策略；两者不能通过同一个环境变量静默混用。
+
 测试 gate 绑定 dataset revision/fingerprint、模型 revision、profile registry digest、adapter digest、
 upstream commit、processor 摘要、decoding、sharding 和显式 GPU selection。任一字段改变，full 阶段拒绝
 旧 gate。InternVL3-78B 只能在明确枚举四张至少 79000 MiB 的 GPU 后以 TP=4 运行，不做量化替代。

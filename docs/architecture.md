@@ -51,6 +51,10 @@ reference 泄漏给模型。
 - API/模型调用可以重试，journal 持久化失败不重发付费请求；
 - 真实空 completion 是成功事件，并自动带 empty warning。
 
+CV-Bench 本地 vLLM 与付费 API 使用不同恢复策略：vLLM 长尾请求采用较长超时，并在一轮数据结束后
+只补 journal 缺失项，避免超时连接背后的服务端生成尚未取消时立即制造重复请求；OpenRouter 保持
+429/5xx 逐请求退避和付费调用安全边界。两类策略都写入最终 runtime metadata。
+
 只有全部目标成功后，runner 才按 index 排序并原子替换 `predictions.jsonl`。metadata 同时记录 model、
 revision、inference/scorer protocol、图像处理、decoding、upstream commit、runtime package、GPU、开始/
 结束时间和 subset 状态。
