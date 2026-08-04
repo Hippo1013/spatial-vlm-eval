@@ -164,6 +164,15 @@ bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --skip-completed
 GPU burn 仍由操作者按对应手册在控制器外显式开关。`--skip-completed` 只在现有 prediction 重新通过
 锁定数据的完整 validator 后跳过对应轨，并在 `status.tsv` 记录 `SKIP_COMPLETE`。控制器不评分。
 
+另开终端可用只读 watcher 自动跟随当前及后续模型的正式 journal，并逐条打印精简后的 prediction；
+默认只显示启动监听后追加的事件，`--from-start` 可重放当前模型已有事件：
+
+```bash
+bash scripts/cv_bench/watch_live_predictions.sh
+```
+
+按 `Ctrl-C` 仅停止 watcher，不会向控制器、模型服务或推理进程发送信号。
+
 ## 5. 校验、评分与报告
 
 正式推理后可先独立执行完整 validator；评分入口还会强制重复校验，不能绕过：

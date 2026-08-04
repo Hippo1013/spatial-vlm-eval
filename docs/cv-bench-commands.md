@@ -73,7 +73,18 @@ bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --skip-completed
 `--skip-completed` 会先用锁定数据重新执行完整 validator，只有实际 prediction 仍通过时才在启动模型前
 写入 `SKIP_COMPLETE` 并跳过。运行前须关闭 GPU burn，并在当前 shell 启用 API 代理。
 
-## 5. 校验
+## 5. 只读查看逐条结果
+
+自动跟随当前及后续串行模型，只打印启动监听后新写入 journal 的逐条 success/failure：
+
+```bash
+bash scripts/cv_bench/watch_live_predictions.sh
+```
+
+需要从头重放当前模型的既有 journal 时增加 `--from-start`。按 `Ctrl-C` 只会退出 watcher，不会中断
+tmux 中的推理。
+
+## 6. 校验
 
 正式结果必须先通过完整 2638 条校验；`score_results.sh` 也会在评分前强制重复这一步：
 
@@ -81,7 +92,7 @@ bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --skip-completed
 bash scripts/cv_bench/validate_predictions.sh --predictions /absolute/path/to/predictions.jsonl
 ```
 
-## 6. 评分
+## 7. 评分
 
 只评分一个刚完成的结果：
 
@@ -96,7 +107,7 @@ bash scripts/cv_bench/score_results.sh --list
 bash scripts/cv_bench/score_results.sh
 ```
 
-## 7. 汇总
+## 8. 汇总
 
 ```bash
 bash scripts/cv_bench/build_results_report.sh --check

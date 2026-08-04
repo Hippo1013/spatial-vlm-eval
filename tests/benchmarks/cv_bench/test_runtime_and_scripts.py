@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import json
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from dataclasses import dataclass
 from pathlib import Path
@@ -144,6 +146,101 @@ class CVBenchRuntimeAndScriptsTest(unittest.TestCase):
         for path in sorted((self.repository / "scripts" / "cv_bench").glob("*.sh")):
             with self.subTest(path=path.name):
                 subprocess.run(["bash", "-n", str(path)], check=True)
+
+    def test_live_prediction_watcher_is_read_only_and_filters_debug_journals(self):
+        script = self.repository / "scripts" / "cv_bench" / "watch_live_predictions.sh"
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("CVBENCH_OUTPUT_ROOT", text)
+        self.assertIn("status.tsv", text)
+        self.assertIn("*.journal.jsonl", text)
+        self.assertIn('"test_runs" not in path.parts', text)
+        self.assertIn('"failed_attempts" not in path.parts', text)
+        self.assertIn("--from-start", text)
+        self.assertNotIn("tmux send-keys", text)
+        self.assertNotIn("kill ", text)
+
+        completed = subprocess.run(
+            ["bash", str(script), "--help"],
+            cwd=self.repository,
+            env={**os.environ, "CVBENCH_ENV_FILE": "/dev/null"},
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        self.assertIn("read-only", completed.stdout)
+
+    def test_live_prediction_watcher_prints_only_new_current_events(self):
+        script = self.repository / "scripts" / "cv_bench" / "watch_live_predictions.sh"
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            control = root / "_serial_full"
+            logs = control / "logs"
+            journal = root / "runs" / "test_profile" / "revision" / "protocol" / (
+                "predictions.jsonl.journal.jsonl"
+            )
+            logs.mkdir(parents=True)
+            journal.parent.mkdir(parents=True)
+            (control / "status.tsv").write_text(
+                "run_id\tprofile\tstate\ttimestamp\n"
+                "test-run\ttest_profile\tSTART\t2026-08-04T00:00:00Z\n",
+                encoding="utf-8",
+            )
+            journal.write_text(
+                json.dumps(
+                    {
+                        "timestamp": "old",
+                        "status": "success",
+                        "index": 0,
+                        "prediction": "OLD",
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            process = subprocess.Popen(
+                ["bash", str(script)],
+                cwd=self.repository,
+                env={
+                    **os.environ,
+                    "CVBENCH_ENV_FILE": "/dev/null",
+                    "CVBENCH_OUTPUT_ROOT": str(root),
+                    "CVBENCH_PYTHON": sys.executable,
+                    "CVBENCH_WATCH_POLL_SECONDS": "1",
+                },
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            try:
+                time.sleep(1.2)
+                with journal.open("a", encoding="utf-8") as handle:
+                    handle.write(
+                        json.dumps(
+                            {
+                                "timestamp": "new",
+                                "status": "success",
+                                "index": 1,
+                                "prediction": "NEW",
+                            }
+                        )
+                        + "\n"
+                    )
+                time.sleep(1.2)
+                (logs / "test-run.controller.log").write_text(
+                    "[cv-bench-full-serial] COMPLETE\n", encoding="utf-8"
+                )
+                stdout, stderr = process.communicate(timeout=5)
+            finally:
+                if process.poll() is None:
+                    process.terminate()
+                    process.wait(timeout=5)
+
+        self.assertEqual(process.returncode, 0, stderr)
+        self.assertIn("index=1", stdout)
+        self.assertIn("NEW", stdout)
+        self.assertNotIn("index=0", stdout)
+        self.assertNotIn("OLD", stdout)
+        self.assertIn("serial inference COMPLETE", stdout)
 
     def test_vllm_launcher_uses_registry_revision_tp_and_served_name(self):
         script = self.repository / "scripts" / "cv_bench" / "serve_vllm_profile.sh"
