@@ -9,7 +9,7 @@
 | Benchmark | 目标范围 | 仓库实现状态 | 当前阶段 |
 |---|---|---|---|
 | MSMU-Bench | official `test`，987 条 | 已实现 input contract、validator、inference 与 scorer | 18 条既有目标 profile 已完成；本阶段告一段落 |
-| CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | contract、23-profile registry、两阶段推理、scorer 与报告已实现 | 本地链路验证中；服务器 test gate/full-2638 尚未运行 |
+| CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | contract、23-profile registry、两阶段推理、scorer 与报告已实现 | 22/23 test gate；2/23 full-2638 已通过 validator，尚未评分（2026-08-04） |
 | Q-Spatial Bench | Q-Spatial++ 与 Q-Spatial-ScanNet | 尚未实现 | **下一项待定**；ScanNet 原始图像的授权与完整性须另行验收 |
 | SPBench-SI | SPBench 单图版本；不包含 SPBench-MV | 尚未实现 | 与 Q-Spatial Bench 的先后待定 |
 
@@ -79,8 +79,9 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 5. processor/template、视觉 canary、smoke8 与输入审计形成绑定 gate；只有完整 2638 条和 publication
    gates 通过后才能发布结果。
 
-本轮不自动启动服务器 full-2638。截至 2026-08-03，22/23 条轨曾通过服务器 v1 test gate；prompt
+截至 2026-08-03，22/23 条轨曾通过服务器 v1 test gate；prompt
 冲突修复后 `3dthinker_mental3d` 与 `spatialladder3b_thinking` 已于 2026-08-04 通过 v2 test gate，
 其余轨可在最终 prompt 不变且仅 adapter digest 变化时审计迁移；
-InternVL3-78B 因当前服务器只有两张 A800、协议要求四张 80GB GPU 而阻塞。下一执行动作是取得四卡
-资源补齐该 gate；其余轨可在用户确认后进入正式 full 阶段。
+InternVL3-78B 因当前服务器只有两张 A800、协议要求四张 80GB GPU 而阻塞。LLaVA-NeXT-Mistral-7B
+与 LLaVA-NeXT-Yi-34B 已于 2026-08-04 完成 full-2638 并通过 validator，但尚未评分；其余轨由操作者
+逐模型进入正式 full 阶段。

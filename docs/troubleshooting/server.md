@@ -26,6 +26,13 @@
 
 <!-- 按模板在此处下方插入条目，最新条目在最上方。 -->
 
+### 2026-08-04 · [CV-Bench/vLLM] Yi-34B 长尾请求连续超时导致 full 缺两条
+- 场景：Yi-34B TP=2、并发 32、官方 greedy/512 配置下运行 full-2638。
+- 报错：`Inference incomplete after retries; missing 2 indices: [491, 501]`。
+- 原因：两个长输出超过旧 180 秒客户端超时，服务端生成未取消时即时重试又叠加重复请求。
+- 处理：本地 vLLM 独立使用 600 秒超时、零即时重试，并在首轮结束后仅补一次 journal 缺失项。
+- 验证：两条首轮超时后在 missing pass 成功；2638 条唯一覆盖、validator 和 publishable inference 通过。
+
 ### 2026-08-01 · [MSMU/deployment] 单模型评测镜像缺少 curl
 - 场景：远程任务运行 `run_model_evaluation.sh internvl3_78b`，准备启动 stage 3。
 - 报错：`[msmu-eval] required command is unavailable: curl`。

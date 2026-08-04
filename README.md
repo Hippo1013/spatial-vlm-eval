@@ -21,7 +21,9 @@ scorer protocol 与发布门禁。模型适配与 benchmark 评分分层，任�
 项目目标覆盖 MSMU-Bench、CV-Bench、Q-Spatial Bench 和 SPBench-SI。MSMU 的既有 18 条目标 profile
 已完成；CV-Bench 已实现 23 条目标轨的链路，服务器曾完成其中 22 条 v1 test gate；prompt 冲突修复后
 两条 reasoning 轨已于 2026-08-04 通过 v2 test，其他轨可在最终 prompt 不变时审计迁移。
-InternVL3-78B 因当前服务器只有两张 A800、协议要求四张 80GB GPU 而保持阻塞。正式 2638 条推理尚未启动。
+InternVL3-78B 因当前服务器只有两张 A800、协议要求四张 80GB GPU 而保持阻塞。截至 2026-08-04，
+LLaVA-NeXT-Mistral-7B 与 LLaVA-NeXT-Yi-34B 两条 full-2638 已通过完整 validator，
+尚未评分；其余轨改由操作者逐模型运行。
 Q-Spatial Bench 与 SPBench-SI 尚未实现。精确范围、数据准备边界与当前阶段见
 [四 Benchmark 评测范围](docs/evaluation-scope.md)。
 

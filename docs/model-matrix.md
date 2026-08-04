@@ -38,13 +38,13 @@ map，因此不建立虚假的 RGB-only 轨。实现 adapter 时分别
 以下 23 条轨已在 registry、CLI、validator、scorer 和报告发现中注册。截至 2026-08-03，服务器曾现场
 审计 22 条 v1 test gate；prompt 修复后的两条 reasoning gate 已于 2026-08-04 通过 v2 test，其他轨的
 最终 prompt 不变并可在仅 adapter digest 变化时审计迁移。InternVL3-78B 因当前只有两张 A800 而无法满足四卡门禁。
-尚未启动 full-2638，不能把本表解释为已有分数。通用轨先审计
+截至 2026-08-04，前两条 LLaVA-NeXT 轨已完成 full-2638 validator，但尚未评分，不能把本表解释为已有分数。通用轨先审计
 官方 Transformers processor/template，再使用 vLLM 0.19；不一致时只能显式回退到锁定 runner。
 
 | Profile | Model / locked revision | Input track | Backend / decoding | 当前状态 |
 |---|---|---|---|---|
-| `llava_next_mistral_7b` | `llava-hf/llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | RGB | vLLM；greedy/512/seed 42 | test gate passed（2026-08-03） |
-| `llava_next_yi_34b` | `llava-hf/llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | RGB | vLLM TP=2；greedy/512/seed 42 | test gate passed（2026-08-03） |
+| `llava_next_mistral_7b` | `llava-hf/llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | RGB | vLLM；greedy/512/seed 42 | full-2638 validator passed，未评分（2026-08-04） |
+| `llava_next_yi_34b` | `llava-hf/llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | RGB | vLLM TP=2；greedy/512/seed 42 | full-2638 validator passed，未评分（2026-08-04） |
 | `internvl3_8b` | `OpenGVLab/InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | RGB | vLLM；greedy/512/seed 42 | test gate passed（2026-08-03） |
 | `internvl3_38b` | `OpenGVLab/InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | RGB | vLLM TP=2；greedy/512/seed 42 | test gate passed（2026-08-03） |
 | `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | RGB | vLLM TP=4，四张 80GB；greedy/512/seed 42 | test gate blocked：当前服务器仅 2×A800（2026-08-03） |
