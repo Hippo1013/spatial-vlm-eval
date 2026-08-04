@@ -63,11 +63,12 @@ bash scripts/cv_bench/run_inference.sh --stage full --all
 多模型按 registry 顺序串行。需要自动轮换通用模型 vLLM 服务并跳过四卡 InternVL3-78B 时：
 
 ```bash
-bash scripts/cv_bench/run_full_serial.sh --without-internvl78
+bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --skip-completed
 ```
 
 该入口按 registry 顺序运行其余 22 条轨、只管理自己启动的 vLLM 服务，任一轨失败立即停止且不评分。
-运行前须关闭 GPU burn，并在当前 shell 启用 API 代理。
+`--skip-completed` 会先用锁定数据重新执行完整 validator，只有实际 prediction 仍通过时才在启动模型前
+写入 `SKIP_COMPLETE` 并跳过。运行前须关闭 GPU burn，并在当前 shell 启用 API 代理。
 
 ## 5. 校验
 

@@ -10,7 +10,7 @@ source "${SCRIPT_DIR}/_env.sh"
 usage() {
   cat <<'EOF'
 Usage:
-  bash scripts/cv_bench/run_full_serial.sh --without-internvl78
+  bash scripts/cv_bench/run_full_serial.sh --without-internvl78 [--skip-completed]
   bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --dry-run
   bash scripts/cv_bench/run_full_serial.sh --list
 
@@ -20,11 +20,13 @@ EOF
 }
 
 exclude_internvl78=0
+skip_completed=0
 dry_run=0
 list_only=0
 while (( $# > 0 )); do
   case "$1" in
     --without-internvl78) exclude_internvl78=1; shift ;;
+    --skip-completed) skip_completed=1; shift ;;
     --dry-run) dry_run=1; shift ;;
     --list) list_only=1; shift ;;
     --help|-h) usage; exit 0 ;;
@@ -254,10 +256,43 @@ run_profile() {
   echo "[cv-bench-full-serial] profile passed: ${profile}"
 }
 
+profile_has_valid_full_predictions() {
+  local profile="$1"
+  "${CVBENCH_PYTHON}" - "${profile}" "${CVBENCH_OUTPUT_ROOT}" "${CVBENCH_DATASET_ROOT}" <<'PY'
+import sys
+from pathlib import Path
+
+from spatial_vlm_eval.benchmarks.cv_bench.inference import track_directory
+from spatial_vlm_eval.benchmarks.cv_bench.prediction_validation import validate_predictions
+from spatial_vlm_eval.benchmarks.cv_bench.profiles import get_profile
+
+profile = get_profile(sys.argv[1])
+prediction_path = track_directory(sys.argv[2], profile) / "predictions.jsonl"
+if not prediction_path.is_file():
+    raise SystemExit(1)
+try:
+    _, report = validate_predictions(
+        prediction_path,
+        Path(sys.argv[3]).resolve(),
+        allow_subset=False,
+        verify_files=True,
+    )
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0 if report.get("passed") is True else 1)
+PY
+}
+
 printf 'run_id\tprofile\tstate\ttimestamp\n' >"${status_file}"
 echo "[cv-bench-full-serial] run_id=${run_id} controller_log=${controller_log}"
 while IFS=$'\t' read -r profile group tp served; do
   [[ -n "${profile}" ]] || continue
+  if [[ "${skip_completed}" == "1" ]] && profile_has_valid_full_predictions "${profile}"; then
+    printf '%s\t%s\tSKIP_COMPLETE\t%s\n' \
+      "${run_id}" "${profile}" "$(date -u +%FT%TZ)" >>"${status_file}"
+    echo "[cv-bench-full-serial] SKIP_COMPLETE profile=${profile} validator=passed"
+    continue
+  fi
   printf '%s\t%s\tSTART\t%s\n' "${run_id}" "${profile}" "$(date -u +%FT%TZ)" >>"${status_file}"
   echo "[cv-bench-full-serial] START profile=${profile}"
   if [[ "${group}" == "general_open" ]]; then

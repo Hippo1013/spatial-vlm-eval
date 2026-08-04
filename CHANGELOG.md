@@ -56,6 +56,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- CV-Bench full 串行控制器增加显式 `--skip-completed`：在启动模型服务前重新以锁定数据完整校验现有
+  2638 条 prediction，仅验证通过的轨记录 `SKIP_COMPLETE` 并跳过，避免恢复批次重新加载已完成模型。
 - 按目标测试策略将 CV-Bench 全部 23 条轨统一改为纯红、纯蓝 RGB 图颜色识别最低视觉 canary，取消
   形状、方位和空间描述能力门槛；smoke8、单图边界审计及其他 provenance gate 保持不变。已通过旧版
   组合空间语义 canary 的轨可在严格 artifact 审计后迁移当前 gate，避免重复模型调用；颜色回答只需

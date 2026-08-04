@@ -155,11 +155,12 @@ index，只补缺失项。
 自动轮换每条通用模型的 vLLM 服务并明确跳过当前无法运行的 InternVL3-78B：
 
 ```bash
-bash scripts/cv_bench/run_full_serial.sh --without-internvl78
+bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --skip-completed
 ```
 
 控制器只管理自己启动的服务，遇到占用端口、忙碌 GPU、过期 gate 或任一轨失败即停止；API 代理和
-GPU burn 仍由操作者按对应手册在控制器外显式开关。控制器不评分。
+GPU burn 仍由操作者按对应手册在控制器外显式开关。`--skip-completed` 只在现有 prediction 重新通过
+锁定数据的完整 validator 后跳过对应轨，并在 `status.tsv` 记录 `SKIP_COMPLETE`。控制器不评分。
 
 ## 5. 校验、评分与报告
 
