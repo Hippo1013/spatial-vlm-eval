@@ -79,6 +79,8 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 5. processor/template、视觉 canary、smoke8 与输入审计形成绑定 gate；只有完整 2638 条和 publication
    gates 通过后才能发布结果。
 
-本轮不自动启动服务器 full-2638。截至 2026-08-03，22/23 条轨已通过服务器 test gate；
+本轮不自动启动服务器 full-2638。截至 2026-08-03，22/23 条轨曾通过服务器 v1 test gate；prompt
+冲突修复后 `3dthinker_mental3d` 与 `spatialladder3b_thinking` 已于 2026-08-04 通过 v2 test gate，
+其余轨可在最终 prompt 不变且仅 adapter digest 变化时审计迁移；
 InternVL3-78B 因当前服务器只有两张 A800、协议要求四张 80GB GPU 而阻塞。下一执行动作是取得四卡
 资源补齐该 gate；其余轨可在用户确认后进入正式 full 阶段。

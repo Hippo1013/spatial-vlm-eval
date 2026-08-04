@@ -74,6 +74,11 @@ runner 每行只接收 index、最终 prompt、一个 PNG data URI 和锁定 pro
 profile/revision/protocol/decoding、原始输出、模板 SHA-256，并证明一个 media 或 image tensor。缺少
 任一证明时测试 gate 失败。不得通过 runner 读取原始 Parquet 或答案/任务/来源字段。
 
+最终 prompt 在 profile 层生成：普通轨追加 direct-letter 后缀；`3dthinker_mental3d` 和
+`spatialladder3b_thinking` 只使用各自官方 `<think>/<answer>` 模板。两条 reasoning 轨的 v1 gate
+包含冲突指令，不能迁移，部署当前代码后必须重新运行 test stage；当前服务器已于 2026-08-04 完成
+两条 v2 gate。其他轨的最终 prompt 不变，若仅 adapter digest 变化可走现有无模型调用的审计迁移。
+
 HiSpatial 额外锁定 `Ruicheng/moge-2-vitl-normal@b135031bae30b5ac2ae141a0e68717795ce38340`
 和 MoGe 上游 `925b8ed835a7a9cdb7578ba15c658a0afc969030`；runner 会同时验证 HiSpatial、
 MoGe-2 checkpoint、两个模型上游 checkout，以及 MoGe requirements 锁定的
@@ -140,6 +145,15 @@ bash scripts/cv_bench/run_inference.sh --stage full --all
 多模型严格按 registry 顺序串行。单卡可容纳的 deterministic 通用模型以两个 endpoint 固定偶/奇 index
 分片并确定性合并；TP=2/4、API 和不支持并行的专用 sampling 轨保持单 endpoint/worker 策略。正式文件
 必须精确覆盖 2638 条并通过 `prediction_validation.json`；subset 不得复制到正式目录。
+
+自动轮换每条通用模型的 vLLM 服务并明确跳过当前无法运行的 InternVL3-78B：
+
+```bash
+bash scripts/cv_bench/run_full_serial.sh --without-internvl78
+```
+
+控制器只管理自己启动的服务，遇到占用端口、忙碌 GPU、过期 gate 或任一轨失败即停止；API 代理和
+GPU burn 仍由操作者按对应手册在控制器外显式开关。控制器不评分。
 
 ## 5. 校验、评分与报告
 

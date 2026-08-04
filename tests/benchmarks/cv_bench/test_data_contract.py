@@ -10,7 +10,6 @@ from spatial_vlm_eval.benchmarks.cv_bench.data import (
     DATASET_FILES,
     DATASET_REVISION,
     OFFICIAL_TEST_SIZE,
-    QUESTION_EXTENSION,
     SMOKE8_INDICES,
 )
 
@@ -33,11 +32,12 @@ class CVBenchDataContractTest(unittest.TestCase):
         for item in DATASET_FILES:
             self.assertRegex(item.sha256, r"^[0-9a-f]{64}$")
 
-    def test_adapter_input_has_only_index_rgb_and_final_prompt(self):
+    def test_adapter_input_has_only_index_rgb_and_dataset_prompt(self):
         model_input = self.contract.model_input(0)
         self.assertEqual([field.name for field in fields(CVBenchModelInput)], ["index", "image", "question"])
         self.assertEqual(model_input.image.mode, "RGB")
-        self.assertTrue(model_input.question.endswith(QUESTION_EXTENSION))
+        self.assertFalse(model_input.question.endswith("directly."))
+        self.assertIn("(A)", model_input.question)
         for forbidden in ("answer", "task", "source", "choices", "bbox"):
             self.assertFalse(hasattr(model_input, forbidden))
         self.assertEqual(set(self.contract.prediction_row(0, "A")), {"index", "raw_prediction"})

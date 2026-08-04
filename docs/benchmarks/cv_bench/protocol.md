@@ -33,11 +33,20 @@ COCO 805、Omni3D 1200。
 CVBenchModelInput(index, one RGB image, question)
 ```
 
-其中 `question` 是数据集 `prompt`（题目和有序选项）加上官方直接答题后缀：
+其中 `question` 在数据合同层只包含数据集 `prompt`（题目和有序选项）。最终输出格式由 profile 层
+决定，避免 benchmark 的通用后缀与模型官方 reasoning prompt 冲突：
 
 ```text
-Answer with the option's letter from the given choices directly.
+普通 direct profile: 数据集 prompt +
+  Answer with the option's letter from the given choices directly.
+
+3dthinker_mental3d / spatialladder3b_thinking:
+  数据集 prompt + 对应锁定的官方 <think>...</think><answer>...</answer> 提示词
+  （不再追加 direct-answer 后缀）
 ```
+
+两条 reasoning profile 的 inference protocol 为 v2；旧 v1 test gate 不得解锁 full。其余 profile 的
+最终 prompt 字节保持不变，只有组合 adapter digest 变化时可按既有严格迁移规则复用输入证据。
 
 adapter 不得接触 `answer`、`task`、`source`、bbox 或其他评分字段。每个调用必须在 journal 或 processor
 审计中证明 prompt、图片 mode/尺寸/像素 SHA-256、模板摘要，以及恰好一个 media prompt 或模型图像

@@ -15,7 +15,6 @@ from ...models.common.runtime import pixel_sha256
 
 DATASET_REPOSITORY = "nyu-visionx/CV-Bench"
 DATASET_REVISION = "bc284db50d036958861cb60cdd7b77612052ce0d"
-QUESTION_EXTENSION = "Answer with the option's letter from the given choices directly."
 OFFICIAL_2D_SIZE = 1438
 OFFICIAL_3D_SIZE = 1200
 OFFICIAL_TEST_SIZE = OFFICIAL_2D_SIZE + OFFICIAL_3D_SIZE
@@ -99,8 +98,8 @@ def answer_letter(answer: Any) -> str:
     return text
 
 
-def model_prompt(row: Mapping[str, Any]) -> str:
-    """Validate and return the dataset prompt plus the official direct-answer suffix."""
+def dataset_prompt(row: Mapping[str, Any]) -> str:
+    """Validate and return the dataset-owned question and ordered choices."""
 
     question = str(row.get("question") or "").strip()
     prompt = str(row.get("prompt") or "").strip()
@@ -123,7 +122,7 @@ def model_prompt(row: Mapping[str, Any]) -> str:
     gold = answer_letter(row.get("answer"))
     if string.ascii_uppercase.index(gold) >= len(choices):
         raise ValueError(f"CV-Bench gold option {gold} is outside {len(choices)} choices")
-    return f"{prompt}\n{QUESTION_EXTENSION}"
+    return prompt
 
 
 def _as_row(value: Any) -> dict[str, Any]:
@@ -150,7 +149,7 @@ def _validate_source_row(row: Mapping[str, Any], *, index: int) -> None:
             f"CV-Bench index {index} has unsupported type/task/source "
             f"{(split_type, task, source)!r}"
         )
-    model_prompt(row)
+    dataset_prompt(row)
     image = row.get("image")
     if image is None or not hasattr(image, "convert"):
         raise ValueError(f"CV-Bench index {index} has no PIL-compatible image")
@@ -266,7 +265,7 @@ class CVBenchTestContract:
         return CVBenchModelInput(
             index=resolved,
             image=row["image"].convert("RGB"),
-            question=model_prompt(row),
+            question=dataset_prompt(row),
         )
 
     def model_inputs(self, indices: Iterable[int]) -> list[CVBenchModelInput]:
@@ -302,7 +301,7 @@ class CVBenchTestContract:
             row = self._source_row(index)
             task_counts[str(row["task"])] += 1
             source_counts[str(row["source"])] += 1
-            prompt_digest.update(f"{index}\0{model_prompt(row)}\0".encode("utf-8"))
+            prompt_digest.update(f"{index}\0{dataset_prompt(row)}\0".encode("utf-8"))
             if include_images:
                 image = row["image"].convert("RGB")
                 image_digest.update(

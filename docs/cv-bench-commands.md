@@ -57,7 +57,14 @@ bash scripts/cv_bench/run_inference.sh --stage full --models PROFILE1,PROFILE2
 bash scripts/cv_bench/run_inference.sh --stage full --all
 ```
 
-多模型按 registry 顺序串行；本轮实施不自动执行这些 full 命令。
+多模型按 registry 顺序串行。需要自动轮换通用模型 vLLM 服务并跳过四卡 InternVL3-78B 时：
+
+```bash
+bash scripts/cv_bench/run_full_serial.sh --without-internvl78
+```
+
+该入口按 registry 顺序运行其余 22 条轨、只管理自己启动的 vLLM 服务，任一轨失败立即停止且不评分。
+运行前须关闭 GPU burn，并在当前 shell 启用 API 代理。
 
 ## 5. 校验
 

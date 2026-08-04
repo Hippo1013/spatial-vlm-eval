@@ -8,6 +8,8 @@ from dataclasses import dataclass
 from typing import Any
 
 
+DIRECT_ANSWER_SUFFIX = "Answer with the option's letter from the given choices directly."
+
 MENTAL_3D_CONTROL_PROMPT = (
     "First imagine the mental 3D scene, think about the reasoning process in the mind and then "
     "provide the user with the answer. The reasoning process and answer are enclosed within "
@@ -125,6 +127,7 @@ def _specialized(
     image_processing: dict[str, Any],
     chat_template: str,
     prompt_prefix: str | None = None,
+    protocol_version: int = 1,
     requires_manifest: bool = False,
     known_deviation: str | None = None,
 ) -> CVBenchProfile:
@@ -136,7 +139,9 @@ def _specialized(
         model=model,
         revision=revision,
         input_profile=input_profile,
-        inference_protocol=f"cv_bench_{key}_{input_profile}_upstream_locked_v1",
+        inference_protocol=(
+            f"cv_bench_{key}_{input_profile}_upstream_locked_v{int(protocol_version)}"
+        ),
         adapter_kind="upstream_command",
         default_backend="upstream_transformers",
         chat_template=chat_template,
@@ -386,6 +391,7 @@ _SPECIALIZED = [
         image_processing={"source": "CV-Bench RGB", "image_count": 1},
         chat_template="3DThinker official modified Qwen2.5-VL template",
         prompt_prefix=MENTAL_3D_CONTROL_PROMPT,
+        protocol_version=2,
     ),
     _specialized(
         "spatialbot_rgb",
@@ -497,6 +503,7 @@ _SPECIALIZED = [
         image_processing={"source": "CV-Bench RGB", "image_count": 1, "min_pixels": 16 * 28 * 28, "max_pixels": 512 * 28 * 28},
         chat_template="SpatialLadder official Qwen2.5-VL template",
         prompt_prefix=SPATIALLADDER_THINKING_TEMPLATE,
+        protocol_version=2,
         requires_manifest=True,
     ),
 ]

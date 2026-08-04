@@ -17,10 +17,15 @@ from spatial_vlm_eval.benchmarks.cv_bench.inference import (
     _strict_legacy_gate_migration_errors,
     inspect_local_gpus,
     merge_prediction_shards,
+    profile_prompt,
     test_gate_errors,
 )
 from spatial_vlm_eval.benchmarks.cv_bench.processor_audit import validate_processor_audit
-from spatial_vlm_eval.benchmarks.cv_bench.profiles import PROFILE_SEQUENCE, PROFILES
+from spatial_vlm_eval.benchmarks.cv_bench.profiles import (
+    DIRECT_ANSWER_SUFFIX,
+    PROFILE_SEQUENCE,
+    PROFILES,
+)
 
 
 class _Pixels:
@@ -134,6 +139,26 @@ class CVBenchProfilesAndInferenceTest(unittest.TestCase):
         ladder = PROFILES["spatialladder3b_thinking"]
         self.assertIn("<think>", ladder.prompt_prefix)
         self.assertEqual(ladder.decoding["max_new_tokens"], 1024)
+
+    def test_profile_prompt_keeps_direct_and_reasoning_instructions_disjoint(self):
+        dataset_prompt = "Which side?\n(A) left\n(B) right"
+        reasoning_keys = {"3dthinker_mental3d", "spatialladder3b_thinking"}
+        for key in PROFILE_SEQUENCE:
+            with self.subTest(profile=key):
+                rendered = profile_prompt(dataset_prompt, PROFILES[key])
+                self.assertIn(dataset_prompt, rendered)
+                if key in reasoning_keys:
+                    self.assertIn("<think>", rendered)
+                    self.assertIn("<answer>", rendered)
+                    self.assertNotIn(DIRECT_ANSWER_SUFFIX, rendered)
+                    self.assertTrue(PROFILES[key].inference_protocol.endswith("_v2"))
+                else:
+                    self.assertEqual(rendered, f"{dataset_prompt}\n{DIRECT_ANSWER_SUFFIX}")
+
+    def test_custom_profile_prompt_without_answer_tags_fails_closed(self):
+        profile = SimpleNamespace(key="broken", prompt_prefix="Explain first.")
+        with self.assertRaisesRegex(ValueError, "without answer tags"):
+            profile_prompt("Question\n(A) yes\n(B) no", profile)
 
     def test_fixed_shard_merge_is_sorted_complete_and_rejects_duplicates(self):
         with tempfile.TemporaryDirectory() as directory:

@@ -102,6 +102,16 @@ class CVBenchRuntimeAndScriptsTest(unittest.TestCase):
         self.assertTrue(lines[0].startswith("llava_next_mistral_7b\t"))
         self.assertTrue(lines[-1].startswith("spatialladder3b_thinking\t"))
 
+    def test_full_serial_controller_is_registry_driven_and_owns_vllm(self):
+        script = self.repository / "scripts" / "cv_bench" / "run_full_serial.sh"
+        text = script.read_text(encoding="utf-8")
+        self.assertIn("PROFILE_SEQUENCE", text)
+        self.assertIn("--without-internvl78", text)
+        self.assertIn("serve_vllm_profile.sh", text)
+        self.assertIn("_probe_openai_models.py", text)
+        self.assertIn("flock -n", text)
+        self.assertNotIn("llava_next_mistral_7b,llava_next_yi_34b", text)
+
     def test_dry_run_preserves_registry_order_for_unsorted_selection(self):
         with tempfile.TemporaryDirectory() as directory:
             completed = subprocess.run(

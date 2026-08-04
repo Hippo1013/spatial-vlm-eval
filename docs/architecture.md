@@ -30,9 +30,10 @@ index, image, question
 层通过 index 从 official row 重新附着前五个 prediction 字段。新增 adapter 不得自行构造六字段
 JSONL，也不得持有原始 dataset row。
 
-`CVBenchTestContract` 使用相同三字段可见边界，但 prompt 是锁定数据集的题目/选项加官方直接答题
-后缀；prediction 只保存 `index, raw_prediction`，answer/task/source 仅在 scorer 中按 index 重新关联。
-MSMU 与 CV-Bench 的 schema、validator 和 scorer protocol 不复用。
+`CVBenchTestContract` 使用相同三字段可见边界，数据层 prompt 只包含锁定数据集的题目和选项；profile
+层再选择 direct-letter 后缀或锁定的 reasoning answer-tag 模板。两种输出指令不得同时出现。
+prediction 只保存 `index, raw_prediction`，answer/task/source 仅在 scorer 中按 index 重新关联。MSMU
+与 CV-Bench 的 schema、validator 和 scorer protocol 不复用。
 
 每次调用前创建输入审计：index、清洗后题干、RGB 数量、mode、尺寸、像素 SHA-256、profile、
 inference protocol 和 chat template。审计禁止保存 base64/API key；它证明“送入哪张图”，但不会把

@@ -39,12 +39,18 @@ from .data import (
     DATASET_FILES,
     DATASET_REVISION,
     OFFICIAL_TEST_SIZE,
-    QUESTION_EXTENSION,
     SMOKE8_INDICES,
 )
 from .prediction_validation import read_jsonl, validate_prediction_rows
 from .processor_audit import audit_processor
-from .profiles import PROFILE_SEQUENCE, PROFILES, CVBenchProfile, get_profile, ordered_profiles
+from .profiles import (
+    DIRECT_ANSWER_SUFFIX,
+    PROFILE_SEQUENCE,
+    PROFILES,
+    CVBenchProfile,
+    get_profile,
+    ordered_profiles,
+)
 from .scorer import SCORER_PROTOCOL
 
 DEFAULT_CAPACITY_CANDIDATES = (32, 16, 8, 4, 2, 1)
@@ -81,11 +87,18 @@ def track_directory(output_root: str | Path, profile: CVBenchProfile) -> Path:
 
 
 def profile_prompt(prompt: str, profile: CVBenchProfile) -> str:
+    dataset_prompt = str(prompt).strip()
+    if not dataset_prompt:
+        raise ValueError("CV-Bench dataset prompt must be non-empty")
     if not profile.prompt_prefix:
-        return str(prompt)
+        return f"{dataset_prompt}\n{DIRECT_ANSWER_SUFFIX}"
+    if "<answer>" not in profile.prompt_prefix or "</answer>" not in profile.prompt_prefix:
+        raise ValueError(
+            f"CV-Bench profile {profile.key} has a custom prompt without answer tags"
+        )
     if "{question}" in profile.prompt_prefix:
-        return profile.prompt_prefix.format(question=str(prompt))
-    return f"{prompt}\n{profile.prompt_prefix}"
+        return profile.prompt_prefix.format(question=dataset_prompt)
+    return f"{dataset_prompt}\n{profile.prompt_prefix}"
 
 
 class ProfiledContract:
@@ -144,7 +157,13 @@ class BoundAdapter(InferenceAdapter):
         metadata["adapter_digest"] = self.adapter_digest
         metadata["backend_deviation"] = self.backend_deviation
         metadata["processor_audit"] = self.processor_audit
-        metadata["dataset_prompt_suffix"] = QUESTION_EXTENSION
+        metadata["dataset_prompt_suffix"] = None
+        metadata["profile_prompt_suffix"] = (
+            None if self.profile.prompt_prefix else DIRECT_ANSWER_SUFFIX
+        )
+        metadata["profile_answer_format"] = (
+            "reasoning_answer_tag" if self.profile.prompt_prefix else "direct_letter"
+        )
         return metadata
 
     def generate(self, model_input: CVBenchModelInput) -> GenerationResult:

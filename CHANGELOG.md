@@ -21,6 +21,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   空闲状态，按 profile 锁定 revision、served name、TP、BF16、单图上限与 seed 42。
 - 增加 CV-Bench OpenRouter key 的交互式隐藏输入工具：只写入未跟踪的 `.env.server`，原子替换旧值并
   固定 mode 600，避免 key 出现在 shell history、命令参数或运行日志中。
+- 增加 CV-Bench registry-driven full 串行控制器：可明确排除 InternVL3-78B，自动为通用开源轨启动、
+  验证并停止其拥有的单/双 endpoint vLLM 服务，再按顺序运行 API 与专用轨；任一失败立即停止且不评分。
 - 将 CV-Bench 独立完整 prediction validator 明确为推理与评分之间的公开阶段；CLI 默认读取
   `CVBENCH_DATASET_ROOT`，评分入口仍强制重复校验且不提供绕过参数。
 - 增加 12 条空间专用轨共用的 dataset-blind persistent runner、五份从锁定上游/checkpoint 解析的
@@ -61,6 +63,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   adapter source digest 改变、其余 binding 完全相同，也可审计迁移而不重复调用模型。
 - CV-Bench 服务器 test stage 已现场完成 22/23 条轨的红/蓝视觉接收、smoke8 和单图审计 gate；
   InternVL3-78B 因当前服务器仅有 2×A800、协议要求 4×80GB GPU 而保持阻塞，full-2638 尚未启动。
+- CV-Bench prompt 冲突修复后的 `3dthinker_mental3d` 与 `spatialladder3b_thinking` 已现场重跑并通过
+  v2 test gate；逐条 journal 审计确认 smoke8 均为单图、包含 reasoning answer tags，且不再含
+  direct-answer 后缀。
 - OpenAI-compatible 可恢复 runner 仅对 429/5xx 执行指数退避；非重试型 HTTP 错误不重复请求，成功
   journal 继续保证 resume 不重复付费。CV-Bench 本地模型每次 test/full 另保存只读 GPU inventory 与
   compute-process 审计；InternVL3-78B 强制显式枚举四张 80GB GPU。
@@ -98,6 +103,10 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Fixed
 
+- 将 CV-Bench 最终回答格式从全局数据层移到 profile 层：普通轨继续追加 direct-letter 后缀，
+  `3dthinker_mental3d` 与 `spatialladder3b_thinking` 只保留各自官方 `<think>/<answer>` prompt，避免
+  “直接回答”与“先推理再回答”同时出现。两条 reasoning inference protocol 升为 v2，旧 test gate
+  自动失效；scorer 的 answer-tag 解析未变，因此 scorer protocol 保持不变。
 - SpatialLadder runner 现在把 checkpoint 嵌套 `text_config` 中的 tied-output 声明传播到模型外层
   config，并锁定 PyTorch SDPA；避免缺失 `lm_head` 被随机初始化后继续生成的不可信状态。
 - HiSpatial/MoGe-2 runner 现在锁定并核验 MoGe requirements 指定的 `utils3d` commit，同时比对环境中

@@ -35,9 +35,10 @@ map，因此不建立虚假的 RGB-only 轨。实现 adapter 时分别
 
 ## CV-Bench 当前 23 条目标 inference profile
 
-以下 23 条轨已在 registry、CLI、validator、scorer 和报告发现中注册。截至 2026-08-03，服务器已现场
-审计 22 条 test gate；InternVL3-78B 因当前只有两张 A800 而无法满足四卡门禁。尚未启动 full-2638，
-不能把本表解释为已有分数。通用轨先审计
+以下 23 条轨已在 registry、CLI、validator、scorer 和报告发现中注册。截至 2026-08-03，服务器曾现场
+审计 22 条 v1 test gate；prompt 修复后的两条 reasoning gate 已于 2026-08-04 通过 v2 test，其他轨的
+最终 prompt 不变并可在仅 adapter digest 变化时审计迁移。InternVL3-78B 因当前只有两张 A800 而无法满足四卡门禁。
+尚未启动 full-2638，不能把本表解释为已有分数。通用轨先审计
 官方 Transformers processor/template，再使用 vLLM 0.19；不一致时只能显式回退到锁定 runner。
 
 | Profile | Model / locked revision | Input track | Backend / decoding | 当前状态 |
@@ -57,14 +58,14 @@ map，因此不建立虚假的 RGB-only 轨。实现 adapter 时分别
 | `ssr_native` | 上述 VLM + `SSR-MIDI-7B@8ed878fa16e3e440741ed8c1fedfcfe40710258d` | RGB + DepthPro + MIDI + TOR10 | locked upstream runner；generation manifest 必需 | test gate passed（2026-08-03） |
 | `spatialrgpt_rgb` | `SpatialRGPT-VILA1.5-8B@64df7902f82b5053f5a53455095805e6de3a1f87` | RGB，无 region/mask/depth | official VILA；greedy/128 | test gate passed（2026-08-03） |
 | `3dthinker_rgb` | `3DThinker-Mindcube@69a70411605f86ec69bada0a625bb96ddee995d9` | RGB | locked upstream runner；generation manifest 必需 | test gate passed（2026-08-03） |
-| `3dthinker_mental3d` | 同上 | RGB + Mental-3D 提示词 | sampling 0.7/top-p 0.9/2048/seed 42 | test gate passed（2026-08-03） |
+| `3dthinker_mental3d` | 同上 | RGB + Mental-3D 提示词 | sampling 0.7/top-p 0.9/2048/seed 42；prompt protocol v2 | v2 test gate passed（2026-08-04） |
 | `spatialbot_rgb` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | RGB | official Bunny；greedy/128 | test gate passed（2026-08-03） |
 | `spatialbot_zoedepth` | 同上 | RGB + ZoeDepth | official Bunny RGB-D；greedy/128 | test gate passed（2026-08-03） |
 | `robobrain25_8b_nv_rgb` | `RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | RGB | official processor；sampling 0.7/top-p 0.8/768/seed 42 | test gate passed（2026-08-03） |
 | `robobrain25_8b_mt_rgb` | `RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | RGB | official processor；sampling 0.7/top-p 0.8/768/seed 42 | test gate passed（2026-08-03） |
 | `hispatial3b_moge2_xyz` | `HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | RGB + MoGe-2 XYZ | official predictor；greedy/100 | test gate passed（2026-08-03） |
 | `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB | official Qwen2.5-VL；SDPA；128；generation manifest 必需 | test gate passed（2026-08-03） |
-| `spatialladder3b_thinking` | 同上 | RGB + 官方思考提示词 | SDPA；temp 0.01/1024/seed 42；generation manifest 必需 | test gate passed（2026-08-03） |
+| `spatialladder3b_thinking` | 同上 | RGB + 官方思考提示词 | SDPA；temp 0.01/1024/seed 42；prompt protocol v2；generation manifest 必需 | v2 test gate passed（2026-08-04） |
 
 通用开源轨的其余统一参数为 temperature 0、`top_p=None`、beam 1。sampling 专用轨的 seed、batch 和
 sharding 进入 inference protocol/gate。HiSpatial 上游 CV 脚本只覆盖 2D Relation 和 3D；本项目统一
