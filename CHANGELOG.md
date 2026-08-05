@@ -58,6 +58,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- CV-Bench 只读逐条结果 watcher 增加双 lane 选择：`--lane gpu0|gpu1` 分别跟随独立 status 与当前正式
+  journal，识别 PASS/FAIL/BLOCKED/COMPLETE 并自动随该 lane 换模；原单串行默认入口保持兼容。
 - CV-Bench full 串行控制器增加显式 `--skip-completed`：在启动模型服务前重新以锁定数据完整校验现有
   2638 条 prediction，仅验证通过的轨记录 `SKIP_COMPLETE` 并跳过，避免恢复批次重新加载已完成模型。
 - 按目标测试策略将 CV-Bench 全部 23 条轨统一改为纯红、纯蓝 RGB 图颜色识别最低视觉 canary，取消

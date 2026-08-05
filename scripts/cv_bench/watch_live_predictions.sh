@@ -11,25 +11,40 @@ usage() {
   cat <<'EOF'
 Usage:
   bash scripts/cv_bench/watch_live_predictions.sh
+  bash scripts/cv_bench/watch_live_predictions.sh --lane gpu0
+  bash scripts/cv_bench/watch_live_predictions.sh --lane gpu1
   bash scripts/cv_bench/watch_live_predictions.sh --from-start
 
-Follow the active CV-Bench serial profile and print each newly appended journal
-success or failure. The watcher is read-only; Ctrl-C stops only the watcher.
+Follow the active CV-Bench serial or dual-lane profile and print each newly
+appended journal success or failure. The watcher is read-only; Ctrl-C stops
+only the watcher.
 
 Options:
+  --lane LANE    Follow _dual_lane/LANE; LANE must be gpu0 or gpu1.
   --from-start   Replay existing journal rows for the currently active profile.
   --help, -h     Show this help.
 EOF
 }
 
 from_start=0
+lane=""
 while (( $# > 0 )); do
   case "$1" in
+    --lane)
+      [[ $# -ge 2 ]] || { echo "[cv-bench-watch] --lane requires gpu0 or gpu1" >&2; exit 2; }
+      lane="$2"
+      shift 2
+      ;;
     --from-start) from_start=1; shift ;;
     --help|-h) usage; exit 0 ;;
     *) echo "[cv-bench-watch] unknown argument: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+if [[ -n "${lane}" && "${lane}" != "gpu0" && "${lane}" != "gpu1" ]]; then
+  echo "[cv-bench-watch] --lane must be gpu0 or gpu1" >&2
+  exit 2
+fi
 
 poll_seconds="${CVBENCH_WATCH_POLL_SECONDS:-1}"
 if [[ ! "${poll_seconds}" =~ ^[1-9][0-9]*$ ]]; then
@@ -42,7 +57,7 @@ if [[ -z "${CVBENCH_OUTPUT_ROOT:-}" ]]; then
 fi
 
 exec "${CVBENCH_PYTHON}" -u - \
-  "${CVBENCH_OUTPUT_ROOT}" "${poll_seconds}" "${from_start}" <<'PY'
+  "${CVBENCH_OUTPUT_ROOT}" "${poll_seconds}" "${from_start}" "${lane}" <<'PY'
 import json
 import sys
 import time
@@ -52,9 +67,11 @@ from pathlib import Path
 output_root = Path(sys.argv[1]).resolve()
 poll_seconds = int(sys.argv[2])
 from_start = sys.argv[3] == "1"
-control_root = output_root / "_serial_full"
+lane = sys.argv[4]
+control_root = output_root / "_dual_lane" / lane if lane else output_root / "_serial_full"
 status_path = control_root / "status.tsv"
 runs_root = output_root / "runs"
+terminal_states = {"PASS", "FAIL", "BLOCKED"} if lane else {"PASS", "FAIL"}
 
 
 def status_rows():
@@ -73,7 +90,7 @@ def active_profile(rows):
     for _, profile, state, _ in rows:
         if state == "START":
             active = profile
-        elif state in {"PASS", "FAIL"} and profile == active:
+        elif state in terminal_states and profile == active:
             active = None
     return active
 
@@ -92,6 +109,8 @@ def journal_paths(profile):
 def batch_complete(rows):
     if not rows:
         return False
+    if lane:
+        return any(state == "COMPLETE" for _, _, state, _ in rows)
     run_id = rows[-1][0]
     log_path = control_root / "logs" / f"{run_id}.controller.log"
     return log_path.is_file() and "[cv-bench-full-serial] COMPLETE" in log_path.read_text(
@@ -126,9 +145,11 @@ if current and not from_start:
             pass
 
 if current:
-    print(f"===== active model: {current} =====", flush=True)
+    scope = f"lane={lane}" if lane else "serial"
+    print(f"===== {scope} active model: {current} =====", flush=True)
 else:
-    print("===== waiting for an active CV-Bench serial profile =====", flush=True)
+    scope = f"lane={lane}" if lane else "serial"
+    print(f"===== waiting for an active CV-Bench {scope} profile =====", flush=True)
 
 try:
     while True:
@@ -137,7 +158,8 @@ try:
         if next_profile != current:
             current = next_profile
             if current:
-                print(f"\n===== active model: {current} =====", flush=True)
+                scope = f"lane={lane}" if lane else "serial"
+                print(f"\n===== {scope} active model: {current} =====", flush=True)
 
         if current:
             for path in journal_paths(current):
@@ -162,7 +184,8 @@ try:
                     continue
 
         if batch_complete(rows):
-            print("\n===== CV-Bench serial inference COMPLETE =====", flush=True)
+            scope = f"lane={lane}" if lane else "serial inference"
+            print(f"\n===== CV-Bench {scope} COMPLETE =====", flush=True)
             raise SystemExit(0)
         time.sleep(poll_seconds)
 except KeyboardInterrupt:

@@ -81,6 +81,14 @@ bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --skip-completed
 bash scripts/cv_bench/watch_live_predictions.sh
 ```
 
+双 GPU 独立 lane 运行时分别打开两个只读进度窗口；每个窗口只跟随对应 lane 的当前模型，并在该 lane
+换模后自动切换 journal：
+
+```bash
+bash scripts/cv_bench/watch_live_predictions.sh --lane gpu0
+bash scripts/cv_bench/watch_live_predictions.sh --lane gpu1
+```
+
 需要从头重放当前模型的既有 journal 时增加 `--from-start`。按 `Ctrl-C` 只会退出 watcher，不会中断
 tmux 中的推理。
 

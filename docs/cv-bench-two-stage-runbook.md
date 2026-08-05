@@ -171,6 +171,15 @@ GPU burn 仍由操作者按对应手册在控制器外显式开关。`--skip-com
 bash scripts/cv_bench/watch_live_predictions.sh
 ```
 
+双 GPU 独立 lane 的状态分别位于 `_dual_lane/gpu0/status.tsv` 与 `_dual_lane/gpu1/status.tsv` 时，使用
+两个终端分别跟随；脚本识别各 lane 的 `PASS`、`FAIL`、`BLOCKED`、`COMPLETE`，只读取对应当前
+profile 的正式 journal：
+
+```bash
+bash scripts/cv_bench/watch_live_predictions.sh --lane gpu0
+bash scripts/cv_bench/watch_live_predictions.sh --lane gpu1
+```
+
 按 `Ctrl-C` 仅停止 watcher，不会向控制器、模型服务或推理进程发送信号。
 
 ## 5. 校验、评分与报告
