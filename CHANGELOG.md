@@ -128,6 +128,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Fixed
 
+- CV-Bench 与 Q-Spatial 公共 shell 入口在未显式设置 benchmark-specific `PYTHON` 时，会在系统
+  `python` 前复用 `.env.server` 的 `LATENT_PYTHON`；避免服务器系统解释器缺少项目依赖时连
+  `--list` / `--dry-run` 都失败，显式 `CVBENCH_PYTHON`、`QSPATIAL_PYTHON` 或 `PYTHON` 仍优先。
 - 修复 CV-Bench 本地 vLLM full 的长尾恢复：将本地请求超时与 OpenRouter 超时解耦，默认延长为 600
   秒，并把即时重复请求改为首轮结束后仅补 journal 缺失 index，避免官方 512-token 配置下极少数长
   输出连续超时导致完整 2638 条无法原子落盘。

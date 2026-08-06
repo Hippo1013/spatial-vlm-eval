@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -13,10 +14,14 @@ class QSpatialRuntimeAndScriptsTest(unittest.TestCase):
         cls.repository = Path(__file__).resolve().parents[3]
 
     def test_public_list_contains_exact_registry_order(self):
+        environment = {**os.environ, "QSPATIAL_ENV_FILE": "/dev/null"}
+        environment.pop("QSPATIAL_PYTHON", None)
+        environment.pop("PYTHON", None)
+        environment["LATENT_PYTHON"] = sys.executable
         completed = subprocess.run(
             ["bash", "scripts/q_spatial/run_inference.sh", "--list"],
             cwd=self.repository,
-            env={**os.environ, "QSPATIAL_ENV_FILE": "/dev/null"},
+            env=environment,
             check=True,
             capture_output=True,
             text=True,
@@ -27,6 +32,10 @@ class QSpatialRuntimeAndScriptsTest(unittest.TestCase):
         self.assertTrue(lines[-1].startswith("spatialladder3b_rgb\t"))
 
     def test_dry_run_selection_uses_registry_order_without_data_or_keys(self):
+        environment = {**os.environ, "QSPATIAL_ENV_FILE": "/dev/null"}
+        environment.pop("QSPATIAL_PYTHON", None)
+        environment.pop("PYTHON", None)
+        environment["LATENT_PYTHON"] = sys.executable
         with tempfile.TemporaryDirectory() as directory:
             completed = subprocess.run(
                 [
@@ -35,7 +44,7 @@ class QSpatialRuntimeAndScriptsTest(unittest.TestCase):
                     "--output-root", directory, "--dry-run",
                 ],
                 cwd=self.repository,
-                env={**os.environ, "QSPATIAL_ENV_FILE": "/dev/null"},
+                env=environment,
                 check=True,
                 capture_output=True,
                 text=True,

@@ -14,6 +14,9 @@ set +a
 bash scripts/q_spatial/run_inference.sh --list
 ```
 
+公共入口按 `QSPATIAL_PYTHON`、`PYTHON`、`LATENT_PYTHON` 的顺序选择解释器；现有服务器配置可直接
+复用 `LATENT_PYTHON`，不得因系统 Python 缺包而向默认解释器安装依赖。
+
 确认 Parquet legacy 根只读、ScanNet RGB 访问已获授权、`QSPATIAL_OUTPUT_ROOT` 位于
 `/media/datasets/lihaoran/`。脚本不会下载、移动或打包 ScanNet。先运行 `--check`；它会验证完整数据、
 processor/template、revision、GPU inventory 与 profile binding，但不会启动服务或付费请求。

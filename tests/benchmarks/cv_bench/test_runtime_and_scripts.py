@@ -92,9 +92,14 @@ class CVBenchRuntimeAndScriptsTest(unittest.TestCase):
         cls.repository = Path(__file__).resolve().parents[3]
 
     def test_public_inference_list_matches_23_profile_registry(self):
+        environment = {**os.environ, "CVBENCH_ENV_FILE": "/dev/null"}
+        environment.pop("CVBENCH_PYTHON", None)
+        environment.pop("PYTHON", None)
+        environment["LATENT_PYTHON"] = sys.executable
         completed = subprocess.run(
             ["bash", "scripts/cv_bench/run_inference.sh", "--list"],
             cwd=self.repository,
+            env=environment,
             check=True,
             capture_output=True,
             text=True,

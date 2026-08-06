@@ -16,6 +16,9 @@ test -e .env.cvbench.server || cp configs/cv-bench-server.env.example .env.cvben
 export CVBENCH_ENV_FILE="$PWD/.env.cvbench.server"
 ```
 
+公共入口按 `CVBENCH_PYTHON`、`PYTHON`、`LATENT_PYTHON` 的顺序选择解释器；合并到既有
+`.env.server` 时可直接复用 `LATENT_PYTHON`，不得因系统 Python 缺包而向默认解释器安装依赖。
+
 模板中的 `CVBENCH_DATASET_ROOT` 已指向 2026-08-03 现场核验的 legacy 只读目录
 `/media/datasets/tangzecong/huggingface/datasets/CV-Bench`；运行前仍须用 `--check` 复核两个文件。新环境、upstream、
 checkpoint、cache 和输出只能写入 `/media/datasets/lihaoran/`。然后列出目标轨：
