@@ -29,6 +29,17 @@ class DocumentationConsistencyTest(unittest.TestCase):
     def setUpClass(cls) -> None:
         cls.repository = Path(__file__).resolve().parents[1]
         cls.docs = cls.repository / "docs"
+        tracked = subprocess.run(
+            ["git", "ls-files", "-z"],
+            cwd=cls.repository,
+            check=True,
+            capture_output=True,
+        ).stdout
+        cls.tracked_files = {
+            Path(value.decode("utf-8"))
+            for value in tracked.split(b"\0")
+            if value
+        }
 
     def markdown_documents(self) -> list[Path]:
         documents = [
@@ -57,6 +68,15 @@ class DocumentationConsistencyTest(unittest.TestCase):
                 if not resolved.exists():
                     missing.append(
                         f"{document.relative_to(self.repository)} -> {raw_target}"
+                    )
+                    continue
+                try:
+                    repository_target = resolved.relative_to(self.repository)
+                except ValueError:
+                    continue
+                if resolved.is_file() and repository_target not in self.tracked_files:
+                    missing.append(
+                        f"{document.relative_to(self.repository)} -> {raw_target} (untracked)"
                     )
         self.assertEqual(missing, [])
 

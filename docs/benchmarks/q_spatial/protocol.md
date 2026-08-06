@@ -9,7 +9,7 @@
   commit `ebe8137eae9781aaf7e29691ce8bc68b2a498a83`。
 - 数据：[`andrewliao11/Q-Spatial-Bench`](https://huggingface.co/datasets/andrewliao11/Q-Spatial-Bench)
   revision `17b92e470d58fa46859ebd48ff35a1669828c9be`。
-- 论文：本地 [`benchmark_paper/Q-Spatial.pdf`](../../../benchmark_paper/Q-Spatial.pdf)。
+- 论文：仓库外未跟踪的 `benchmark_paper/Q-Spatial.pdf`。
 
 正式运行必须显式提供两个数据根，不能从一个根猜另一个根，也不能把 ScanNet 许可内容复制进仓库：
 
