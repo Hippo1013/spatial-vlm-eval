@@ -15,14 +15,25 @@ from spatial_vlm_eval.benchmarks.cv_bench.data import (
 from spatial_vlm_eval.benchmarks.cv_bench.profiles import PROFILE_SEQUENCE, PROFILES
 from spatial_vlm_eval.benchmarks.cv_bench.report import discover_results, render_markdown
 from spatial_vlm_eval.benchmarks.cv_bench.score_results import discover_candidates
-from spatial_vlm_eval.benchmarks.cv_bench.scorer import RESULT_KIND, SCORER_PROTOCOL
+from spatial_vlm_eval.benchmarks.cv_bench.scorer import (
+    LEGACY_SCORER_PROTOCOL_V2,
+    RESULT_KIND,
+    SCORER_PROTOCOL,
+)
 
 
 def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def write_summary(root: Path, profile_key: str, *, run_name: str | None = None, accuracy=1.0):
+def write_summary(
+    root: Path,
+    profile_key: str,
+    *,
+    run_name: str | None = None,
+    accuracy=1.0,
+    metadata_scorer_protocol: str = SCORER_PROTOCOL,
+):
     profile = PROFILES[profile_key]
     run = root / (run_name or profile_key)
     predictions = run / "predictions.jsonl"
@@ -31,7 +42,7 @@ def write_summary(root: Path, profile_key: str, *, run_name: str | None = None, 
     metadata = {
         "output": str(predictions.resolve()),
         "output_sha256": _sha256(predictions),
-        "scorer_protocol": SCORER_PROTOCOL,
+        "scorer_protocol": metadata_scorer_protocol,
         "publishable_inference": True,
         "dataset": {
             "revision": DATASET_REVISION,
@@ -84,6 +95,7 @@ def write_summary(root: Path, profile_key: str, *, run_name: str | None = None, 
             "model_revision": profile.revision,
             "input_profile": profile.input_profile,
             "inference_protocol": profile.inference_protocol,
+            "declared_scorer_protocol": metadata_scorer_protocol,
             "decoding": {**profile.decoding, "stream": False},
         },
         "num_scored_rows": OFFICIAL_TEST_SIZE,
@@ -169,6 +181,15 @@ class CVBenchDiscoveryAndReportTest(unittest.TestCase):
         self.assertIn("Qwen3-VL-4B（RGB）", markdown)
         self.assertIn("**100.00**", markdown)
         self.assertIn("缺失 profile", markdown)
+
+    def test_report_accepts_explicit_v2_inference_metadata_compatibility(self):
+        write_summary(
+            self.root,
+            "qwen3_vl_2b",
+            metadata_scorer_protocol=LEGACY_SCORER_PROTOCOL_V2,
+        )
+        results = discover_results(self.root)
+        self.assertEqual([result.profile for result in results], ["qwen3_vl_2b"])
 
     def test_duplicate_publishable_profile_fails_closed(self):
         write_summary(self.root, "qwen3_vl_2b", run_name="one")

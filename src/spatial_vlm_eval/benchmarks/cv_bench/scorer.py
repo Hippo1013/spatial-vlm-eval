@@ -22,8 +22,18 @@ from .data import (
 )
 from .prediction_validation import read_jsonl, validate_prediction_rows
 
-SCORER_PROTOCOL = "cv_bench_robust_mcq_v2_answer_tag_unique_letter_or_exact_option_text"
+LEGACY_SCORER_PROTOCOL_V2 = (
+    "cv_bench_robust_mcq_v2_answer_tag_unique_letter_or_exact_option_text"
+)
+SCORER_PROTOCOL = (
+    "cv_bench_robust_mcq_v3_answer_tag_unique_declared_letter_or_exact_option_text"
+)
+COMPATIBLE_INFERENCE_SCORER_PROTOCOLS = frozenset(
+    {LEGACY_SCORER_PROTOCOL_V2, SCORER_PROTOCOL}
+)
 RESULT_KIND = "cv_bench_official_formula_robust_parser_internal_score"
+
+TERMINAL_TOKENS = ("<eos>", "<|im_end|>", "<|endoftext|>")
 
 TASK_KEYS = {
     "Relation": "spatial_relationship",
@@ -37,6 +47,7 @@ TASK_KEYS = {
 class ParsedAnswer:
     answer: str | None
     status: str
+    evidence: tuple[str, ...] = ()
 
 
 def _normalized_text(value: Any) -> str:
@@ -45,43 +56,123 @@ def _normalized_text(value: Any) -> str:
     return text.strip(" \t\r\n.!,;:'\"`“”‘’")
 
 
-def _explicit_letter_candidates(text: str) -> list[str]:
-    candidates: list[str] = []
+def inference_metadata_scorer_protocol_is_compatible(value: Any) -> bool:
+    return str(value) in COMPATIBLE_INFERENCE_SCORER_PROTOCOLS
+
+
+def _strip_terminal_tokens(text: str) -> tuple[str, tuple[str, ...]]:
+    """Remove only known generation terminators from the parser view.
+
+    ``raw_prediction`` remains unchanged in scored artifacts. Returning the exact
+    stripped tokens makes the normalization auditable rather than silently
+    rewriting a model response.
+    """
+
+    cleaned = str(text).strip()
+    stripped: list[str] = []
+    changed = True
+    while changed:
+        changed = False
+        folded = cleaned.casefold()
+        for token in TERMINAL_TOKENS:
+            if folded.endswith(token.casefold()):
+                cleaned = cleaned[: -len(token)].strip()
+                stripped.append(token)
+                changed = True
+                break
+    return cleaned, tuple(stripped)
+
+
+def _explicit_letter_candidates(text: str) -> dict[str, set[str]]:
+    candidates: dict[str, set[str]] = {}
+
+    def add(letter: str, source: str) -> None:
+        candidates.setdefault(str(letter).upper(), set()).add(source)
+
     upper = text.upper()
-    candidates.extend(re.findall(r"[\(\[]\s*([A-Z])\s*[\)\]]", upper))
-    candidates.extend(
-        re.findall(
-            r"\b(?:FINAL\s+)?(?:ANSWER|OPTION|CHOICE)\s*(?:IS\s*)?(?::|=|-)?\s*[\(\[]?([A-Z])(?:[\)\]]|\b)",
-            upper,
-        )
-    )
-    whole = re.fullmatch(r"\s*[\(\[]?([A-Z])[\)\].,:;]?\s*", upper)
-    if whole:
-        candidates.append(whole.group(1))
-    leading = re.match(r"\s*[\(\[]?([A-Z])[\)\].:]\s+", upper)
-    if leading:
-        candidates.append(leading.group(1))
-    for match in re.finditer(
-        r"\b(?:OPTION\s+)?([A-Z])\s+(?:OR|AND)\s+(?:OPTION\s+)?([A-Z])\b",
+    for letter in re.findall(r"[\(\[]\s*([A-Z])\s*[\)\]]", upper):
+        add(letter, "parenthesized_letter")
+    for letter in re.findall(
+        r"\b(?:FINAL\s+)?(?:ANSWER|OPTION|CHOICE)\b"
+        r"(?:\s+IS\b)?\s*(?::|=|-)?\s*(?:\*\*)?"
+        r"[\(\[]?([A-Z])(?:[\)\]]|\b)(?:\*\*)?",
         upper,
     ):
-        candidates.extend(match.groups())
-    return list(dict.fromkeys(candidates))
+        add(letter, "labelled_answer_letter")
+    whole = re.fullmatch(r"\s*[\(\[]?([A-Z])[\)\].,:;]?\s*", upper)
+    if whole:
+        add(whole.group(1), "whole_letter")
+    leading = re.match(r"\s*[\(\[]?([A-Z])[\)\].:]\s*", upper)
+    if leading:
+        add(leading.group(1), "leading_label_letter")
+    leading_parenthetical_text = re.match(r"\s*([A-Z])\s+\(", upper)
+    if leading_parenthetical_text:
+        add(leading_parenthetical_text.group(1), "leading_parenthetical_text_letter")
+
+    nonempty_lines = [line.strip() for line in upper.splitlines() if line.strip()]
+    if nonempty_lines:
+        first = re.fullmatch(r"[\(\[]?([A-Z])[\)\].,:;]?", nonempty_lines[0])
+        if first:
+            add(first.group(1), "first_line_letter")
+        last = re.fullmatch(r"[\(\[]?([A-Z])[\)\].,:;]?", nonempty_lines[-1])
+        if last:
+            add(last.group(1), "last_line_letter")
+
+    two_letter_response = re.fullmatch(
+        r"\s*[\(\[]?([A-Z])[\)\]]?\s+[\(\[]?([A-Z])[\)\]]?\s*",
+        upper,
+    )
+    if two_letter_response:
+        for letter in two_letter_response.groups():
+            add(letter, "two_letter_response")
+
+    for match in re.finditer(
+        r"\b(?:OPTION\b\s+)?([A-Z])\b\s+(?:OR|AND)\s+"
+        r"(?:OPTION\b\s+)?([A-Z])\b",
+        upper,
+    ):
+        for letter in match.groups():
+            add(letter, "paired_letter_expression")
+    return candidates
 
 
 def _text_candidates(text: str) -> list[str]:
     values = [_normalized_text(text)]
     stripped_prefix = re.sub(
-        r"^\s*(?:the\s+)?(?:final\s+)?(?:answer|option|choice)\s*(?:is|:|=|-)+\s*",
+        r"^\s*(?:the\s+)?(?:(?:final|correct)\s+)*(?:answer|option|choice)\b"
+        r"(?:\s+is\b)?\s*(?::|=|-)?\s*",
         "",
         text,
         flags=re.IGNORECASE,
     )
     values.append(_normalized_text(stripped_prefix))
-    labelled = re.match(r"^\s*[\(\[]?[A-Z][\)\].:]\s+(.+?)\s*$", text, flags=re.IGNORECASE | re.DOTALL)
+    labelled = re.match(
+        r"^\s*[\(\[]?[A-Z][\)\].:]\s*(.+?)\s*$",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
     if labelled:
         values.append(_normalized_text(labelled.group(1)))
+    parenthetical_text = re.match(
+        r"^\s*[A-Z]\s+\((.+?)\)\s*$",
+        text,
+        flags=re.IGNORECASE | re.DOTALL,
+    )
+    if parenthetical_text:
+        values.append(_normalized_text(parenthetical_text.group(1)))
     return list(dict.fromkeys(value for value in values if value))
+
+
+def _letter_status(sources: set[str]) -> str:
+    if "whole_letter" in sources:
+        return "explicit_letter"
+    if "first_line_letter" in sources and "last_line_letter" not in sources:
+        return "first_line_explicit_letter"
+    if "last_line_letter" in sources and "first_line_letter" not in sources:
+        return "last_line_explicit_letter"
+    if {"leading_label_letter", "leading_parenthetical_text_letter"} & sources:
+        return "leading_explicit_letter"
+    return "explicit_letter"
 
 
 def parse_answer(raw_prediction: Any, choices: list[str]) -> ParsedAnswer:
@@ -92,19 +183,45 @@ def parse_answer(raw_prediction: Any, choices: list[str]) -> ParsedAnswer:
         r"<answer>\s*(.*?)\s*</answer>", text, flags=re.IGNORECASE | re.DOTALL
     )
     if len(tagged_answers) > 1:
-        return ParsedAnswer(None, "multiple_answer_tags")
-    parse_text = tagged_answers[0] if tagged_answers else text
+        return ParsedAnswer(
+            None,
+            "multiple_answer_tags",
+            (f"answer_tag_count:{len(tagged_answers)}",),
+        )
+    parse_text, terminal_tokens = _strip_terminal_tokens(
+        tagged_answers[0] if tagged_answers else text
+    )
+    evidence_prefix = (("answer_tag",) if tagged_answers else ()) + tuple(
+        f"stripped_terminal_token:{token}" for token in terminal_tokens
+    )
     status_prefix = "answer_tag_" if tagged_answers else ""
-    if tagged_answers and not parse_text.strip():
-        return ParsedAnswer(None, "empty_answer_tag")
+    if terminal_tokens:
+        status_prefix += "terminal_token_stripped_"
+    if tagged_answers and not parse_text:
+        return ParsedAnswer(None, "empty_answer_tag", evidence_prefix)
+    if not parse_text:
+        return ParsedAnswer(None, "empty_after_terminal_tokens", evidence_prefix)
     letters = _explicit_letter_candidates(parse_text)
+    letter_evidence = tuple(
+        f"letter:{letter}:{source}"
+        for letter in sorted(letters)
+        for source in sorted(letters[letter])
+    )
     if len(letters) > 1:
-        return ParsedAnswer(None, status_prefix + "multiple_answers")
+        return ParsedAnswer(
+            None,
+            status_prefix + "multiple_answers",
+            evidence_prefix + letter_evidence,
+        )
     if letters:
-        position = string.ascii_uppercase.index(letters[0])
+        letter_answer = next(iter(letters))
+        position = string.ascii_uppercase.index(letter_answer)
         if position >= len(choices):
-            return ParsedAnswer(None, status_prefix + "out_of_range")
-        letter_answer = letters[0]
+            return ParsedAnswer(
+                None,
+                status_prefix + "out_of_range",
+                evidence_prefix + letter_evidence,
+            )
     else:
         letter_answer = None
 
@@ -116,19 +233,42 @@ def parse_answer(raw_prediction: Any, choices: list[str]) -> ParsedAnswer:
         if candidate == choice
     }
     if len(matched_positions) > 1:
-        return ParsedAnswer(None, status_prefix + "multiple_answers")
+        return ParsedAnswer(
+            None,
+            status_prefix + "multiple_answers",
+            evidence_prefix + letter_evidence + ("multiple_exact_option_texts",),
+        )
     text_answer = (
         string.ascii_uppercase[next(iter(matched_positions))] if matched_positions else None
     )
+    option_text_evidence = (
+        (f"exact_option_text:{text_answer}",) if text_answer is not None else ()
+    )
     if letter_answer and text_answer:
         if letter_answer != text_answer:
-            return ParsedAnswer(None, status_prefix + "conflict")
-        return ParsedAnswer(letter_answer, status_prefix + "letter_and_option_text")
+            return ParsedAnswer(
+                None,
+                status_prefix + "conflict",
+                evidence_prefix + letter_evidence + option_text_evidence,
+            )
+        return ParsedAnswer(
+            letter_answer,
+            status_prefix + "letter_and_option_text",
+            evidence_prefix + letter_evidence + option_text_evidence,
+        )
     if letter_answer:
-        return ParsedAnswer(letter_answer, status_prefix + "explicit_letter")
+        return ParsedAnswer(
+            letter_answer,
+            status_prefix + _letter_status(letters[letter_answer]),
+            evidence_prefix + letter_evidence,
+        )
     if text_answer:
-        return ParsedAnswer(text_answer, status_prefix + "option_text")
-    return ParsedAnswer(None, status_prefix + "unparsed")
+        return ParsedAnswer(
+            text_answer,
+            status_prefix + "option_text",
+            evidence_prefix + option_text_evidence,
+        )
+    return ParsedAnswer(None, status_prefix + "unparsed", evidence_prefix)
 
 
 def _accuracy(correct: int, total: int) -> float:
@@ -173,6 +313,7 @@ def score_rows(
                 "raw_prediction": str(prediction["raw_prediction"]),
                 "parsed_answer": parsed.answer,
                 "parse_status": parsed.status,
+                "parse_evidence": list(parsed.evidence),
                 "gold": source["gold"],
                 "correct": bool(correct),
                 "type": source["type"],
@@ -224,7 +365,6 @@ def _load_and_validate_metadata(
     checks = {
         "metadata.output": (str(Path(metadata.get("output", "")).resolve()), str(prediction_path)),
         "metadata.output_sha256": (metadata.get("output_sha256"), _sha256(prediction_path)),
-        "metadata.scorer_protocol": (metadata.get("scorer_protocol"), SCORER_PROTOCOL),
         "metadata.dataset.fingerprint": (dataset.get("fingerprint"), contract.dataset_fingerprint),
         "metadata.dataset.official_test_size": (dataset.get("official_test_size"), OFFICIAL_TEST_SIZE),
         "metadata.dataset.revision": (dataset.get("revision"), DATASET_REVISION),
@@ -237,6 +377,13 @@ def _load_and_validate_metadata(
     for label, (actual, expected) in checks.items():
         if actual != expected:
             errors.append(f"{label} mismatch: got={actual!r}, expected={expected!r}")
+    declared_scorer_protocol = metadata.get("scorer_protocol")
+    if not inference_metadata_scorer_protocol_is_compatible(declared_scorer_protocol):
+        errors.append(
+            "metadata.scorer_protocol is not compatible with the current CV-Bench scorer: "
+            f"got={declared_scorer_protocol!r}, "
+            f"allowed={sorted(COMPATIBLE_INFERENCE_SCORER_PROTOCOLS)!r}"
+        )
     return metadata, errors
 
 
@@ -292,6 +439,7 @@ def score_predictions(
             "model_revision": inference_model.get("model_revision"),
             "input_profile": inference_model.get("input_profile"),
             "inference_protocol": inference_model.get("inference_protocol"),
+            "declared_scorer_protocol": metadata.get("scorer_protocol") if metadata else None,
             "backend": inference_model.get("backend"),
             "decoding": inference_model.get("decoding"),
         },
@@ -322,6 +470,13 @@ def score_predictions(
             == set(EXPECTED_SOURCE_COUNTS),
             "protocol_consistency": summary["scorer_protocol"] == SCORER_PROTOCOL,
             "inference_metadata_consistency": metadata is not None or not require_metadata,
+            "inference_scorer_protocol_compatible": (
+                metadata is not None
+                and inference_metadata_scorer_protocol_is_compatible(
+                    metadata.get("scorer_protocol")
+                )
+            )
+            or not require_metadata,
         },
         "summary": str(summary_path),
         "generated_at": utc_now(),

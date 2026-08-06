@@ -104,13 +104,23 @@ prediction 保留并告警。subset 只能出现在 `test_runs/`，即使 valida
 当前 scorer protocol：
 
 ```text
-cv_bench_robust_mcq_v2_answer_tag_unique_letter_or_exact_option_text
+cv_bench_robust_mcq_v3_answer_tag_unique_declared_letter_or_exact_option_text
 ```
 
-解析只接受唯一合法的显式选项字母，或与单个选项完整匹配的文本；带官方 thinking prompt 的轨可用
-唯一完整 `<answer>...</answer>` 界定最终答案，多个 answer tag 仍判无效。字母和文本同时出现且指向同一
-选项时有效；冲突、多答案、越界、空值或无法解析均记零分。`scored_rows.jsonl` 保存
-`parsed_answer`、`parse_status`、gold、correctness 和分组字段，不覆盖原始输出。
+解析只接受模型公开声明的唯一合法选项字母，或与单个选项完整匹配的文本，不推断模型未明确写出的
+“潜在意图”。解析视图可以剥离末尾已知生成终止 token（`<eos>`、`<|im_end|>`、
+`<|endoftext|>`），并接受整段/首个非空行/最后一个非空行的独立字母，以及 `B.1`、`A (2)` 这类
+紧凑字母加选项文本；原始 `raw_prediction` 永不改写。紧凑格式只有在字母与完整选项文本指向同一
+选项时有效。带官方 thinking prompt 的轨可用唯一完整 `<answer>...</answer>` 界定解析范围，多个
+answer tag 仍判无效。任何竞争字母、字母/文本冲突、多答案、越界、空值或无法解析均记零分。
+`scored_rows.jsonl` 保存 `parsed_answer`、`parse_status`、`parse_evidence`、gold、correctness 和分组
+字段；`parse_evidence` 明确记录 answer tag、终止 token 归一化、字母位置和完整选项文本证据。
+
+v3 修正了 v2 对真实输出的两个非对称行为：裸字母后的终止 token 会导致漏解析，而带括号字母后的
+同一 token 又可能掩盖第二个冲突答案；同时修复 `options and ...` 被误识别为字母 `S` 的单词边界
+问题。推理与评分协议保持分离：已有完整 prediction 的 inference metadata 可以显式声明当前 v3 或
+历史 v2 scorer ID；v3 scorer 将原声明写入 summary 的 `inference.declared_scorer_protocol` 并仅允许
+这两个已知 ID，不修改既有 metadata，也不要求重新推理。新的推理 metadata 默认声明 v3。
 
 本实现沿用官方指标定义，但解析器比 Cambrian 旧版的首字符解析更严格稳健，因此结果类型是
 `cv_bench_official_formula_robust_parser_internal_score`，不是旧脚本的逐字节复刻。聚合固定为：

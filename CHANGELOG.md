@@ -58,6 +58,10 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- 将 CV-Bench robust multiple-choice scorer 升级为 v3 declared-answer parser：仅在解析视图剥离已知
+  末尾生成 token，支持首/末行独立字母和字母/完整选项文本一致的紧凑格式，为每条结果记录
+  `parse_evidence`；竞争字母、文本冲突、多 tag、越界和截断继续判零。修复 `options and` 的复数
+  单词边界误识别，并显式允许 v3 scorer 消费未改写的 v2/v3 inference metadata，不引入模型提取器。
 - CV-Bench 只读逐条结果 watcher 增加双 lane 选择：`--lane gpu0|gpu1` 分别跟随独立 status 与当前正式
   journal，识别 PASS/FAIL/BLOCKED/COMPLETE 并自动随该 lane 换模；原单串行默认入口保持兼容。
 - CV-Bench full 串行控制器增加显式 `--skip-completed`：在启动模型服务前重新以锁定数据完整校验现有

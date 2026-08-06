@@ -92,7 +92,10 @@ media count 和 template digest。
 CV-Bench 评分器递归发现完整 prediction，不维护 profile 名单，评分前强制 full validator。报告器只
 接受当前 robust scorer protocol 下通过 publication gates 且 registry provenance 完整的 summary；
 一条 profile 出现多个发布候选时 fail closed。最终表固定使用模型名称区分 input track，一次只选择一个
-scorer protocol，并保留完整 provenance 于 metadata/summary。
+scorer protocol，并保留完整 provenance 于 metadata/summary。scorer protocol 升级不要求重跑不变的
+inference；兼容规则必须显式列出可消费的历史 inference-metadata scorer ID，并把原声明复制到新
+summary，未知 ID 仍 fail closed。解析归一化只作用于 scorer 视图，逐行结果保留未改写的原始回答和
+确定性 `parse_evidence`。
 
 `scripts/msmu/` 包含 family inference、vLLM server、GPU preflight、validator/scorer 和 pipeline。
 GPU preflight 只读取 `nvidia-smi`；显存不足、利用率超限或已有 compute process 时退出，绝不终止

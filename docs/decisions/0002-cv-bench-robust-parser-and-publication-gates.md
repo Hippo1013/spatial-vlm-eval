@@ -2,6 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-03
+- Amended: 2026-08-06
 - Supersedes: none
 
 ## Context
@@ -25,11 +26,22 @@ direct-letter 后缀；3DThinker Mental-3D 与 SpatialLadder thinking profile �
 推理 protocol、scorer protocol 和 input track 保持分离。23 条目标轨的 registry 只决定目标矩阵与
 provenance，不成为评分器的硬编码发现名单。
 
+2026-08-06 的 v3 修订把“显式字母”收敛为可审计的 declared-answer 语义：解析器只剥离末尾已知
+generation terminator，接受整段、首行、末行或紧凑字母/选项文本中的唯一答案，并把证据写入逐行
+结果；原始 prediction 保持不变。字母和完整选项文本必须一致，第二个竞争字母即使跟在终止 token
+之前也会令该条无效。修订同时为 `answer|option|choice` 和 `A or B` 正则增加完整单词边界，避免把
+`options and` 的 `S` 当作候选。这里不引入本地模型或语义 fallback，因为它会把模型未明确声明的
+答案猜入正式分数。
+
+v3 scorer 允许消费 inference metadata 中明确记录的 v2 或 v3 scorer ID，并把原声明复制进 summary
+供报告复核。这是评分协议兼容，不是 inference gate 迁移：prediction、metadata 和模型输出均不改写，
+其他未知 scorer ID 继续 fail closed。
+
 ## Consequences
 
 - 分数可以按官方公式比较，但解析行为不是旧首字符脚本的逐字节复刻，必须标为 robust-parser
   internal score。
-- 当前 answer-tag-aware scorer 使用 v2 identity；parser 或聚合语义再改变时必须继续更换 scorer
+- 当前 answer-tag-aware scorer 使用 v3 identity；parser 或聚合语义再改变时必须继续更换 scorer
   protocol、更新 protocol/ADR 并增加回归测试。
 - model revision、input track、decoding、dataset/adapter binding 改变时旧 test gate 自动失效。
 - reasoning prompt 从冲突的双重指令改为单一 answer-tag 指令时必须升级对应 inference protocol；scorer

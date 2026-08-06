@@ -19,7 +19,12 @@ from .data import (
     OFFICIAL_TEST_SIZE,
 )
 from .profiles import PROFILE_SEQUENCE, PROFILES
-from .scorer import RESULT_KIND, SCORER_PROTOCOL
+from .scorer import (
+    COMPATIBLE_INFERENCE_SCORER_PROTOCOLS,
+    RESULT_KIND,
+    SCORER_PROTOCOL,
+    inference_metadata_scorer_protocol_is_compatible,
+)
 
 DEFAULT_OUTPUT_NAME = "cv-bench-result.md"
 METRIC_COLUMNS = (
@@ -125,7 +130,6 @@ def _validate_result(summary_path: Path) -> ReportResult:
     metadata_checks = {
         "output": (str(Path(str(metadata.get("output", ""))).resolve()), str(predictions)),
         "output_sha256": (metadata.get("output_sha256"), _sha256(predictions)),
-        "scorer_protocol": (metadata.get("scorer_protocol"), SCORER_PROTOCOL),
         "dataset.revision": (metadata_dataset.get("revision"), DATASET_REVISION),
         "dataset.fingerprint": (metadata_dataset.get("fingerprint"), dataset.get("fingerprint")),
         "dataset.official_test_size": (
@@ -137,7 +141,19 @@ def _validate_result(summary_path: Path) -> ReportResult:
     for label, (actual, expected) in metadata_checks.items():
         if actual != expected:
             raise ValueError(f"Inference metadata {label} mismatch: {summary_path}")
+    declared_scorer_protocol = metadata.get("scorer_protocol")
+    if not inference_metadata_scorer_protocol_is_compatible(declared_scorer_protocol):
+        raise ValueError(
+            "Inference metadata scorer_protocol is not compatible: "
+            f"got={declared_scorer_protocol!r}, "
+            f"allowed={sorted(COMPATIBLE_INFERENCE_SCORER_PROTOCOLS)!r}: {summary_path}"
+        )
     inference = summary.get("inference") if isinstance(summary.get("inference"), dict) else {}
+    if inference.get("declared_scorer_protocol") != declared_scorer_protocol:
+        raise ValueError(
+            "Summary/inference metadata declared scorer protocol mismatch: "
+            f"{summary_path}"
+        )
     profile_key = str(inference.get("profile") or "")
     if profile_key not in PROFILES:
         raise ValueError(f"Summary has an unregistered profile: {summary_path}")
