@@ -9,14 +9,15 @@
 | Benchmark | 目标范围 | 仓库实现状态 | 当前阶段 |
 |---|---|---|---|
 | MSMU-Bench | official `test`，987 条 | 已实现 input contract、validator、inference 与 scorer | 18 条既有目标 profile 已完成；本阶段告一段落 |
-| CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | contract、23-profile registry、两阶段推理、scorer 与报告已实现 | 22/23 test gate；其余 22 条轨正在进行 full-2638 串行推理，尚未评分（2026-08-04） |
-| Q-Spatial Bench | Q-Spatial++ 与 Q-Spatial-ScanNet | 尚未实现 | **下一项待定**；ScanNet 原始图像的授权与完整性须另行验收 |
-| SPBench-SI | SPBench 单图版本；不包含 SPBench-MV | 尚未实现 | 与 Q-Spatial Bench 的先后待定 |
+| CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | contract、23-profile registry、两阶段推理、scorer 与报告已实现 | 22 条轨已通过 full-2638 validator、评分和 publication gates；仅四卡 InternVL3-78B 缺失，报告 22/23（2026-08-06） |
+| Q-Spatial Bench | Q-Spatial-ScanNet 170 + Q-Spatial++ 101，共 271 条 | contract、21-profile registry、两阶段推理、numeric scorer 与报告已实现 | 代码/回归完成；服务器模型 test/full、付费 API 与评分尚未开始（2026-08-06） |
+| SPBench-SI | SPBench 单图版本；不包含 SPBench-MV | 尚未实现 | Q-Spatial 链路实跑验收后的下一候选 |
 
 “尚未实现”表示仓库中还没有可发布的 benchmark contract、validator、scorer protocol、运行入口或
 结果目录，不能因为数据已经下载就宣称可以正式评测。CV-Bench 的“已实现”只指代码、协议和本地
 验证链路，不表示 23 条服务器结果已经产生；状态必须以 test gate、validator、metadata、summary 和
-publication gates 为准。Q-Spatial Bench 与 SPBench-SI 的后续先后尚未确定。
+publication gates 为准。Q-Spatial 的“已实现”同样不表示已有模型结果；服务器状态必须读取其
+`test_gate.json`、validator、metadata、summary 与 publication gates。SPBench-SI 仍无可发布链路。
 
 ## 目标模型覆盖
 
@@ -48,9 +49,11 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 
 ## 服务器数据与模型位置
 
-- Q-Spatial Bench、CV-Bench、SPBench-SI 的既有下载位于
+- CV-Bench、SPBench-SI 和 Q-Spatial Parquet 的既有下载位于
   `/media/datasets/tangzecong/huggingface/`。它们是 legacy 资产：只读引用，不移动、不删除，也不向
-  该 namespace 继续下载。路径存在不等于 split、图片、license 或 fingerprint 已验收。
+  该 namespace 继续下载。Q-Spatial ScanNet RGB 使用显式新 namespace 入口
+  `/media/datasets/lihaoran/huggingface/datasets/Q-Spatial-Bench/QSpatial_scannet/images`；代码不从
+  Parquet 根推断它，也不复制、打包或提交许可内容。
 - 2026-08-03 新增四个模型的目标 Hugging Face revision 和上游 commit 已锁入 CV-Bench registry；
   服务器运行前仍须现场核对 snapshot 完整性、license、processor/template 与 runner 实现 SHA。新增
   下载只写入 `/media/datasets/lihaoran/huggingface/`。
@@ -68,6 +71,18 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 | CV-Bench | [cambrian-mllm/cambrian](https://github.com/cambrian-mllm/cambrian) | [nyu-visionx/CV-Bench](https://huggingface.co/datasets/nyu-visionx/CV-Bench) |
 | SPBench-SI | [ZJU-REAL/SpatialLadder](https://github.com/ZJU-REAL/SpatialLadder) | [hongxingli/SPBench](https://huggingface.co/datasets/hongxingli/SPBench) |
 
+## Q-Spatial 已锁定实现
+
+Q-Spatial 使用官方代码 commit `ebe8137eae9781aaf7e29691ce8bc68b2a498a83` 与数据 revision
+`17b92e470d58fa46859ebd48ff35a1669828c9be`。全局顺序固定为 ScanNet `0..169` 后接
+Q-Spatial++ `170..270`；21 轨中 18 条是 RGB，3 条是 RGB 派生 depth/XYZ。Standard Prompt、两阶段
+LLaVA 格式修复、red/blue canary、smoke8、逐请求 seed、四卡 78B 门禁、robust numeric scorer、
+split-macro Overall 与报告 provenance 都已进入 registry/validator/tests。
+
+截至 2026-08-06 已完成仓库实现与 285 项全量回归，尚未在服务器启动任何 Q-Spatial 模型或付费 API 请求，因而
+没有 test/full/评分结果。详细协议见 [Q-Spatial canonical protocol](benchmarks/q_spatial/protocol.md)，
+执行顺序见 [Q-Spatial 两阶段 runbook](q-spatial-two-stage-runbook.md)。
+
 ## CV-Bench 已锁定实现
 
 以下边界已固化在 [CV-Bench protocol](benchmarks/cv_bench/protocol.md)、registry 和回归测试：
@@ -79,10 +94,8 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 5. processor/template、视觉 canary、smoke8 与输入审计形成绑定 gate；只有完整 2638 条和 publication
    gates 通过后才能发布结果。
 
-截至 2026-08-03，22/23 条轨曾通过服务器 v1 test gate；prompt
-冲突修复后 `3dthinker_mental3d` 与 `spatialladder3b_thinking` 已于 2026-08-04 通过 v2 test gate，
-其余轨可在最终 prompt 不变且仅 adapter digest 变化时审计迁移；
-InternVL3-78B 因当前服务器只有两张 A800、协议要求四张 80GB GPU 而阻塞。截至 2026-08-04，
-排除该四卡轨后的 22 条目标轨已进入 registry-driven full-2638 串行推理；控制器会重新校验并跳过
-已完成轨，尚未启动评分。逐轨完成情况必须读取服务器 `status.tsv`、validator 和 metadata，不能从
-本段静态快照推断。
+截至 2026-08-06，排除四卡 InternVL3-78B 后的 22 条目标轨均已通过当前 test gate、full-2638
+validator、scorer v3 评分和全部 publication gates；全局 `cv-bench-result.md` 有 22 行并明确只缺
+`internvl3_78b`。InternVL3-78B 仍因当前服务器只有两张 A800、协议要求四张 80GB GPU 而阻塞。
+逐轨实时状态仍须读取服务器 validator、metadata、summary 和 publication gates，不能只从本段静态
+快照推断。

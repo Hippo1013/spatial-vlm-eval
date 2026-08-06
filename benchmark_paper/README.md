@@ -5,11 +5,10 @@
 
 当前本地文件：
 
-- `MSMUBench.pdf`
-- `Q-Spatial++.pdf`
-- `SpatialBot.pdf`
-- `SpatialRGPT-Bench.pdf`
-- `SSRBench.pdf`
+- `CV-Bench.pdf`
+- `MSMU-Bench.pdf`
+- `Q-Spatial.pdf`
+- `SPBench-SI.pdf`
 
 论文内容不是可执行协议的唯一依据；正式实现仍应记录上游代码 commit、数据版本和本仓库
 protocol id。

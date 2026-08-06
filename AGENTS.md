@@ -44,6 +44,7 @@
 | 任务触发条件 | 必须阅读 | 时机 |
 |---|---|---|
 | 修改 benchmark 输入、schema、validator、judge、阈值、cache 或聚合 | 对应 `docs/benchmarks/<name>/` 协议、`docs/architecture.md`、相关 benchmark 测试 | 方案与编辑前 |
+| 运行或修改 Q-Spatial contract、21 轨、推理、评分或报告 | `docs/benchmarks/q_spatial/protocol.md`、`docs/q-spatial-two-stage-runbook.md` 与 Q-Spatial 测试 | 设计或执行前 |
 | 修改模型 profile、processor/template、图像输入、decoding 或 revision | `docs/model-matrix.md`、`docs/msmu-inference.md`、对应 benchmark 输入协议和 model 测试 | 设计 adapter 前 |
 | 修改 shell、环境变量、输出路径、服务器部署或 GPU 编排 | `docs/msmu-inference.md`、相关阶段 runbook、`docs/troubleshooting/` 和脚本测试 | 执行服务器命令前 |
 | 配置、操作或修改服务器显式出站代理 | `docs/server-network-proxy.md` | 输入订阅或执行代理命令前 |
@@ -86,6 +87,17 @@ sdvlm_official_compat_local_judge_v4_grounding_split_strict_quant_length_malform
 改变 prompt、grounding 路由、阈值、列表长度语义、聚合方式或 judge 身份进入 cache key 的规则时，
 必须更换 protocol/cache id、添加回归测试并更新文档。只做不改变 judge response 的确定性后处理修复时，
 应审慎判断是否保留 cache protocol。
+
+## Q-Spatial 不变量
+
+canonical 文档是 `docs/benchmarks/q_spatial/protocol.md`。正式数据顺序固定为 ScanNet 170 条后接
+Q-Spatial++ 101 条；Parquet 与 ScanNet RGB 使用两个显式根，后者的许可内容不复制、不打包、不提交。
+adapter 只接收 `index`、一张 RGB、Standard system prompt 和当前 `Question: ...`，prediction 只含
+`index, raw_prediction`。21 条 profile 中 18 条 RGB、3 条派生 depth/XYZ；不得加入 Mental-3D、thinking
+或 ScanNet GT depth。full 必须通过绑定 red/blue canary、smoke8、processor/template、单图证据与
+完整 provenance 的当前 test gate；subset 永不评分。当前 scorer protocol 是
+`q_spatial_robust_numeric_v1_standard_prompt_tag_first_unique_fallback_paper_inclusive_ratio`，主指标为
+两个 split 等权的 inclusive `δ≤2`；改变 parser、单位、边界或聚合必须换 protocol 并补测试/ADR。
 
 ## 修改与验证流程
 

@@ -14,6 +14,13 @@ from spatial_vlm_eval.benchmarks.cv_bench.scorer import (
     SCORER_PROTOCOL as CVBENCH_SCORER_PROTOCOL,
 )
 from spatial_vlm_eval.benchmarks.msmu.scorer import SCORER_PROTOCOL as MSMU_SCORER_PROTOCOL
+from spatial_vlm_eval.benchmarks.q_spatial.data import DATASET_REVISION as QSPATIAL_DATASET_REVISION
+from spatial_vlm_eval.benchmarks.q_spatial.profiles import (
+    PROFILE_SEQUENCE as QSPATIAL_PROFILE_SEQUENCE,
+)
+from spatial_vlm_eval.benchmarks.q_spatial.scorer import (
+    SCORER_PROTOCOL as QSPATIAL_SCORER_PROTOCOL,
+)
 from spatial_vlm_eval.models.profiles import CURRENT_TARGET_PROFILE_KEYS, PROFILES
 
 
@@ -121,11 +128,19 @@ class DocumentationConsistencyTest(unittest.TestCase):
 
         cvbench_section = matrix.split(
             "## CV-Bench 当前 23 条目标 inference profile", 1
-        )[1].split("## MSMU 当前 18 条已完成目标 inference profile", 1)[0]
+        )[1].split("## Q-Spatial 当前 21 条目标 inference profile", 1)[0]
         documented_cvbench = re.findall(
             r"^\| `([^`]+)` \|", cvbench_section, flags=re.MULTILINE
         )
         self.assertEqual(documented_cvbench, list(CVBENCH_PROFILE_SEQUENCE))
+
+        qspatial_section = matrix.split(
+            "## Q-Spatial 当前 21 条目标 inference profile", 1
+        )[1].split("## MSMU 当前 18 条已完成目标 inference profile", 1)[0]
+        documented_qspatial = re.findall(
+            r"^\| `([^`]+)` \|", qspatial_section, flags=re.MULTILINE
+        )
+        self.assertEqual(documented_qspatial, list(QSPATIAL_PROFILE_SEQUENCE))
 
     def test_cross_benchmark_scope_and_planned_sota_models_are_explicit(self) -> None:
         scope = (self.docs / "evaluation-scope.md").read_text(encoding="utf-8")
@@ -153,10 +168,11 @@ class DocumentationConsistencyTest(unittest.TestCase):
                 self.assertIn(model, matrix)
 
         self.assertIn("共 19 个模型身份", scope)
-        self.assertIn("**下一项待定**", scope)
+        self.assertIn("代码/回归完成", scope)
         self.assertIn("不是本项目复现结果", scope)
         self.assertIn("CV-Bench 的 23 条目标轨由独立 registry 维护", scope)
-        self.assertIn("22 条轨正在进行 full-2638 串行推理，尚未评分", scope)
+        self.assertIn("22 条目标轨均已通过当前 test gate、full-2638", scope)
+        self.assertIn("全局 `cv-bench-result.md` 有 22 行", scope)
         self.assertIn("/media/datasets/tangzecong/huggingface/", scope)
         self.assertIn("/media/datasets/lihaoran/huggingface/", scope)
 
@@ -206,6 +222,14 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("Overall = (2D + 3D) / 2", cvbench_protocol)
         self.assertIn("不是旧脚本的逐字节复刻", cvbench_protocol)
 
+        qspatial_protocol = (
+            self.docs / "benchmarks" / "q_spatial" / "protocol.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(QSPATIAL_SCORER_PROTOCOL, qspatial_protocol)
+        self.assertIn(QSPATIAL_DATASET_REVISION, qspatial_protocol)
+        self.assertIn("δ≤2", qspatial_protocol)
+        self.assertIn("170/101", qspatial_protocol.replace(" ", ""))
+
     def test_cvbench_runbook_and_config_match_public_entrypoints(self) -> None:
         runbook = (self.docs / "cv-bench-two-stage-runbook.md").read_text(
             encoding="utf-8"
@@ -238,6 +262,31 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("只评分 internvl3_78b", internvl78)
         self.assertIn("cv-bench-result.md", internvl78)
         self.assertIn("新增 InternVL3-78B 一行", internvl78)
+
+    def test_qspatial_runbook_config_and_registry_match_public_entrypoints(self) -> None:
+        runbook = (self.docs / "q-spatial-two-stage-runbook.md").read_text(encoding="utf-8")
+        commands = (self.docs / "q-spatial-commands.md").read_text(encoding="utf-8")
+        config = (self.repository / "configs" / "q-spatial-server.env.example").read_text(encoding="utf-8")
+        readme = (self.repository / "README.md").read_text(encoding="utf-8")
+        for required in [
+            "run_inference.sh --stage test",
+            "run_inference.sh --stage full",
+            "score_results.sh --predictions",
+            "build_results_report.sh",
+            "21",
+        ]:
+            with self.subTest(required=required):
+                self.assertIn(required, runbook)
+                self.assertIn(required, commands)
+        for required in [
+            "QSPATIAL_PARQUET_ROOT",
+            "QSPATIAL_SCANNET_RGB_ROOT",
+            "QSPATIAL_OUTPUT_ROOT",
+            "/media/datasets/lihaoran",
+            "/media/datasets/tangzecong",
+        ]:
+            self.assertIn(required, config)
+        self.assertIn("QSPATIAL_OUTPUT_ROOT", readme)
 
     def test_results_report_uses_one_protocol_and_concise_chinese_table(self) -> None:
         architecture = (self.docs / "architecture.md").read_text(encoding="utf-8")

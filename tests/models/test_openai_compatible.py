@@ -7,6 +7,8 @@ from unittest.mock import patch
 from PIL import Image
 
 from spatial_vlm_eval.benchmarks.msmu.data import MSMUModelInput
+from spatial_vlm_eval.benchmarks.q_spatial.data import QSpatialModelInput, STANDARD_SYSTEM_PROMPT
+from spatial_vlm_eval.benchmarks.q_spatial.profiles import PROFILES as QSPATIAL_PROFILES
 from spatial_vlm_eval.models.openai_compatible.client import (
     APIRequestError,
     HTTPJSONResponse,
@@ -46,6 +48,34 @@ class OpenAICompatibleContractTest(unittest.TestCase):
         rendered = str(payload)
         self.assertNotIn("reference", rendered.lower())
         self.assertNotIn("system", rendered.lower())
+
+    def test_q_spatial_system_user_and_vllm_sampling_extension_is_isolated(self):
+        value = QSpatialModelInput(
+            7,
+            Image.new("RGB", (5, 3), (12, 34, 56)),
+            STANDARD_SYSTEM_PROMPT,
+            "Question: How far?",
+        )
+        adapter = OpenAICompatibleAdapter(
+            profile=QSPATIAL_PROFILES["qwen3_vl_8b"],
+            backend="vllm",
+            base_url="https://example.test/v1",
+            api_key="test-key",
+            served_model_name="qwen3-vl-8b-qspatial",
+        )
+        payload = adapter.request_payload(value)
+        self.assertEqual([message["role"] for message in payload["messages"]], ["system", "user"])
+        self.assertEqual(payload["messages"][0]["content"], STANDARD_SYSTEM_PROMPT)
+        self.assertEqual(payload["messages"][1]["content"][1]["text"], "Question: How far?")
+        self.assertEqual(payload["top_k"], 20)
+        self.assertEqual(payload["presence_penalty"], 1.5)
+        self.assertEqual(payload["seed"], 3407)
+        self.assertEqual(payload["max_tokens"], 1024)
+
+        legacy = self.adapter("llava_next_mistral_7b", "vllm").request_payload(model_input())
+        self.assertEqual([message["role"] for message in legacy["messages"]], ["user"])
+        self.assertNotIn("top_k", legacy)
+        self.assertNotIn("presence_penalty", legacy)
 
     def test_http_headers_request_json_and_openrouter_metadata(self):
         adapter = self.adapter("gpt5_openrouter_non_zdr", "openrouter")

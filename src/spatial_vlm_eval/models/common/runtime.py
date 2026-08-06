@@ -57,7 +57,13 @@ class GenerationResult:
 
 
 class RestrictedVisionInput(Protocol):
-    """Structural input boundary shared by image-plus-prompt benchmarks."""
+    """Structural input boundary shared by image-plus-prompt benchmarks.
+
+    ``question`` remains the compatibility surface used by MSMU and CV-Bench.
+    Benchmarks with a genuine system/user protocol may additionally expose
+    ``system_prompt`` and ``user_prompt``; adapters must feature-detect those
+    fields instead of assuming that every benchmark owns a system message.
+    """
 
     index: int
     image: Any
@@ -143,7 +149,7 @@ def pixel_sha256(image: Any) -> str:
 
 def input_audit(model_input: RestrictedVisionInput, adapter_metadata: dict[str, Any]) -> dict[str, Any]:
     rgb = model_input.image.convert("RGB")
-    return {
+    audit = {
         "index": int(model_input.index),
         "question": str(model_input.question),
         "image_count": 1,
@@ -154,6 +160,17 @@ def input_audit(model_input: RestrictedVisionInput, adapter_metadata: dict[str, 
         "inference_protocol": adapter_metadata["inference_protocol"],
         "chat_template": adapter_metadata["chat_template"],
     }
+    system_prompt = getattr(model_input, "system_prompt", None)
+    user_prompt = getattr(model_input, "user_prompt", None)
+    if system_prompt is not None or user_prompt is not None:
+        if not isinstance(system_prompt, str) or not isinstance(user_prompt, str):
+            raise TypeError("System/user benchmark prompts must both be strings")
+        audit["system_prompt"] = system_prompt
+        audit["user_prompt"] = user_prompt
+        system_role_supported = bool(adapter_metadata.get("system_role_supported", True))
+        audit["system_role_supported"] = system_role_supported
+        audit["prompt_roles"] = ["system", "user"] if system_role_supported else ["user"]
+    return audit
 
 
 def _canonical_json(value: Any) -> str:

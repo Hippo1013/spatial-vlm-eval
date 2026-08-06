@@ -9,12 +9,14 @@
 |---|---|---|
 | MSMU 输入、校验、judge、阈值与聚合 | `src/spatial_vlm_eval/benchmarks/msmu/` | [canonical protocol](benchmarks/msmu/protocol.md) |
 | CV-Bench 数据、23 条轨、校验、评分与报告 | `src/spatial_vlm_eval/benchmarks/cv_bench/` | [CV-Bench protocol](benchmarks/cv_bench/protocol.md) |
+| Q-Spatial 数据、21 条轨、校验、numeric scorer 与报告 | `src/spatial_vlm_eval/benchmarks/q_spatial/` | [Q-Spatial protocol](benchmarks/q_spatial/protocol.md) |
 | 四 benchmark 范围、推进顺序与数据准备边界 | 实现前为项目规划；实现后由各 benchmark registry/validator 固化 | [评测范围](evaluation-scope.md) |
 | 项目级目标模型身份与新增 SOTA 范围 | 实现前为项目规划 | [模型矩阵](model-matrix.md) |
 | 已注册 MSMU profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` | [模型矩阵的 MSMU profile](model-matrix.md#msmu-当前-18-条已完成目标-inference-profile) |
 | CV-Bench 23 条目标轨及顺序 | `benchmarks.cv_bench.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 CV-Bench profile](model-matrix.md#cv-bench-当前-23-条目标-inference-profile) |
+| Q-Spatial 21 条目标轨及顺序 | `benchmarks.q_spatial.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 Q-Spatial profile](model-matrix.md#q-spatial-当前-21-条目标-inference-profile) |
 | 阶段三默认/Qwen3 补测轨与顺序 | `run_stage3_serial_inference.sh --list` / `--qwen3 --list` | [阶段三 runbook](msmu-stage3-full-eval.md) |
-| 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata 和 `summary.json` | 模型矩阵只保存注明日期的已验证快照 |
+| 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata、`summary.json` 和 publication gates | 模型矩阵只保存注明日期的已验证快照 |
 | CLI、环境变量与输出布局 | 脚本 `--help`、`configs/*server.env.example` | 对应 runbook |
 | 服务器显式出站代理 | 仓库外 `/media/datasets/lihaoran/tools/mihomo/` | [网络代理手册](server-network-proxy.md) |
 | 精确代码历史 | Git commit/diff | 根目录 [CHANGELOG](../CHANGELOG.md) 只记录语义变化 |
@@ -46,17 +48,20 @@
 - [MSMU canonical protocol](benchmarks/msmu/protocol.md)：MSMU 评分与输入协议的唯一规范文档。
 - [CV-Bench canonical protocol](benchmarks/cv_bench/protocol.md)：锁定数据、模型输入、23 条轨、
   robust scorer 和 publication gates。
+- [Q-Spatial canonical protocol](benchmarks/q_spatial/protocol.md)：两根数据合同、Standard Prompt、21 条
+  轨、numeric scorer 与 publication gates。
 - [来源记录](source-provenance.json)：上游 commit、模型 revision 和文件哈希。
 
 ### 状态与参考
 
 - [四 Benchmark 评测范围](evaluation-scope.md)：MSMU、CV-Bench、Q-Spatial Bench、SPBench-SI 的
   当前阶段、SOTA 对照来源与服务器资产边界。
-- [模型矩阵](model-matrix.md)：19 个项目级目标模型身份、CV-Bench 23 条目标轨，以及 MSMU 已落地
-  profile、锁定身份、已知偏差和注明日期的验证状态快照。
+- [模型矩阵](model-matrix.md)：19 个项目级目标模型身份、CV-Bench 23 条与 Q-Spatial 21 条目标轨，
+  以及 MSMU 已落地 profile、锁定身份、已知偏差和注明日期的验证状态快照。
 - [Judge 提示词中文参考](msmu-judge-prompts-zh-reference.md)：人工阅读译文；英文 scorer 源码仍是
   唯一运行真值。
 - [MSMU 遗留小问题](benchmarks/msmu/known-minor-issues.md)：仅供以后人工复核的暂缓问题清单。
+- [Q-Spatial 遗留小问题](benchmarks/q_spatial/known-minor-issues.md)：单次/multi-seed 与公开图片计数说明。
 - [本地论文目录说明](../benchmark_paper/README.md)：不进入 Git 的论文文件约定。
 
 ### 运行手册
@@ -65,6 +70,8 @@
 - [CV-Bench 两阶段 runbook](cv-bench-two-stage-runbook.md)：test gate、full-2638、目录评分与报告命令。
 - [CV-Bench InternVL3-78B 一键评测](cv-bench-internvl3-78b-evaluation.md)：四卡 TP=4 的 test/full、
   独立校验、精确单轨评分和原有全局报告重建。
+- [Q-Spatial 简明运行指令](q-spatial-commands.md)：21 轨 test/full/评分/报告的可复制命令。
+- [Q-Spatial 两阶段 runbook](q-spatial-two-stage-runbook.md)：两根数据、endpoint、gate、full-271 与评分。
 - [MSMU 多模型推理与验收](msmu-inference.md)：环境、模型 family 和完整产物说明。
 - [三阶段统一入口](msmu-all-model-test-commands.md)：人工测试总入口。
 - [阶段一 canary](msmu-stage1-canary.md)：接口、processor 和视觉链路检查。
@@ -80,6 +87,7 @@
 - [ADR 索引与模板](decisions/README.md)：长期设计决策及其后果。
 - [Inference/scorer protocol 分离决策](decisions/0001-separate-inference-and-scorer-protocols.md)。
 - [CV-Bench 稳健解析与发布门禁决策](decisions/0002-cv-bench-robust-parser-and-publication-gates.md)。
+- [Q-Spatial numeric parser 与发布门禁决策](decisions/0003-q-spatial-robust-numeric-parser-and-publication-gates.md)。
 - [Troubleshooting 规则](troubleshooting/README.md)与
   [服务器问题库](troubleshooting/server.md)。
 

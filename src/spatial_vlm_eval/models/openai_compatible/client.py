@@ -117,6 +117,19 @@ def single_image_user_message(question: str, image_data_uri: str) -> list[dict[s
     ]
 
 
+def single_image_system_user_messages(
+    system_prompt: str,
+    user_prompt: str,
+    image_data_uri: str,
+) -> list[dict[str, Any]]:
+    """Return one text-only system turn and one single-image user turn."""
+
+    if not isinstance(system_prompt, str) or not system_prompt:
+        raise ValueError("OpenAI-compatible system prompt must be a non-empty string")
+    messages = single_image_user_message(user_prompt, image_data_uri)
+    return [{"role": "system", "content": system_prompt}, *messages]
+
+
 def _safe_api_error_body(raw: bytes) -> str:
     try:
         value = json.loads(raw.decode("utf-8", errors="replace"))
@@ -376,23 +389,46 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "zdr": require_zdr,
         }
 
-    def request_payload(self, model_input: RestrictedVisionInput) -> dict[str, Any]:
+    def request_messages(self, model_input: RestrictedVisionInput) -> list[dict[str, Any]]:
+        image_data_uri = image_to_png_data_uri(model_input.image)
+        system_prompt = getattr(model_input, "system_prompt", None)
+        user_prompt = getattr(model_input, "user_prompt", None)
+        if system_prompt is None and user_prompt is None:
+            return single_image_user_message(model_input.question, image_data_uri)
+        if not isinstance(system_prompt, str) or not isinstance(user_prompt, str):
+            raise TypeError("System/user model inputs must provide both prompts as strings")
+        return single_image_system_user_messages(system_prompt, user_prompt, image_data_uri)
+
+    def request_payload(
+        self,
+        model_input: RestrictedVisionInput,
+        *,
+        messages: list[dict[str, Any]] | None = None,
+        max_tokens_override: int | None = None,
+        continue_final_message: bool = False,
+    ) -> dict[str, Any]:
+        maximum = self.max_new_tokens if max_tokens_override is None else int(max_tokens_override)
+        if maximum <= 0:
+            raise ValueError("max_tokens_override must be positive")
         payload: dict[str, Any] = {
             "model": self.request_model,
-            "messages": single_image_user_message(
-                model_input.question,
-                image_to_png_data_uri(model_input.image),
-            ),
+            "messages": messages if messages is not None else self.request_messages(model_input),
             "stream": False,
         }
         if self.backend in {"vllm", "openrouter"}:
-            payload["max_tokens"] = self.max_new_tokens
+            payload["max_tokens"] = maximum
         else:
-            payload["max_completion_tokens"] = self.max_new_tokens
+            payload["max_completion_tokens"] = maximum
         if self.temperature is not None:
             payload["temperature"] = self.temperature
         if self.decoding.get("top_p") is not None:
             payload["top_p"] = self.decoding["top_p"]
+        if self.backend == "vllm" and self.decoding.get("top_k") is not None:
+            payload["top_k"] = int(self.decoding["top_k"])
+        if self.decoding.get("presence_penalty") is not None:
+            payload["presence_penalty"] = float(self.decoding["presence_penalty"])
+        if self.backend == "vllm" and self.decoding.get("repetition_penalty") is not None:
+            payload["repetition_penalty"] = float(self.decoding["repetition_penalty"])
         if self.backend == "vllm" and self.decoding.get("seed") is not None:
             payload["seed"] = int(self.decoding["seed"])
         if self.reasoning_effort is not None:
@@ -403,6 +439,10 @@ class OpenAICompatibleAdapter(InferenceAdapter):
                 }
             elif self.backend in {"openai", "google"}:
                 payload["reasoning_effort"] = self.reasoning_effort
+        if continue_final_message:
+            if self.backend != "vllm":
+                raise ValueError("Assistant-prefill continuation is only supported for vLLM")
+            payload["continue_final_message"] = True
         if self.backend == "openrouter":
             payload["provider"] = self._openrouter_provider_policy()
         return payload
@@ -586,11 +626,11 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "num_media_prompt": int(media_count),
         }
 
-    def generate(self, model_input: RestrictedVisionInput) -> GenerationResult:
+    def _generate_payload(self, payload: dict[str, Any]) -> GenerationResult:
         response = self._request_json(
             method="POST",
             url=f"{self.base_url}/chat/completions",
-            payload=self.request_payload(model_input),
+            payload=payload,
         )
         try:
             choices = response.data.get("choices")
@@ -637,3 +677,36 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             raise
         warnings = ("model returned an empty text completion",) if not text.strip() else ()
         return GenerationResult(text=text, metadata=generation_metadata, warnings=warnings)
+
+    def generate_messages(
+        self,
+        model_input: RestrictedVisionInput,
+        messages: list[dict[str, Any]],
+        *,
+        max_tokens: int | None = None,
+        continue_final_message: bool = False,
+    ) -> GenerationResult:
+        """Generate from an audited custom transcript containing exactly one image."""
+
+        image_count = 0
+        for message in messages:
+            content = message.get("content") if isinstance(message, dict) else None
+            if not isinstance(content, list):
+                continue
+            image_count += sum(
+                isinstance(part, dict) and part.get("type") in {"image_url", "image"}
+                for part in content
+            )
+        if image_count != 1:
+            raise ValueError(f"Custom OpenAI-compatible transcript must contain one image, got {image_count}")
+        return self._generate_payload(
+            self.request_payload(
+                model_input,
+                messages=messages,
+                max_tokens_override=max_tokens,
+                continue_final_message=continue_final_message,
+            )
+        )
+
+    def generate(self, model_input: RestrictedVisionInput) -> GenerationResult:
+        return self._generate_payload(self.request_payload(model_input))

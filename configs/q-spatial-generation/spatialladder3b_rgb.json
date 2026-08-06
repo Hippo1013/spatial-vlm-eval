@@ -1,0 +1,13 @@
+{
+  "profile": "spatialladder3b_rgb",
+  "model_revision": "0819c3adf8827a2ea6c0348d49a23503ecb1f428",
+  "upstream_commit": "7a0d2ee85c28728835300310a349a53a15967f2e",
+  "decoding": {
+    "do_sample": true,
+    "temperature": 0.01,
+    "top_p": 1.0,
+    "repetition_penalty": 1.05,
+    "max_new_tokens": 128,
+    "seed": 42
+  }
+}

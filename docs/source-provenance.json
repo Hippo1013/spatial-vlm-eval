@@ -1,16 +1,24 @@
 {
   "captured_at": "2026-08-03",
   "source_root": "/media/datasets/tangzecong/latent_reasoning",
-  "note": "Canonical MSMU scorer semantics are v4. CV-Bench uses its independent locked dataset, robust multiple-choice scorer and 23-track inference registry; inference and scorer protocol ids remain separate.",
+  "note": "Canonical MSMU scorer semantics are v4. CV-Bench and Q-Spatial use independent locked datasets, benchmark-owned robust scorers and separate inference/scorer protocol ids.",
   "dataset_revisions": {
-    "nyu-visionx/CV-Bench": "bc284db50d036958861cb60cdd7b77612052ce0d"
+    "nyu-visionx/CV-Bench": "bc284db50d036958861cb60cdd7b77612052ce0d",
+    "andrewliao11/Q-Spatial-Bench": "17b92e470d58fa46859ebd48ff35a1669828c9be"
   },
   "legacy_dataset_locations": {
-    "nyu-visionx/CV-Bench": "/media/datasets/tangzecong/huggingface/datasets/CV-Bench"
+    "nyu-visionx/CV-Bench": "/media/datasets/tangzecong/huggingface/datasets/CV-Bench",
+    "andrewliao11/Q-Spatial-Bench/parquet": "/media/datasets/tangzecong/huggingface/dataset/Q-Spatial-Bench"
+  },
+  "licensed_dataset_locations": {
+    "andrewliao11/Q-Spatial-Bench/scannet_rgb": "/media/datasets/lihaoran/huggingface/datasets/Q-Spatial-Bench/QSpatial_scannet/images"
   },
   "dataset_file_sha256": {
     "nyu-visionx/CV-Bench/test_2d.parquet": "33196034ef4bf3265cae4a7ff5c4071b2ff1cc21123e8e285c6a91393897ecbc",
-    "nyu-visionx/CV-Bench/test_3d.parquet": "ef91fe8b5392eb2a16e318ca68fa02449d45ba1e152afece12a0a526e9fbbc25"
+    "nyu-visionx/CV-Bench/test_3d.parquet": "ef91fe8b5392eb2a16e318ca68fa02449d45ba1e152afece12a0a526e9fbbc25",
+    "andrewliao11/Q-Spatial-Bench/data/QSpatial_scannet-00000-of-00001.parquet": "a5b0a37443b4ae18c837e4df7fe60411f869f282aa5803b8a7d509ba381286ba",
+    "andrewliao11/Q-Spatial-Bench/data/QSpatial_plus-00000-of-00001.parquet": "30ff075480f7fe0497122c8251f5d529f2241dda1387038e2a0ed802ae8615e2",
+    "andrewliao11/Q-Spatial-Bench/QSpatial_scannet/images-manifest": "4485132ff448f43bdfb1283743825995823487a37f74ae4ab5a8e9d4b653751b"
   },
   "legacy_files": {
     "msmu_sft_baseline/data.py": "440D315DF868461661D3C1596CE139A3DFEEE36045E83C78C7A06C84671EF4E8",
@@ -24,6 +32,7 @@
   },
   "upstream_commits": {
     "cambrian-mllm/cambrian": "539ffc3254bba004e5d012b65c0ad6cb308897c5",
+    "andrewliao11/Q-Spatial-Bench-code": "ebe8137eae9781aaf7e29691ce8bc68b2a498a83",
     "yliu-cs/SSR": "52a21a14a84a98f07575721dd3200f76c11930d8",
     "yliu-cs/ml-depth-pro": "edb23bbab37cfc4d3fe1048a2f126ca7c590ab64",
     "AnjieCheng/SpatialRGPT": "16715d4f1419997da18926c6ce574802d1eb3a37",

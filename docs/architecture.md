@@ -35,6 +35,12 @@ JSONL，也不得持有原始 dataset row。
 prediction 只保存 `index, raw_prediction`，answer/task/source 仅在 scorer 中按 index 重新关联。MSMU
 与 CV-Bench 的 schema、validator 和 scorer protocol 不复用。
 
+`QSpatialTestContract` 使用两个显式数据根，私有持有数值答案、单位、split 与 type。adapter 只收到
+`index, image, system_prompt, user_prompt`：一张 RGB、官方 Standard system prompt 和
+`Question: {question}`。不支持 system role 的 runner 只允许按锁定分隔符折叠两段 prompt。prediction
+同样是 `index, raw_prediction`，但 Q-Spatial validator/scorer 与 CV-Bench 完全独立；`1d_horizontal`
+只在 scorer 派生分类中映射为 object width。
+
 每次调用前创建输入审计：index、清洗后题干、RGB 数量、mode、尺寸、像素 SHA-256、profile、
 inference protocol 和 chat template。审计禁止保存 base64/API key；它证明“送入哪张图”，但不会把
 reference 泄漏给模型。
@@ -69,6 +75,10 @@ cache identity、阈值、聚合与 scorer protocol。model 包不得定义指�
 CV-Bench 子包额外拥有 23 条目标轨的 benchmark-specific registry，因为同一模型在不同 benchmark 的
 prompt、decoding 和合法 input track 并不相同。通用 journal/resume/原子写入来自 model-neutral
 runtime；registry 不进入 scorer 的结果发现逻辑。
+
+Q-Spatial 子包独立拥有两根数据合同、21 条 profile、system/user transport、LLaVA 两阶段格式修复、
+numeric parser、split-macro 聚合和发布报告。它只复用 model-neutral runtime 与已锁定 family runner，
+不复制 CV-Bench 的题目、parser 或聚合语义。
 
 ### `spatial_vlm_eval.models`
 
@@ -109,6 +119,12 @@ GPU preflight 只读取 `nvidia-smi`；显存不足、利用率超限或已有 c
 `INFERENCE_BASE_URL` 与 `JUDGE_BASE_URL` 是两个独立变量。`RUN_SCORE=1` 时 pipeline 强制要求
 `JUDGE_BASE_URL`，避免把被测模型 endpoint 错当成 judge。`INDICES`/`LIMIT` 自动进入 subset validator，
 且 pipeline 硬拒绝 subset scoring。
+
+`scripts/q_spatial/` 提供 registry-driven test/full、严格 validator、目录评分和报告入口。test gate 绑定
+两个数据根、Standard Prompt、profile/revision、processor/adapter digest、decoding/seed、GPU、capacity
+和 sharding；TP=1 vLLM 用两个 endpoint 固定奇偶分片，其他 backend 单 endpoint/runner。LLaVA 两阶段
+调用都传同一张图；specialized JSONL bridge 分别传 system/user prompt 且不含评分字段。评分只发现
+271 条完整 prediction，报告按 comparison group 计算加粗且拒绝重复候选。
 
 阶段三串行调度器只编排 inference 与完整 validator，不复制模型或 benchmark 逻辑。它在独立 session/
 process group 中启动每个模型，使用 fsync journal 的文件活动做停滞 watchdog，只终止自己记录的
@@ -193,6 +209,27 @@ CVBENCH_OUTPUT_ROOT/
 │       ├── summary.json
 │       └── publication_gates.json
 └── cv-bench-result.md
+```
+
+Q-Spatial 使用平行但独立的仓库外根：
+
+```text
+QSPATIAL_OUTPUT_ROOT/
+├── runs/PROFILE/MODEL_REVISION/INFERENCE_PROTOCOL/
+│   ├── test_artifacts/
+│   │   ├── dataset_manifest.json
+│   │   ├── vision_canary.json
+│   │   ├── capacity_probe.json
+│   │   └── test_gate.json
+│   ├── predictions.jsonl
+│   ├── predictions.jsonl.journal.jsonl
+│   ├── predictions.jsonl.metadata.json
+│   └── scores/SCORER_PROTOCOL/
+│       ├── prediction_validation.json
+│       ├── scored_rows.jsonl
+│       ├── summary.json
+│       └── publication_gates.json
+└── q-spatial-result.md
 ```
 
 以下是 MSMU 的既有布局：

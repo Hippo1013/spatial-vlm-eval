@@ -7,6 +7,16 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 增加独立 Q-Spatial Bench 全链路：锁定官方代码 `ebe8137` 与数据 revision `17b92e4`、两个显式
+  数据根、170+101 行及 99-frame ScanNet manifest，不可泄漏的 system/user 单图输入、两字段
+  prediction validator、21 条目标 profile、test/full 绑定 gate、目录评分和 publication-gated 报告。
+- 增加 Q-Spatial tag-first robust numeric scorer：确定性单位换算、论文 inclusive `δ≤2` / `δ≤1.25`、
+  ScanNet/Q-Spatial++ 等权 Overall、ScanNet 五类分项，以及同批次旧 notebook strict-threshold 审计；
+  malformed/冲突答案保守记零且逐行保留差异。
+- 扩展 OpenAI-compatible client 以按 benchmark 输入可选发送 system + single-image user messages，并
+  支持 vLLM `top_k`、presence/repetition penalty、seed 与自定义 token 上限；MSMU/CV-Bench 原有
+  user-only payload 保持不变。增加 LLaVA 两阶段格式修复、纯红/纯蓝 canary、smoke8、固定奇偶双
+  endpoint 分片和独立 Q-Spatial specialized JSONL bridge。
 - 增加独立 CV-Bench 全链路：锁定 revision `bc284db50d036958861cb60cdd7b77612052ce0d`
   的 2D/3D 两个 Parquet（2638 条）、不可泄漏的单图输入合同、两字段 prediction validator、23 条目标
   profile registry、test/full 两阶段绑定 gate、目录驱动评分与 publication-gated Markdown 报告。
@@ -76,8 +86,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   adapter source digest 改变、其余 binding 完全相同，也可审计迁移而不重复调用模型。
 - CV-Bench 服务器 test stage 已现场完成 22/23 条轨的红/蓝视觉接收、smoke8 和单图审计 gate；
   InternVL3-78B 因当前服务器仅有 2×A800、协议要求 4×80GB GPU 而保持阻塞。排除该轨后的 22 条目标轨
-  已于 2026-08-04 启动 registry-driven full-2638 串行推理；已验证完成轨由 validator 复核后跳过，
-  当前未启动评分。
+  已于 2026-08-06 全部通过 full-2638 validator、scorer v3 评分和 publication gates；全局报告为
+  22/23 并明确只缺 `internvl3_78b`。
 - CV-Bench prompt 冲突修复后的 `3dthinker_mental3d` 与 `spatialladder3b_thinking` 已现场重跑并通过
   v2 test gate；逐条 journal 审计确认 smoke8 均为单图、包含 reasoning answer tags，且不再含
   direct-answer 后缀。
@@ -146,6 +156,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Documentation
 
+- 增加 Q-Spatial canonical protocol、两阶段 runbook、简明命令、21 轨模型矩阵、numeric scorer ADR
+  和遗留小问题；同步 README、架构、评测范围、文档地图、来源记录、AGENTS 路由与论文目录索引。
 - 增加 CV-Bench canonical protocol、两阶段 runbook、23 条目标 profile 矩阵与 robust parser/publication
   gate ADR，以及面向操作者的精简 test/full/评分/汇总命令页；同步架构、评测范围、文档地图、来源记录
   和文档一致性测试。
