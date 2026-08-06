@@ -128,6 +128,16 @@ full 必须使用当前绑定的 test gate；服务器 endpoint、专用 runner�
 [CV-Bench 简明运行指令](docs/cv-bench-commands.md)与
 [两阶段 runbook](docs/cv-bench-two-stage-runbook.md)。
 
+四卡 InternVL3-78B 可用一条命令完成 test gate、full-2638、独立校验、精确单轨评分并重建同一个
+全局报告：
+
+```bash
+bash scripts/cv_bench/run_internvl3_78b_evaluation.sh
+```
+
+运行前检查、tmux 与恢复方式见
+[CV-Bench InternVL3-78B 一键评测](docs/cv-bench-internvl3-78b-evaluation.md)。
+
 ### MSMU
 
 复制模板并从未跟踪文件加载：

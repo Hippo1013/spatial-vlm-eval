@@ -25,6 +25,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   验证并停止其拥有的单/双 endpoint vLLM 服务，再按顺序运行 API 与专用轨；任一失败立即停止且不评分。
 - 增加 CV-Bench 只读逐条结果 watcher：自动跟随 full 串行批次的当前 profile，只读取正式 append-only
   journal 并打印精简 success/failure；默认从启动时刻继续，支持 `--from-start` 重放当前模型。
+- 增加 CV-Bench InternVL3-78B 四卡单模型一键入口：固定 TP=4/BF16 和 registry decoding，自动复用
+  test gate/journal/完整结果，顺序执行 full-2638、独立 validator、精确单轨评分和原有全局报告重建；
+  正式 prediction、score 与 `cv-bench-result.md` 继续使用既有 canonical 路径。
 - 将 CV-Bench 独立完整 prediction validator 明确为推理与评分之间的公开阶段；CLI 默认读取
   `CVBENCH_DATASET_ROOT`，评分入口仍强制重复校验且不提供绕过参数。
 - 增加 12 条空间专用轨共用的 dataset-blind persistent runner、五份从锁定上游/checkpoint 解析的

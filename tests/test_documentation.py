@@ -211,6 +211,9 @@ class DocumentationConsistencyTest(unittest.TestCase):
             encoding="utf-8"
         )
         commands = (self.docs / "cv-bench-commands.md").read_text(encoding="utf-8")
+        internvl78 = (
+            self.docs / "cv-bench-internvl3-78b-evaluation.md"
+        ).read_text(encoding="utf-8")
         config = (
             self.repository / "configs" / "cv-bench-server.env.example"
         ).read_text(encoding="utf-8")
@@ -229,6 +232,12 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("/media/datasets/lihaoran", config)
         self.assertIn("/media/datasets/tangzecong", config)
         self.assertIn("CVBENCH_OUTPUT_ROOT", readme)
+        for document in (runbook, commands, internvl78, readme):
+            with self.subTest(document=document[:40]):
+                self.assertIn("run_internvl3_78b_evaluation.sh", document)
+        self.assertIn("只评分 internvl3_78b", internvl78)
+        self.assertIn("cv-bench-result.md", internvl78)
+        self.assertIn("新增 InternVL3-78B 一行", internvl78)
 
     def test_results_report_uses_one_protocol_and_concise_chinese_table(self) -> None:
         architecture = (self.docs / "architecture.md").read_text(encoding="utf-8")

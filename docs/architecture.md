@@ -97,6 +97,11 @@ inference；兼容规则必须显式列出可消费的历史 inference-metadata 
 summary，未知 ID 仍 fail closed。解析归一化只作用于 scorer 视图，逐行结果保留未改写的原始回答和
 确定性 `parse_evidence`。
 
+InternVL3-78B 的单模型控制器沿用同一边界：固定四卡 TP=4，必要时自动管理自有 vLLM，顺序调用既有
+test/full、validator、`--predictions` 精确评分和全局报告入口。它不复制 benchmark/scorer 逻辑，也不
+创建模型专属结果根；prediction、score 和 `cv-bench-result.md` 均由原有 canonical 路径与发现逻辑
+生成。控制日志仅位于输出根的 `_single_model_evaluation/logs/`。
+
 `scripts/msmu/` 包含 family inference、vLLM server、GPU preflight、validator/scorer 和 pipeline。
 GPU preflight 只读取 `nvidia-smi`；显存不足、利用率超限或已有 compute process 时退出，绝不终止
 其他进程。只有资源已经协调时才能显式放宽 utilization/process 门禁。
@@ -176,6 +181,7 @@ CV-Bench 使用独立仓库外根：
 
 ```text
 CVBENCH_OUTPUT_ROOT/
+├── _single_model_evaluation/logs/        # 编排日志，不是正式结果
 ├── runs/PROFILE/MODEL_REVISION/INFERENCE_PROTOCOL/
 │   ├── test_gate.json
 │   ├── predictions.jsonl

@@ -164,6 +164,19 @@ bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --skip-completed
 GPU burn 仍由操作者按对应手册在控制器外显式开关。`--skip-completed` 只在现有 prediction 重新通过
 锁定数据的完整 validator 后跳过对应轨，并在 `status.tsv` 记录 `SKIP_COMPLETE`。控制器不评分。
 
+InternVL3-78B 不进入上述两卡串行批次。四张 80GB GPU 可用后，用一个独立入口串起该轨的当前 test
+gate、full-2638、独立 validator、精确单轨评分和原有全局报告：
+
+```bash
+bash scripts/cv_bench/run_internvl3_78b_evaluation.sh --check
+bash scripts/cv_bench/run_internvl3_78b_evaluation.sh
+```
+
+入口固定 profile `internvl3_78b`、BF16、TP=4 和 registry decoding；只拥有自己启动的 vLLM 进程组，
+在评分前停止服务并确认四卡释放。prediction、score 和报告继续使用原有 canonical 路径；控制日志单独
+保存在 `$CVBENCH_OUTPUT_ROOT/_single_model_evaluation/logs/`。完整操作说明见
+[InternVL3-78B 一键完整评测](cv-bench-internvl3-78b-evaluation.md)。
+
 另开终端可用只读 watcher 自动跟随当前及后续模型的正式 journal，并逐条打印精简后的 prediction；
 默认只显示启动监听后追加的事件，`--from-start` 可重放当前模型已有事件：
 

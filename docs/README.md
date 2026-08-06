@@ -63,6 +63,8 @@
 
 - [CV-Bench 简明运行指令](cv-bench-commands.md)：操作者直接复制的 test/full/评分/汇总命令。
 - [CV-Bench 两阶段 runbook](cv-bench-two-stage-runbook.md)：test gate、full-2638、目录评分与报告命令。
+- [CV-Bench InternVL3-78B 一键评测](cv-bench-internvl3-78b-evaluation.md)：四卡 TP=4 的 test/full、
+  独立校验、精确单轨评分和原有全局报告重建。
 - [MSMU 多模型推理与验收](msmu-inference.md)：环境、模型 family 和完整产物说明。
 - [三阶段统一入口](msmu-all-model-test-commands.md)：人工测试总入口。
 - [阶段一 canary](msmu-stage1-canary.md)：接口、processor 和视觉链路检查。

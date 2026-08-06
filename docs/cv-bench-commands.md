@@ -51,8 +51,8 @@ test 会依次完成 GPU/processor、视觉 canary、smoke8、输入审计和绑
 
 ## 4. 正式 2638 条
 
-截至 2026-08-04，排除四卡 InternVL3-78B 后的串行批次正在运行。控制器存活时不要重复执行启动命令；
-先用 `--status` 和 `$CVBENCH_OUTPUT_ROOT/_serial_full/status.tsv` 查看现场状态。
+常规串行控制器明确排除四卡 InternVL3-78B。控制器存活时不要重复执行启动命令；先用 `--status` 和
+`$CVBENCH_OUTPUT_ROOT/_serial_full/status.tsv` 查看现场状态。
 
 ```bash
 bash scripts/cv_bench/run_inference.sh --stage full --model PROFILE
@@ -72,6 +72,18 @@ bash scripts/cv_bench/run_full_serial.sh --without-internvl78 --skip-completed
 该入口按 registry 顺序运行其余 22 条轨、只管理自己启动的 vLLM 服务，任一轨失败立即停止且不评分。
 `--skip-completed` 会先用锁定数据重新执行完整 validator，只有实际 prediction 仍通过时才在启动模型前
 写入 `SKIP_COMPLETE` 并跳过。运行前须关闭 GPU burn，并在当前 shell 启用 API 代理。
+
+四卡 InternVL3-78B 使用独立的一键完整评测入口：
+
+```bash
+bash scripts/cv_bench/run_internvl3_78b_evaluation.sh --check
+bash scripts/cv_bench/run_internvl3_78b_evaluation.sh
+```
+
+它自动完成当前 test gate、full-2638、独立 validator、精确单轨评分和原有全局报告重建；所有正式
+产物仍写到既有 `runs/internvl3_78b/...`、`scores/...` 和同一个 `cv-bench-result.md`，不另开结果根。
+四卡配置、tmux、恢复、完成核验和手工诊断见
+[InternVL3-78B 一键完整评测](cv-bench-internvl3-78b-evaluation.md)。
 
 ## 5. 只读查看逐条结果
 

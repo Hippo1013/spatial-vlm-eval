@@ -119,6 +119,51 @@ class CVBenchRuntimeAndScriptsTest(unittest.TestCase):
         self.assertIn("export CUDA_VISIBLE_DEVICES=0", text)
         self.assertNotIn("llava_next_mistral_7b,llava_next_yi_34b", text)
 
+    def test_internvl78_single_model_controller_uses_canonical_outputs(self):
+        script = (
+            self.repository
+            / "scripts"
+            / "cv_bench"
+            / "run_internvl3_78b_evaluation.sh"
+        )
+        text = script.read_text(encoding="utf-8")
+        for required in [
+            'PROFILE="internvl3_78b"',
+            "track_directory",
+            "--stage test",
+            "--stage full",
+            "--predictions",
+            "build_results_report.sh",
+            '_single_model_evaluation',
+            'CVBENCH_INTERNVL3_78B_GPU_IDS',
+        ]:
+            with self.subTest(required=required):
+                self.assertIn(required, text)
+        self.assertNotIn(
+            'control_root="${CVBENCH_OUTPUT_ROOT%/}/_internvl3_78b_evaluation"',
+            text,
+        )
+
+        with tempfile.TemporaryDirectory() as directory:
+            output_root = Path(directory) / "cv-bench-outputs"
+            completed = subprocess.run(
+                ["bash", str(script), "--dry-run"],
+                cwd=self.repository,
+                env={
+                    **os.environ,
+                    "CVBENCH_ENV_FILE": "/dev/null",
+                    "CVBENCH_PYTHON": sys.executable,
+                    "CVBENCH_OUTPUT_ROOT": str(output_root),
+                    "INTERNVL3_78B_MODEL": "/dry-run/locked-internvl3-78b",
+                },
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertFalse(output_root.exists())
+        self.assertIn('"stage": "full"', completed.stdout)
+        self.assertIn("cv-bench-result.md", completed.stdout)
+
     def test_dry_run_preserves_registry_order_for_unsorted_selection(self):
         with tempfile.TemporaryDirectory() as directory:
             completed = subprocess.run(
