@@ -1,13 +1,14 @@
 # 项目目标测试模型矩阵
 
-本矩阵同时区分“项目级模型身份”和“已经落地的 benchmark-specific inference profile”。剩余三个
+本矩阵同时区分“项目级模型身份”和“已经落地的 benchmark-specific inference profile”。三个后续
 benchmark 的目标范围是 MSMU 阶段已有 15 个模型身份加 4 个新开源 SOTA 模型，共 19 个模型身份；
 benchmark 范围与推进顺序见[四 Benchmark 评测范围](evaluation-scope.md)。
 
 MSMU 注册 profile 保存在 `src/spatial_vlm_eval/models/profiles.py`；同文件的
 `CURRENT_TARGET_PROFILE_KEYS` 唯一确定已经实现并完成的 MSMU 目标集合。CV-Bench 使用独立的
 `src/spatial_vlm_eval/benchmarks/cv_bench/profiles.py`，其 `PROFILE_SEQUENCE` 唯一确定 23 条目标轨和
-串行顺序。每条正式结果仍须记录 model revision、
+串行顺序。Q-Spatial 与 SPBench-SI 也分别由各自 benchmark package 的 `PROFILE_SEQUENCE` 独立锁定
+21 条轨，禁止跨 benchmark 复用 prompt、decoding 或 scorer 语义。每条正式结果仍须记录 model revision、
 inference protocol、prompt/template、图像处理、decoding 和 scorer protocol。精简展示表只有在逐行
 校验这些 provenance、一次只选择一个 scorer protocol，并在模型名称中区分不同 input track 时才可
 省略 protocol 列。
@@ -77,25 +78,27 @@ sharding 进入 inference protocol/gate。HiSpatial 上游 CV 脚本只覆盖 2D
 
 Q-Spatial 使用独立的 `src/spatial_vlm_eval/benchmarks/q_spatial/profiles.py`；`PROFILE_SEQUENCE` 唯一
 确定下表的 21 条轨与顺序，其中 RGB 18 条、派生输入 3 条。代码、协议和回归已于 2026-08-06
-完成；本表不表示服务器 test/full、付费 API 或评分已经运行，所有轨当前状态均为“待服务器 test”。
+完成。截至 2026-08-07，除固定 TP=4 blocked 的 `internvl3_78b` 外，其余 20 轨的服务器
+red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
+评分与 publication gates 均已独立复核通过；全局报告为 20/21，唯一缺失 `internvl3_78b`。
 
 | Profile | Model / locked revision | Input track / comparison group | Backend / decoding |
 |---|---|---|---|
-| `llava_next_mistral_7b` | `llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | RGB / RGB | vLLM TP=1；官方两阶段格式修复，512+64，seed 42 |
+| `llava_next_mistral_7b` | `llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | RGB / RGB | vLLM TP=1 单卡单 endpoint；官方两阶段格式修复，512+64，seed 42 |
 | `llava_next_yi_34b` | `llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | RGB / RGB | vLLM TP=2；官方两阶段格式修复，512+64，seed 42 |
-| `internvl3_8b` | `InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | RGB / RGB | vLLM TP=1；greedy/512/seed 42 |
+| `internvl3_8b` | `InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | RGB / RGB | vLLM TP=1 单卡单 endpoint；greedy/512/seed 42 |
 | `internvl3_38b` | `InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | RGB / RGB | vLLM TP=2；greedy/512/seed 42 |
 | `internvl3_78b` | `InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | RGB / RGB | vLLM BF16 TP=4；四张 80GB；greedy/512/seed 42 |
-| `qwen3_vl_2b` | `Qwen3-VL-2B-Instruct@89644892e4d85e24eaac8bacfd4f463576704203` | RGB / RGB | vLLM TP=1；0.7/top-p 0.8/top-k 20/presence 1.5/1024/seed 3407 |
-| `qwen3_vl_4b` | `Qwen3-VL-4B-Instruct@ebb281ec70b05090aa6165b016eac8ec08e71b17` | RGB / RGB | vLLM TP=1；同 Qwen sampling |
-| `qwen3_vl_8b` | `Qwen3-VL-8B-Instruct@0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | RGB / RGB | vLLM TP=1；同 Qwen sampling |
+| `qwen3_vl_2b` | `Qwen3-VL-2B-Instruct@89644892e4d85e24eaac8bacfd4f463576704203` | RGB / RGB | vLLM TP=1 单卡单 endpoint；0.7/top-p 0.8/top-k 20/presence 1.5/1024/seed 3407 |
+| `qwen3_vl_4b` | `Qwen3-VL-4B-Instruct@ebb281ec70b05090aa6165b016eac8ec08e71b17` | RGB / RGB | vLLM TP=1 单卡单 endpoint；同 Qwen sampling |
+| `qwen3_vl_8b` | `Qwen3-VL-8B-Instruct@0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | RGB / RGB | vLLM TP=1 单卡单 endpoint；同 Qwen sampling |
 | `qwen3_vl_32b` | `Qwen3-VL-32B-Instruct@0cfaf48183f594c314753d30a4c4974bc75f3ccb` | RGB / RGB | vLLM TP=2；同 Qwen sampling |
 | `gpt5_openrouter_non_zdr` | `openai/gpt-5-2025-08-07` | RGB / RGB | OpenRouter first-party non-ZDR；medium/16384；无 temperature |
 | `gemini31pro_openrouter_non_zdr` | `google/gemini-3.1-pro-preview-20260219` | RGB / RGB | OpenRouter first-party non-ZDR；temp 0/medium/16384 |
 | `ssr_rgb` | `SSR-VLM-7B@7bcb4636f1396325f27f7fbb2f2df121128931bf` | RGB / RGB | official runner；0.1/top-p .001/top-k 1/repetition 1.05/128 |
 | `ssr_native` | 上述 VLM + `SSR-MIDI-7B@8ed878fa16e3e440741ed8c1fedfcfe40710258d` | RGB + DepthPro + MIDI + TOR10 / RGB + 派生深度 | official runner；同 SSR decoding，10 TOR |
 | `spatialrgpt_rgb` | `SpatialRGPT-VILA1.5-8B@64df7902f82b5053f5a53455095805e6de3a1f87` | RGB，无 region/mask/depth / RGB | official VILA；greedy/128 |
-| `3dthinker_rgb` | `3DThinker-Mindcube@69a70411605f86ec69bada0a625bb96ddee995d9` | RGB，无 Mental-3D / RGB | official runner；0.7/top-p .9/2048 |
+| `3dthinker_rgb` | `3DThinker-Mindcube@69a70411605f86ec69bada0a625bb96ddee995d9` | RGB，无 Mental-3D / RGB | official runner；processor 12544..401408 pixels；0.7/top-p .9/2048 |
 | `spatialbot_rgb` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | RGB / RGB | official Bunny；greedy/128 |
 | `spatialbot_zoedepth` | 同上 | RGB + ZoeDepth / RGB + 派生深度 | official Bunny；greedy/128 |
 | `robobrain25_8b_nv_rgb` | `RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | RGB / RGB | official processor；0.7/top-p .8/768 |
@@ -107,6 +110,48 @@ Q-Spatial 使用独立的 `src/spatial_vlm_eval/benchmarks/q_spatial/profiles.py
 本地 runner 使用每请求固定 base seed；不支持重置 RNG 的 backend 只允许单 persistent runner；两条
 API 轨明确标记 provider nondeterministic。执行和评分边界见
 [Q-Spatial canonical protocol](benchmarks/q_spatial/protocol.md)。
+
+双卡批次的机器计划由 `scheduled_batch.SCHEDULE` 唯一维护：20 条可运行轨分为阶段 A 双卡/API 与
+阶段 B GPU 0/GPU 1；`internvl3_78b` 仍固定 TP=4 blocked，不进入 20 轨计划。该计划只改变资源调度，
+不改变本表的模型身份、input track、decoding 或 inference protocol。迁移到四卡服务器后，该轨由
+`run_internvl3_78b_evaluation.sh` 独立补齐，正式产物追加到原输出根并原地重建同一份 21 轨报告。
+
+## SPBench-SI 当前 21 条目标 inference profile
+
+SPBench-SI 使用独立的 `src/spatial_vlm_eval/benchmarks/spbench_si/profiles.py`；`PROFILE_SEQUENCE` 唯一
+确定下表顺序，其中 RGB 18 条、同一源 RGB 派生输入 3 条。代码、协议和本地回归于 2026-08-07 完成；
+除固定 TP=4 blocked 的 `internvl3_78b` 外，其余 20 轨已通过服务器当前 test gate。full 批次尚未形成
+终态证据，未启动正式评分或发布；下表不把 test gate 写成 full 结果。
+
+| Profile | Model / locked revision | Input track | Backend / locked decoding |
+|---|---|---|---|
+| `llava_next_mistral_7b` | `llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | RGB | vLLM TP=1；native template；greedy/128/seed 42 |
+| `llava_next_yi_34b` | `llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | RGB | vLLM TP=2；native template；greedy/128/seed 42 |
+| `internvl3_8b` | `InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | RGB | vLLM TP=1；greedy/128/seed 42 |
+| `internvl3_38b` | `InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | RGB | vLLM TP=2；greedy/128/seed 42 |
+| `internvl3_78b` | `InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | RGB | vLLM BF16 TP=4；四张 80GB；greedy/128/seed 42 |
+| `qwen3_vl_2b` | `Qwen3-VL-2B-Instruct@89644892e4d85e24eaac8bacfd4f463576704203` | RGB | vLLM TP=1；0.7/top-p .8/top-k 20/presence 1.5/128/seed 3407 |
+| `qwen3_vl_4b` | `Qwen3-VL-4B-Instruct@ebb281ec70b05090aa6165b016eac8ec08e71b17` | RGB | vLLM TP=1；同 Qwen sampling |
+| `qwen3_vl_8b` | `Qwen3-VL-8B-Instruct@0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | RGB | vLLM TP=1；同 Qwen sampling |
+| `qwen3_vl_32b` | `Qwen3-VL-32B-Instruct@0cfaf48183f594c314753d30a4c4974bc75f3ccb` | RGB | vLLM TP=2；同 Qwen sampling |
+| `gpt5_openrouter_non_zdr` | `openai/gpt-5-2025-08-07` | RGB | OpenRouter first-party non-ZDR；medium/16384；无 temperature |
+| `gemini31pro_openrouter_non_zdr` | `google/gemini-3.1-pro-preview-20260219` | RGB | OpenRouter first-party non-ZDR；temperature 0/medium/16384 |
+| `ssr_rgb` | `SSR-VLM-7B@7bcb4636f1396325f27f7fbb2f2df121128931bf` | RGB | official runner；checkpoint generation config/128/seed 42 |
+| `ssr_native` | 上述 VLM + `SSR-MIDI-7B@8ed878fa16e3e440741ed8c1fedfcfe40710258d` | RGB + DepthPro + MIDI + TOR10 | official persistent runner；128/seed 42 |
+| `spatialrgpt_rgb` | `SpatialRGPT-VILA1.5-8B@64df7902f82b5053f5a53455095805e6de3a1f87` | RGB，无伪 region/depth | official VILA；greedy/128/seed 42 |
+| `3dthinker_rgb` | `3DThinker-Mindcube@69a70411605f86ec69bada0a625bb96ddee995d9` | RGB，无 Mental-3D | official runner；0.7/top-p .9/2048/seed 42 |
+| `spatialbot_rgb` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | RGB | official Bunny；greedy/100/seed 42 |
+| `spatialbot_zoedepth` | 同上 | RGB + 同图 ZoeDepth | official Bunny；greedy/100/seed 42 |
+| `robobrain25_8b_nv_rgb` | `RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | RGB | official general VQA；0.7/768/seed 42 |
+| `robobrain25_8b_mt_rgb` | `RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | RGB | official general VQA；0.7/768/seed 42 |
+| `hispatial3b_moge2_xyz` | `HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | RGB + 同图 MoGe-2 XYZ | official predictor；greedy/100/seed 42 |
+| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB，无 thinking prompt | official Qwen2.5-VL；BF16/FA2；0.01/top-p 1/repetition 1.05/128/seed 42 |
+
+所有轨统一使用 SPBench-SI 官方 `default/direct` prompt。双卡 `scheduled_batch.SCHEDULE` 只覆盖 20 条，
+明确排除固定 TP=4 的 `internvl3_78b`；该轨由 `run_internvl3_78b_evaluation.sh` 在四卡服务器独立补齐，
+不允许量化或 TP=2 替代。20/21 报告只能暂行且必须只缺该轨。完整 prompt、processor、
+image-processing、seed strategy、test gate 与 scorer 边界见
+[SPBench-SI canonical protocol](benchmarks/spbench_si/protocol.md)。
 
 ## MSMU 当前 18 条已完成目标 inference profile
 

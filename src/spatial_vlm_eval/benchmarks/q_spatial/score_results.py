@@ -11,7 +11,12 @@ from pathlib import Path
 from typing import Any
 
 from .data import OFFICIAL_TEST_SIZE, QSpatialTestContract
-from .scorer import SCORER_PROTOCOL, score_predictions
+from .scorer import (
+    COMPATIBLE_INFERENCE_SCORER_PROTOCOLS,
+    SCORER_PROTOCOL,
+    inference_metadata_scorer_protocol_is_compatible,
+    score_predictions,
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -37,8 +42,13 @@ def score_state(predictions: str | Path) -> Candidate:
     dataset = metadata.get("dataset") if isinstance(metadata.get("dataset"), dict) else {}
     if not metadata.get("publishable_inference") or dataset.get("official_test_size") != OFFICIAL_TEST_SIZE:
         return Candidate(path, "subset", "inference metadata is not a full publishable split")
-    if metadata.get("scorer_protocol") != SCORER_PROTOCOL:
-        return Candidate(path, "excluded_protocol", "prediction belongs to a different scorer protocol")
+    if not inference_metadata_scorer_protocol_is_compatible(metadata.get("scorer_protocol")):
+        return Candidate(
+            path,
+            "excluded_protocol",
+            "prediction scorer declaration is not compatible with the current scorer; "
+            f"allowed={sorted(COMPATIBLE_INFERENCE_SCORER_PROTOCOLS)!r}",
+        )
     score_dir = path.parent / "scores" / SCORER_PROTOCOL
     gates = _load_json(score_dir / "publication_gates.json")
     summary = _load_json(score_dir / "summary.json")
@@ -61,7 +71,15 @@ def discover_candidates(output_root: str | Path) -> list[Candidate]:
     found: list[Candidate] = []
     for path in sorted(root.rglob("predictions.jsonl")):
         parts = path.relative_to(root).parts
-        if "test_runs" in parts or "shards" in parts or "scores" in parts:
+        if (
+            "test_runs" in parts
+            or "shards" in parts
+            or "scores" in parts
+            or any(
+                part == "test_artifacts" or part.startswith("test_artifacts.stale-")
+                for part in parts
+            )
+        ):
             continue
         found.append(score_state(path))
     return found

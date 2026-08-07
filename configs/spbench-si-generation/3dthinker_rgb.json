@@ -1,0 +1,6 @@
+{
+  "profile": "3dthinker_rgb",
+  "model_revision": "69a70411605f86ec69bada0a625bb96ddee995d9",
+  "upstream_commit": "c9469e01b719310b0eaecc1133317e4ecfc74d8c",
+  "decoding": {"do_sample": true, "temperature": 0.7, "top_p": 0.9, "max_new_tokens": 2048, "seed": 42}
+}

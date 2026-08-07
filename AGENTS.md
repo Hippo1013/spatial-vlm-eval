@@ -45,6 +45,7 @@
 |---|---|---|
 | 修改 benchmark 输入、schema、validator、judge、阈值、cache 或聚合 | 对应 `docs/benchmarks/<name>/` 协议、`docs/architecture.md`、相关 benchmark 测试 | 方案与编辑前 |
 | 运行或修改 Q-Spatial contract、21 轨、推理、评分或报告 | `docs/benchmarks/q_spatial/protocol.md`、`docs/q-spatial-two-stage-runbook.md` 与 Q-Spatial 测试 | 设计或执行前 |
+| 运行或修改 SPBench-SI contract、21 轨、推理、评分或报告 | `docs/benchmarks/spbench_si/protocol.md`、`docs/spbench-si-two-stage-runbook.md` 与 SPBench-SI 测试 | 设计或执行前 |
 | 修改模型 profile、processor/template、图像输入、decoding 或 revision | `docs/model-matrix.md`、`docs/msmu-inference.md`、对应 benchmark 输入协议和 model 测试 | 设计 adapter 前 |
 | 修改 shell、环境变量、输出路径、服务器部署或 GPU 编排 | `docs/msmu-inference.md`、相关阶段 runbook、`docs/troubleshooting/` 和脚本测试 | 执行服务器命令前 |
 | 配置、操作或修改服务器显式出站代理 | `docs/server-network-proxy.md` | 输入订阅或执行代理命令前 |
@@ -96,8 +97,18 @@ adapter 只接收 `index`、一张 RGB、Standard system prompt 和当前 `Quest
 `index, raw_prediction`。21 条 profile 中 18 条 RGB、3 条派生 depth/XYZ；不得加入 Mental-3D、thinking
 或 ScanNet GT depth。full 必须通过绑定 red/blue canary、smoke8、processor/template、单图证据与
 完整 provenance 的当前 test gate；subset 永不评分。当前 scorer protocol 是
-`q_spatial_robust_numeric_v1_standard_prompt_tag_first_unique_fallback_paper_inclusive_ratio`，主指标为
+`q_spatial_robust_numeric_v2_standard_prompt_declared_final_equivalent_tags_controlled_wrappers_paper_inclusive_ratio`，主指标为
 两个 split 等权的 inclusive `δ≤2`；改变 parser、单位、边界或聚合必须换 protocol 并补测试/ADR。
+
+## SPBench-SI 不变量
+
+canonical 文档是 `docs/benchmarks/spbench_si/protocol.md`。本阶段只评单图 `test` 1,009 题，不含
+SPBench-MV。loader 必须显式读取锁定 Parquet 与 ZIP，直接解码 524 张 JPEG；adapter 只能看到
+`index, image, system_prompt, user_prompt`，prediction 只有 `index, raw_prediction`。21 轨中 18 条 RGB、
+3 条同图派生 depth/XYZ，统一使用官方 `default/direct`，禁止 thinking/Mental-3D/GT depth。主 scorer
+protocol 是 `spbench_si_original_mra10_strict_robust_direct_four_task_macro_v1`，使用十阈值严格 MRA 与
+四题型宏平均；当前上游 direct-mode 只作为独立 audit，禁止混表。subset 不评分；暂行 20/21 报告只能
+缺固定 TP=4 的 InternVL3-78B。
 
 ## 修改与验证流程
 

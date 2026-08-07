@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,33 @@ MENTAL_3D_CONTROL_PROMPT = (
     "<think> reasoning process here </think><answer> answer here </answer>."
 )
 _ANSWER_PATTERN = re.compile(r"<answer>\s*(.*?)\s*</answer>", flags=re.DOTALL | re.IGNORECASE)
+
+
+def _optional_positive_env(name: str) -> int | None:
+    raw = os.environ.get(name)
+    if raw is None or not raw.strip():
+        return None
+    value = int(raw)
+    if value <= 0:
+        raise ValueError(f"{name} must be positive")
+    return value
+
+
+def configure_processor_pixel_bounds(
+    processor: Any,
+    min_pixels: int | None,
+    max_pixels: int | None,
+) -> None:
+    """Apply the Qwen2.5 processor's active size-edge configuration."""
+
+    if min_pixels is None and max_pixels is None:
+        return
+    if min_pixels is None or max_pixels is None:
+        raise ValueError("3DThinker pixel bounds require both min and max pixels")
+    processor.image_processor.size = {
+        "shortest_edge": int(min_pixels),
+        "longest_edge": int(max_pixels),
+    }
 
 
 def three_d_thinker_prompt(profile_key: str, question: str) -> str:
@@ -116,6 +144,8 @@ class ThreeDThinkerAdapter(InferenceAdapter):
         device_map: str = "auto",
         generation_kwargs: dict[str, Any] | None = None,
         control_prompt_already_present: bool = False,
+        image_min_pixels: int | None = None,
+        image_max_pixels: int | None = None,
     ) -> None:
         if profile_key not in {"3dthinker", "3dthinker_native"}:
             raise ValueError("3DThinker profile must be 3dthinker or 3dthinker_native")
@@ -150,6 +180,26 @@ class ThreeDThinkerAdapter(InferenceAdapter):
         if int(self.generation_kwargs.get("max_new_tokens", 0)) <= 0:
             raise ValueError("3DThinker generation kwargs require a positive max_new_tokens")
         self.control_prompt_already_present = bool(control_prompt_already_present)
+        self.image_min_pixels = (
+            int(image_min_pixels)
+            if image_min_pixels is not None
+            else _optional_positive_env("THREEDTHINKER_IMAGE_MIN_PIXELS")
+        )
+        self.image_max_pixels = (
+            int(image_max_pixels)
+            if image_max_pixels is not None
+            else _optional_positive_env("THREEDTHINKER_IMAGE_MAX_PIXELS")
+        )
+        if self.image_min_pixels is not None and self.image_min_pixels <= 0:
+            raise ValueError("image_min_pixels must be positive")
+        if self.image_max_pixels is not None and self.image_max_pixels <= 0:
+            raise ValueError("image_max_pixels must be positive")
+        if (
+            self.image_min_pixels is not None
+            and self.image_max_pixels is not None
+            and self.image_min_pixels > self.image_max_pixels
+        ):
+            raise ValueError("image_min_pixels must not exceed image_max_pixels")
         self._loaded = False
 
     def metadata(self) -> dict[str, Any]:
@@ -181,6 +231,8 @@ class ThreeDThinkerAdapter(InferenceAdapter):
                 "source": "MSMU RGB only",
                 "image_count": 1,
                 "processor_use_fast": False,
+                "min_pixels": getattr(self, "image_min_pixels", None),
+                "max_pixels": getattr(self, "image_max_pixels", None),
                 "external_3d_input": None,
                 "mental_3d_is_model_generated": native,
             },
@@ -213,11 +265,20 @@ class ThreeDThinkerAdapter(InferenceAdapter):
         self.torch = torch
         self.transformers_version = transformers.__version__
         kwargs = _pretrained_kwargs(self.model_path, self.model_revision)
+        processor_kwargs: dict[str, Any] = {}
+        if self.image_min_pixels is not None:
+            processor_kwargs["min_pixels"] = self.image_min_pixels
+        if self.image_max_pixels is not None:
+            processor_kwargs["max_pixels"] = self.image_max_pixels
         self.processor = AutoProcessor.from_pretrained(
             self.model_path,
             trust_remote_code=True,
             use_fast=False,
+            **processor_kwargs,
             **kwargs,
+        )
+        configure_processor_pixel_bounds(
+            self.processor, self.image_min_pixels, self.image_max_pixels
         )
         ensure_processor_chat_template(self.processor)
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(

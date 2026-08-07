@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path
@@ -21,7 +22,6 @@ from ...models.common.runtime import (
     GenerationResult,
     InferenceAdapter,
     atomic_write_json,
-    atomic_write_jsonl,
     pixel_sha256,
     run_recoverable_inference,
     utc_now,
@@ -313,7 +313,7 @@ class ResolvedConfiguration:
     def sharding(self) -> dict[str, Any]:
         workers = len(self.base_urls) if self.base_urls else 1
         return {
-            "strategy": "fixed_modulo" if workers == 2 else "single_worker",
+            "strategy": "single_endpoint_concurrent_requests" if self.base_urls else "single_persistent_runner",
             "worker_count": workers,
             "tensor_parallel_size": self.profile.default_tensor_parallel_size,
         }
@@ -381,11 +381,7 @@ def inspect_local_gpus(profile: QSpatialProfile, backend: str) -> dict[str, Any]
             }
         )
     selected = _configured_gpu_ids(profile)
-    expected_selected = (
-        (2 if profile.default_tensor_parallel_size == 1 else profile.default_tensor_parallel_size)
-        if backend == "vllm"
-        else 1
-    )
+    expected_selected = profile.default_tensor_parallel_size if backend == "vllm" else 1
     if len(selected) != expected_selected:
         raise ResourceBlockedError(
             f"{profile.key} requires {expected_selected} explicit GPU id(s) for {backend}; "
@@ -474,7 +470,7 @@ def resolve_configuration(profile: QSpatialProfile) -> ResolvedConfiguration:
         processor_report = audit_processor(profile, model_path)
         raw_urls = _profile_env(profile, "BASE_URLS") or os.environ.get("QSPATIAL_VLLM_BASE_URLS", "")
         urls = tuple(value.strip().rstrip("/") for value in raw_urls.split(",") if value.strip())
-        expected = 2 if profile.default_tensor_parallel_size == 1 else 1
+        expected = 1
         if len(urls) != expected:
             raise ValueError(
                 f"{profile.key} requires {expected} vLLM endpoint(s); set "
@@ -496,6 +492,15 @@ def resolve_configuration(profile: QSpatialProfile) -> ResolvedConfiguration:
 def _request_timeout_seconds(backend: str) -> float:
     variable = "QSPATIAL_VLLM_API_TIMEOUT" if backend == "vllm" else "QSPATIAL_API_TIMEOUT"
     return float(os.environ.get(variable, "600" if backend == "vllm" else "180"))
+
+
+def _vllm_max_model_len(configuration: ResolvedConfiguration) -> int | None:
+    if configuration.backend != "vllm":
+        return None
+    value = int(os.environ.get("QSPATIAL_VLLM_MAX_MODEL_LEN", "32768"))
+    if value <= 0:
+        raise ValueError("QSPATIAL_VLLM_MAX_MODEL_LEN must be positive")
+    return value
 
 
 def _runtime_retry_policy(backend: str) -> dict[str, int]:
@@ -600,11 +605,12 @@ def binding(configuration: ResolvedConfiguration, contract: QSpatialTestContract
             "adapter_digest": configuration.adapter_digest,
             "decoding": configuration.decoding,
             "processor_audit": processor_identity,
+            "vllm_max_model_len": _vllm_max_model_len(configuration),
         },
         "test_protocol": {
             "vision_canary": COLOR_CANARY_PROTOCOL,
             "smoke_indices": list(SMOKE8_INDICES),
-            "capacity_candidates": list(_capacity_candidates()),
+            "capacity_candidates": list(_capacity_candidates(configuration.backend)),
         },
         "sharding": {
             **configuration.sharding,
@@ -656,20 +662,26 @@ def _canary_report(adapter: BoundAdapter) -> dict[str, Any]:
     return {"protocol": COLOR_CANARY_PROTOCOL, "passed": passed, "cases": cases}
 
 
-def _capacity_candidates() -> tuple[int, ...]:
-    raw = os.environ.get("QSPATIAL_CAPACITY_CANDIDATES", "32,16,8,4,2,1")
+def _capacity_candidates(backend: str = "vllm") -> tuple[int, ...]:
+    if backend == "openrouter":
+        variable = "QSPATIAL_API_CAPACITY_CANDIDATES"
+        default = "8,4,2,1"
+    else:
+        variable = "QSPATIAL_CAPACITY_CANDIDATES"
+        default = "32,16,8,4,2,1"
+    raw = os.environ.get(variable, default)
     values = tuple(int(item.strip()) for item in raw.split(",") if item.strip())
     if not values or any(value <= 0 for value in values) or tuple(sorted(set(values), reverse=True)) != values:
-        raise ValueError("QSPATIAL_CAPACITY_CANDIDATES must be unique positive descending integers")
+        raise ValueError(f"{variable} must be unique positive descending integers")
     return values
 
 
-def probe_capacity(adapter: BoundAdapter) -> dict[str, Any]:
+def probe_capacity(adapter: BoundAdapter, *, backend: str = "vllm") -> dict[str, Any]:
     if not adapter.supports_concurrency:
         return {"passed": True, "selected_concurrency": 1, "attempts": [{"candidate": 1, "passed": True}]}
     expected, model_input = _color_canary_specs()[0]
     attempts: list[dict[str, Any]] = []
-    for candidate in _capacity_candidates():
+    for candidate in _capacity_candidates(backend):
         try:
             with ThreadPoolExecutor(max_workers=candidate) as executor:
                 results = list(executor.map(lambda _unused: adapter.generate(model_input), range(candidate)))
@@ -744,25 +756,6 @@ def _enrich_metadata(
     return metadata
 
 
-def merge_prediction_shards(
-    shard_paths: list[str | Path],
-    output: str | Path,
-    *,
-    expected_indices: list[int],
-) -> list[dict[str, Any]]:
-    rows: list[dict[str, Any]] = []
-    for path in shard_paths:
-        rows.extend(read_jsonl(path))
-    indices = [int(row["index"]) for row in rows]
-    if len(indices) != len(set(indices)):
-        raise ValueError("Q-Spatial shard merge found duplicate indices")
-    if sorted(indices) != sorted(expected_indices):
-        raise ValueError("Q-Spatial shard merge does not cover the expected indices")
-    rows.sort(key=lambda row: int(row["index"]))
-    atomic_write_jsonl(Path(output).resolve(), rows)
-    return rows
-
-
 def test_gate_errors(gate: dict[str, Any], expected_binding_digest: str) -> list[str]:
     errors: list[str] = []
     if not gate.get("passed"):
@@ -784,95 +777,26 @@ def test_gate_errors(gate: dict[str, Any], expected_binding_digest: str) -> list
     return errors
 
 
-def _run_dual_shard_full(
-    *,
-    contract: QSpatialTestContract,
-    configuration: ResolvedConfiguration,
-    output: Path,
-    binding_value: dict[str, Any],
-    test_gate: Path,
-    capacity: int,
-) -> dict[str, Any]:
-    shard_root = output.parent / "shards"
-    shard_outputs = [shard_root / f"worker-{worker}" / "predictions.jsonl" for worker in range(2)]
+def _rotate_stale_test_artifacts(track: Path, expected_binding_digest: str) -> Path | None:
+    """Preserve an invalid completed gate before starting a fresh test signature."""
 
-    def run_worker(worker: int) -> dict[str, Any]:
-        adapter = build_adapter(configuration, worker)
-        indices = [index for index in range(OFFICIAL_TEST_SIZE) if index % 2 == worker]
-        return run_recoverable_inference(
-            contract=ProfiledContract(contract),
-            adapter=adapter,
-            output=shard_outputs[worker],
-            target_indices=indices,
-            benchmark="Q-Spatial Bench",
-            split="test",
-            official_size=OFFICIAL_TEST_SIZE,
-            scorer_protocol=SCORER_PROTOCOL,
-            workers=capacity,
-            **_runtime_retry_policy(configuration.backend),
-        )
-
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        shard_metadata = list(executor.map(run_worker, range(2)))
-    rows = merge_prediction_shards(
-        [str(path) for path in shard_outputs],
-        output,
-        expected_indices=list(range(OFFICIAL_TEST_SIZE)),
-    )
-    model_metadata = dict(shard_metadata[0]["model"])
-    model_metadata["backend"] = "vllm-dual-endpoint"
-    model_metadata["shards"] = [
-        {
-            "worker": worker,
-            "endpoint": shard_metadata[worker]["model"].get("api_base_url"),
-            "run_signature": shard_metadata[worker]["run_signature"],
-            "journal": shard_metadata[worker]["journal"],
-        }
-        for worker in range(2)
-    ]
-    final = {
-        "schema_version": 1,
-        "inference_protocol": configuration.profile.inference_protocol,
-        "scorer_protocol": SCORER_PROTOCOL,
-        "model": model_metadata,
-        "dataset": {
-            "benchmark": "Q-Spatial Bench",
-            "root": str(contract.parquet_root),
-            "parquet_root": str(contract.parquet_root),
-            "scannet_rgb_root": str(contract.scannet_rgb_root),
-            "split": "test",
-            "revision": DATASET_REVISION,
-            "fingerprint": contract.dataset_fingerprint,
-            "files": {item.name: item.sha256 for item in DATASET_FILES},
-            "official_test_size": OFFICIAL_TEST_SIZE,
-            "loaded_size": len(contract),
-            "target_indices": list(range(OFFICIAL_TEST_SIZE)),
-            "num_targets": OFFICIAL_TEST_SIZE,
-            "is_subset": False,
-        },
-        "prompt": {
-            "system_prompt_sha256": STANDARD_SYSTEM_PROMPT_SHA256,
-            "user_template": "Question: {question}",
-            "system_role_supported": configuration.profile.system_role_supported,
-        },
-        "output": str(output),
-        "output_sha256": _file_digest(output),
-        "run_signature": _digest([item["run_signature"] for item in shard_metadata]),
-        "num_predictions": len(rows),
-        "empty_prediction_indices": [
-            int(row["index"]) for row in rows if not str(row["raw_prediction"]).strip()
-        ],
-        "publishable_inference": True,
-        "binding": binding_value,
-        "binding_digest": _digest(binding_value),
-        "test_gate": str(test_gate),
-        "shard_metadata": [item["output"] + ".metadata.json" for item in shard_metadata],
-        "started_at": min(item["started_at"] for item in shard_metadata),
-        "finished_at": max(item["finished_at"] for item in shard_metadata),
-        "runtime": {"sharding": configuration.sharding, "per_endpoint_concurrency": capacity},
-    }
-    atomic_write_json(output.with_suffix(output.suffix + ".metadata.json"), final)
-    return final
+    artifact_root = track / "test_artifacts"
+    gate_path = track / "test_gate.json"
+    if not artifact_root.exists() or not gate_path.is_file():
+        return None
+    try:
+        gate = json.loads(gate_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        gate = {}
+    if isinstance(gate, dict) and not test_gate_errors(gate, expected_binding_digest):
+        return None
+    old_digest = str(gate.get("binding_digest", "unknown"))[:12] if isinstance(gate, dict) else "unknown"
+    suffix = f"stale-{old_digest}-{time.time_ns()}"
+    archived_artifacts = track / f"test_artifacts.{suffix}"
+    archived_gate = track / f"test_gate.{suffix}.json"
+    artifact_root.rename(archived_artifacts)
+    gate_path.rename(archived_gate)
+    return archived_artifacts
 
 
 def run_test_stage(
@@ -883,6 +807,9 @@ def run_test_stage(
     gpu_audit = inspect_local_gpus(profile, profile.default_backend)
     configuration = resolve_configuration(profile)
     track = track_directory(output_root, profile)
+    binding_value = binding(configuration, contract)
+    binding_digest = _digest(binding_value)
+    _rotate_stale_test_artifacts(track, binding_digest)
     artifact_root = track / "test_artifacts"
     artifact_root.mkdir(parents=True, exist_ok=True)
     dataset_manifest = contract.dataset_manifest(include_images=True)
@@ -890,8 +817,6 @@ def run_test_stage(
     if configuration.backend != profile.default_backend:
         gpu_audit = inspect_local_gpus(profile, configuration.backend)
     atomic_write_json(artifact_root / "gpu_preflight.json", gpu_audit)
-    binding_value = binding(configuration, contract)
-    binding_digest = _digest(binding_value)
     adapters = [
         build_adapter(configuration, endpoint_index)
         for endpoint_index in range(max(1, len(configuration.base_urls)))
@@ -910,7 +835,9 @@ def run_test_stage(
         atomic_write_json(artifact_root / "vision_canary.json", canary)
         if not canary["passed"]:
             raise RuntimeError(f"Q-Spatial vision canary failed for {profile.key}")
-        capacity_reports = [probe_capacity(value) for value in adapters]
+        capacity_reports = [
+            probe_capacity(value, backend=configuration.backend) for value in adapters
+        ]
         capacity = {
             "passed": all(report["passed"] for report in capacity_reports),
             "selected_concurrency": min(
@@ -1022,35 +949,25 @@ def run_full_stage(
     atomic_write_json(track / "full_gpu_preflight.json", gpu_audit)
     output = track / "predictions.jsonl"
     output.parent.mkdir(parents=True, exist_ok=True)
-    if len(configuration.base_urls) == 2:
-        metadata = _run_dual_shard_full(
-            contract=contract,
-            configuration=configuration,
-            output=output,
-            binding_value=binding_value,
-            test_gate=gate_path,
-            capacity=capacity,
-        )
-    else:
-        metadata = run_recoverable_inference(
-            contract=ProfiledContract(contract),
-            adapter=build_adapter(configuration),
-            output=output,
-            target_indices=list(range(OFFICIAL_TEST_SIZE)),
-            benchmark="Q-Spatial Bench",
-            split="test",
-            official_size=OFFICIAL_TEST_SIZE,
-            scorer_protocol=SCORER_PROTOCOL,
-            workers=capacity,
-            **_runtime_retry_policy(configuration.backend),
-        )
-        metadata = _enrich_metadata(
-            output.with_suffix(output.suffix + ".metadata.json"),
-            contract=contract,
-            configuration=configuration,
-            binding_value=binding_value,
-            test_gate=gate_path,
-        )
+    metadata = run_recoverable_inference(
+        contract=ProfiledContract(contract),
+        adapter=build_adapter(configuration),
+        output=output,
+        target_indices=list(range(OFFICIAL_TEST_SIZE)),
+        benchmark="Q-Spatial Bench",
+        split="test",
+        official_size=OFFICIAL_TEST_SIZE,
+        scorer_protocol=SCORER_PROTOCOL,
+        workers=capacity,
+        **_runtime_retry_policy(configuration.backend),
+    )
+    metadata = _enrich_metadata(
+        output.with_suffix(output.suffix + ".metadata.json"),
+        contract=contract,
+        configuration=configuration,
+        binding_value=binding_value,
+        test_gate=gate_path,
+    )
     rows = read_jsonl(output)
     validation = validate_prediction_rows(rows, contract, prediction_path=output, allow_subset=False)
     if not validation["passed"] or not metadata.get("publishable_inference"):

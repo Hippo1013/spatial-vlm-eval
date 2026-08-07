@@ -1,21 +1,23 @@
 # Spatial VLM Evaluation
 
 用于可复现地评测通用与空间专用视觉语言模型的多 benchmark 工作区。仓库当前实现 MSMU-Bench
-official test 987 条、CV-Bench locked test 2638 条和 Q-Spatial Bench locked test 271 条的受限输入
+official test 987 条、CV-Bench locked test 2638 条、Q-Spatial Bench locked test 271 条和 SPBench-SI
+single-image test 1009 条的受限输入
 合同、可恢复推理、严格 validator、独立 scorer protocol 与发布门禁。模型适配与 benchmark 评分分层，
 任何模型都不能收到答案、reference、类型标签、来源或其他协议禁止字段。
 
 ## 当前能力
 
 - Benchmark：MSMU-Bench official `test`（987）、CV-Bench locked `test_2d+test_3d`（2638）与
-  Q-Spatial ScanNet + Q-Spatial++（170+101）。
-- 推理：benchmark-owned 输入、CV-Bench 23 轨与 Q-Spatial 21 轨、单图/template 审计、fsync journal、
+  Q-Spatial ScanNet + Q-Spatial++（170+101）、SPBench-SI single-image `test`（1009）。
+- 推理：benchmark-owned 输入、CV-Bench 23 轨、Q-Spatial/SPBench-SI 各 21 轨、单图/template 审计、fsync journal、
   断点恢复和原子输出。
-- 验收：subset/full 强制隔离；CV-Bench 与 Q-Spatial test gate 分别绑定完整 provenance 和 sharding。
-- 评分：MSMU macro-8、CV-Bench 2D/3D/Overall、Q-Spatial split-macro `δ≤2` 使用彼此独立的 scorer
+- 验收：subset/full 强制隔离；CV-Bench、Q-Spatial 与 SPBench-SI test gate 各自绑定完整 provenance。
+- 评分：MSMU macro-8、CV-Bench 2D/3D/Overall、Q-Spatial split-macro `δ≤2`、SPBench-SI 原始严格
+  MRA 四题型宏平均使用彼此独立的 scorer
   protocol；评分与报告均按目录发现并强制 publication gates。
-- 结果性质：MSMU 是 official-compatible internal score；CV-Bench 与 Q-Spatial 是 official formula +
-  robust parser internal score，均不冒充上游实现的逐字节复刻。
+- 结果性质：MSMU 是 official-compatible internal score；CV-Bench、Q-Spatial 与 SPBench-SI 主分是
+  official/original formula + robust parser internal score，均不冒充上游实现的逐字节复刻。
 
 ## 当前评测范围
 
@@ -23,7 +25,12 @@ official test 987 条、CV-Bench locked test 2638 条和 Q-Spatial Bench locked 
 已完成；CV-Bench 已实现 23 条目标轨的链路。截至 2026-08-06，除需四张 80GB GPU 的
 InternVL3-78B 外，其余 22 条轨均已完成 full-2638、正式 validator、当前 scorer protocol 评分和
 publication gates，全局报告状态为 22/23。Q-Spatial Bench 的 21 轨代码、协议、回归与运行入口已经
-实现，但尚未执行服务器模型 test/full、付费 API、评分或发布；SPBench-SI 尚未实现。精确范围、
+实现；截至 2026-08-07，除固定 TP=4 blocked 的 InternVL3-78B 外，其余 20 轨均已在服务器通过
+red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
+评分与 publication gates；全局报告状态为 20/21。SPBench-SI 的 21 轨 contract、
+两阶段 gate、双 scorer、调度与报告已于 2026-08-07 完成本地实现和回归；除固定 TP=4 blocked 的
+InternVL3-78B 外，其余 20 轨已通过服务器当前 test gate。full 批次尚未形成终态证据，未启动正式评分
+或发布。精确范围、
 数据准备边界与当前阶段见
 [四 Benchmark 评测范围](docs/evaluation-scope.md)。
 
@@ -35,8 +42,8 @@ RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B。CV-Bench registry 将 f
 README 推断。
 完整文档分类与更新规则见[文档地图](docs/README.md)，语义变更见 [CHANGELOG](CHANGELOG.md)。
 
-MSMU 正式产物以 `MANUAL_TEST_OUTPUT_ROOT` 为准；CV-Bench 与 Q-Spatial 分别以
-`CVBENCH_OUTPUT_ROOT`、`QSPATIAL_OUTPUT_ROOT` 为准。三者都必须位于仓库外。仓库根禁止创建
+MSMU 正式产物以 `MANUAL_TEST_OUTPUT_ROOT` 为准；CV-Bench、Q-Spatial 与 SPBench-SI 分别以
+`CVBENCH_OUTPUT_ROOT`、`QSPATIAL_OUTPUT_ROOT`、`SPBENCH_SI_OUTPUT_ROOT` 为准。它们都必须位于仓库外。仓库根禁止创建
 `output/` 或 `outputs/`；可再生成的人工抽查和临时导出同样写入仓库外，不能作为 canonical 发布或
 恢复来源。
 
@@ -64,6 +71,7 @@ src/spatial_vlm_eval/
 ├── benchmarks/msmu/          # 987 条数据合同、validator、judge/scorer
 ├── benchmarks/cv_bench/      # 2638 条合同、23-profile registry、推理/评分/报告
 ├── benchmarks/q_spatial/     # 271 条合同、21-profile registry、numeric scorer/报告
+├── benchmarks/spbench_si/    # 1009 条合同、21-profile registry、MRA + upstream audit
 └── models/
     ├── common/               # 输入审计、journal、resume、原子 finalization
     ├── openai_compatible/    # OpenRouter/OpenAI/Google/vLLM
@@ -77,6 +85,7 @@ src/spatial_vlm_eval/
 scripts/msmu/                 # 环境、GPU preflight、服务与 pipeline 编排
 scripts/cv_bench/             # 两阶段推理、目录驱动评分和报告入口
 scripts/q_spatial/            # Q-Spatial test/full、评分、报告与 vLLM 入口
+scripts/spbench_si/            # SPBench-SI test/full、双卡调度、双 scorer 与报告入口
 tests/                        # 协议不变量和 bug 回归
 docs/                         # 文档地图、canonical 协议、runbook、ADR 与 troubleshooting
 CHANGELOG.md                  # 影响结果、行为或操作方式的语义变化
@@ -151,13 +160,59 @@ bash scripts/cv_bench/run_internvl3_78b_evaluation.sh
 bash scripts/q_spatial/run_inference.sh --list
 bash scripts/q_spatial/run_inference.sh --stage test --model qwen3_vl_8b
 bash scripts/q_spatial/run_inference.sh --stage full --model qwen3_vl_8b
+bash scripts/q_spatial/run_scheduled_batch.sh --list
+bash scripts/q_spatial/run_scheduled_batch.sh --check
+bash scripts/q_spatial/run_scheduled_batch.sh --dry-run
+bash scripts/q_spatial/run_scheduled_batch.sh --stage test --dry-run
 bash scripts/q_spatial/score_results.sh --predictions /absolute/path/to/predictions.jsonl
 bash scripts/q_spatial/build_results_report.sh
 ```
 
-两根数据合同、纯色 canary、smoke8、21 轨并行策略与付费 API 边界见
+双卡正式批次另需显式传入 `--without-internvl78 --with-paid-api`；`--stage test` 只建立或复用 gate，
+默认 `--stage full` 才继续 full/validator，控制器不自动评分。两根数据合同、纯色 canary、smoke8、
+20 轨分阶段 lane 与付费 API 边界见
 [Q-Spatial 简明指令](docs/q-spatial-commands.md)和
 [两阶段 runbook](docs/q-spatial-two-stage-runbook.md)。API 实跑必须另行明确批准。
+
+四卡补齐 InternVL3-78B 时，先同步现有 20/21 输出根，再用一条独立命令完成当前 test gate、
+full-271、validator、精确单轨评分和原有全局报告 21/21 重建：
+
+```bash
+bash scripts/q_spatial/run_internvl3_78b_evaluation.sh --check
+bash scripts/q_spatial/run_internvl3_78b_evaluation.sh --faq
+bash scripts/q_spatial/run_internvl3_78b_evaluation.sh
+```
+
+正式产物仍写入原 `QSPATIAL_OUTPUT_ROOT`，报告仍是原 `q-spatial-result.md`；迁移与恢复说明见
+[Q-Spatial InternVL3-78B 四卡补测](docs/q-spatial-internvl3-78b-evaluation.md)。
+
+### SPBench-SI
+
+将 [SPBench-SI 配置模板](configs/spbench-si-server.env.example)合并到未跟踪 `.env.server`。只读检查、
+单轨两阶段和目录评分入口如下：
+
+```bash
+bash scripts/spbench_si/run_inference.sh --list
+bash scripts/spbench_si/run_inference.sh --stage test --model qwen3_vl_8b
+bash scripts/spbench_si/run_inference.sh --stage full --model qwen3_vl_8b
+bash scripts/spbench_si/run_scheduled_batch.sh --list
+bash scripts/spbench_si/run_scheduled_batch.sh --check
+bash scripts/spbench_si/run_scheduled_batch.sh --dry-run
+bash scripts/spbench_si/score_results.sh --check
+bash scripts/spbench_si/score_results.sh --predictions /absolute/path/to/predictions.jsonl
+bash scripts/spbench_si/build_results_report.sh
+
+# 四卡 InternVL3-78B：只读检查后执行 test/full/validator/精确评分/报告重建
+bash scripts/spbench_si/run_internvl3_78b_evaluation.sh --check
+bash scripts/spbench_si/run_internvl3_78b_evaluation.sh
+```
+
+正式双卡批次必须显式传入 `--without-internvl78 --with-paid-api`；控制器不自动评分。GPU test/full、
+付费 API 与正式评分分别需要后续明确授权。数据合同、20/21 暂行报告与 TP=4 边界见
+[SPBench-SI 简明指令](docs/spbench-si-commands.md)和
+[两阶段 runbook](docs/spbench-si-two-stage-runbook.md)。迁移到四卡服务器补齐 78B 时使用
+[InternVL3-78B 四卡完整评测](docs/spbench-si-internvl3-78b-evaluation.md)；入口不会接管已有端口或
+GPU 进程。
 
 ### MSMU
 
@@ -237,9 +292,10 @@ index, raw_type, task_family, question, reference, prediction
 base64。只有所有目标 index 成功后才原子生成排序 JSONL；网络错误不能伪装成空答案，模型真实返回
 空文本则保留并告警。
 
-CV-Bench 与 Q-Spatial prediction 每行都严格只有 `index, raw_prediction`，但属于独立 validator 和
-scorer protocol：CV-Bench 的 answer/task/source 与 Q-Spatial 的 answer/unit/split/type 都只在评分时由
-各自锁定 Parquet 重新关联。三套 benchmark schema 与 scorer 不互换。
+CV-Bench、Q-Spatial 与 SPBench-SI prediction 每行都严格只有 `index, raw_prediction`，但属于独立
+validator 和 scorer protocol：CV-Bench 的 answer/task/source、Q-Spatial 的 answer/unit/split/type、
+SPBench-SI 的 ground truth/question type 都只在评分时由各自数据合同重新关联。四套 benchmark schema
+与 scorer 不互换。
 
 ## 测试
 
@@ -251,6 +307,7 @@ find scripts -name '*.sh' -print0 | xargs -0 -n1 bash -n
 
 协议细节见 [MSMU canonical protocol](docs/benchmarks/msmu/protocol.md)、
 [CV-Bench canonical protocol](docs/benchmarks/cv_bench/protocol.md)与
-[Q-Spatial canonical protocol](docs/benchmarks/q_spatial/protocol.md)，分层边界见
+[Q-Spatial canonical protocol](docs/benchmarks/q_spatial/protocol.md)、
+[SPBench-SI canonical protocol](docs/benchmarks/spbench_si/protocol.md)，分层边界见
 [架构说明](docs/architecture.md)。协作者从[文档地图](docs/README.md)选择任务相关材料；coding agent
 修改前必须阅读 [AGENTS.md](AGENTS.md) 并按其中的触发路由执行。

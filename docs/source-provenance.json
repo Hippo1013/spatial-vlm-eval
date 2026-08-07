@@ -1,14 +1,19 @@
 {
-  "captured_at": "2026-08-03",
+  "captured_at": "2026-08-07",
   "source_root": "/media/datasets/tangzecong/latent_reasoning",
-  "note": "Canonical MSMU scorer semantics are v4. CV-Bench and Q-Spatial use independent locked datasets, benchmark-owned robust scorers and separate inference/scorer protocol ids.",
+  "note": "Canonical MSMU scorer semantics are v4. CV-Bench, Q-Spatial and SPBench-SI use independent locked datasets, benchmark-owned scorers and separate inference/scorer protocol ids.",
   "dataset_revisions": {
     "nyu-visionx/CV-Bench": "bc284db50d036958861cb60cdd7b77612052ce0d",
-    "andrewliao11/Q-Spatial-Bench": "17b92e470d58fa46859ebd48ff35a1669828c9be"
+    "andrewliao11/Q-Spatial-Bench": "17b92e470d58fa46859ebd48ff35a1669828c9be",
+    "hongxingli/SPBench": "03611025a4e6032c558117c0e86b76c8b084c305"
+  },
+  "dataset_card_licenses": {
+    "hongxingli/SPBench@03611025a4e6032c558117c0e86b76c8b084c305": "apache-2.0; source imagery derives from ScanNet validation and retains its applicable terms"
   },
   "legacy_dataset_locations": {
     "nyu-visionx/CV-Bench": "/media/datasets/tangzecong/huggingface/datasets/CV-Bench",
-    "andrewliao11/Q-Spatial-Bench/parquet": "/media/datasets/tangzecong/huggingface/dataset/Q-Spatial-Bench"
+    "andrewliao11/Q-Spatial-Bench/parquet": "/media/datasets/tangzecong/huggingface/dataset/Q-Spatial-Bench",
+    "hongxingli/SPBench": "/media/datasets/tangzecong/huggingface/datasets/SPBench"
   },
   "licensed_dataset_locations": {
     "andrewliao11/Q-Spatial-Bench/scannet_rgb": "/media/datasets/lihaoran/huggingface/datasets/Q-Spatial-Bench/QSpatial_scannet/images"
@@ -18,7 +23,9 @@
     "nyu-visionx/CV-Bench/test_3d.parquet": "ef91fe8b5392eb2a16e318ca68fa02449d45ba1e152afece12a0a526e9fbbc25",
     "andrewliao11/Q-Spatial-Bench/data/QSpatial_scannet-00000-of-00001.parquet": "a5b0a37443b4ae18c837e4df7fe60411f869f282aa5803b8a7d509ba381286ba",
     "andrewliao11/Q-Spatial-Bench/data/QSpatial_plus-00000-of-00001.parquet": "30ff075480f7fe0497122c8251f5d529f2241dda1387038e2a0ed802ae8615e2",
-    "andrewliao11/Q-Spatial-Bench/QSpatial_scannet/images-manifest": "4485132ff448f43bdfb1283743825995823487a37f74ae4ab5a8e9d4b653751b"
+    "andrewliao11/Q-Spatial-Bench/QSpatial_scannet/images-manifest": "4485132ff448f43bdfb1283743825995823487a37f74ae4ab5a8e9d4b653751b",
+    "hongxingli/SPBench/SPBench-SI.parquet": "72aa46f998212a0d0a9c93ea24107eea086425ccc610083ede35c6218050c9a4",
+    "hongxingli/SPBench/SPBench-SI-images.zip": "bb53190a1eacf4268fb109b0d8e353c750908bdf33cad8a9221b187d81439461"
   },
   "legacy_files": {
     "msmu_sft_baseline/data.py": "440D315DF868461661D3C1596CE139A3DFEEE36045E83C78C7A06C84671EF4E8",

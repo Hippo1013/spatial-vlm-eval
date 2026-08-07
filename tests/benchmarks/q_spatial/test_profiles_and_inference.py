@@ -19,10 +19,12 @@ from spatial_vlm_eval.benchmarks.q_spatial.inference import (
     LLAVA_CONTINUATION,
     LLAVA_USER_FORMAT_SUFFIX,
     LlavaTwoStageAdapter,
+    ResolvedConfiguration,
     ResourceBlockedError,
     _capacity_candidates,
+    _rotate_stale_test_artifacts,
+    _vllm_max_model_len,
     inspect_local_gpus,
-    merge_prediction_shards,
     test_gate_errors,
 )
 from spatial_vlm_eval.benchmarks.q_spatial.profiles import (
@@ -180,19 +182,7 @@ class QSpatialProfilesAndInferenceTest(unittest.TestCase):
         self.assertTrue(llava_report["llava_two_stage"]["enabled"])
         self.assertRegex(llava_report["final_stage_1_user_prompt_sha256"], r"^[0-9a-f]{64}$")
 
-    def test_fixed_shards_and_stale_test_gate_fail_closed(self):
-        with tempfile.TemporaryDirectory() as directory:
-            root = Path(directory)
-            even = root / "even.jsonl"
-            odd = root / "odd.jsonl"
-            even.write_text('{"index":2,"raw_prediction":"c"}\n{"index":0,"raw_prediction":"a"}\n')
-            odd.write_text('{"index":3,"raw_prediction":"d"}\n{"index":1,"raw_prediction":"b"}\n')
-            output = root / "predictions.jsonl"
-            merged = merge_prediction_shards([even, odd], output, expected_indices=[0, 1, 2, 3])
-            self.assertEqual([row["index"] for row in merged], [0, 1, 2, 3])
-            odd.write_text('{"index":2,"raw_prediction":"duplicate"}\n')
-            with self.assertRaisesRegex(ValueError, "duplicate"):
-                merge_prediction_shards([even, odd], output, expected_indices=[0, 2])
+    def test_stale_test_gate_fails_closed(self):
         gate = {
             "passed": True,
             "binding_digest": "old",
@@ -206,13 +196,50 @@ class QSpatialProfilesAndInferenceTest(unittest.TestCase):
         }
         self.assertEqual(test_gate_errors(gate, "new"), ["binding digest differs"])
 
+    def test_stale_gate_artifacts_are_preserved_before_fresh_test(self):
+        with tempfile.TemporaryDirectory() as directory:
+            track = Path(directory)
+            artifacts = track / "test_artifacts"
+            artifacts.mkdir()
+            (artifacts / "old.journal.jsonl").write_text("old", encoding="utf-8")
+            (track / "test_gate.json").write_text(
+                json.dumps({"passed": True, "binding_digest": "old"}), encoding="utf-8"
+            )
+            archived = _rotate_stale_test_artifacts(track, "new")
+            self.assertIsNotNone(archived)
+            assert archived is not None
+            self.assertEqual((archived / "old.journal.jsonl").read_text(), "old")
+            self.assertFalse((track / "test_artifacts").exists())
+            self.assertFalse((track / "test_gate.json").exists())
+            self.assertEqual(len(list(track.glob("test_gate.stale-old-*.json"))), 1)
+
     def test_capacity_candidates_are_descending_and_resource_block_is_typed(self):
         with patch.dict(os.environ, {"QSPATIAL_CAPACITY_CANDIDATES": "32,16,8,4,2,1"}):
             self.assertEqual(_capacity_candidates(), (32, 16, 8, 4, 2, 1))
+        with patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(_capacity_candidates("openrouter"), (8, 4, 2, 1))
+        with patch.dict(os.environ, {"QSPATIAL_API_CAPACITY_CANDIDATES": "4,2,1"}):
+            self.assertEqual(_capacity_candidates("openrouter"), (4, 2, 1))
         with patch.dict(os.environ, {"QSPATIAL_CAPACITY_CANDIDATES": "1,2"}):
             with self.assertRaises(ValueError):
                 _capacity_candidates()
         self.assertTrue(issubclass(ResourceBlockedError, RuntimeError))
+
+    def test_vllm_context_budget_is_positive_and_large_enough_for_qwen_smoke(self):
+        configuration = ResolvedConfiguration(
+            profile=PROFILES["qwen3_vl_32b"],
+            backend="vllm",
+            base_urls=("http://127.0.0.1:18101/v1",),
+            decoding=dict(PROFILES["qwen3_vl_32b"].decoding),
+            adapter_digest="digest",
+            command=None,
+            processor_audit=None,
+        )
+        with patch.dict(os.environ, {"QSPATIAL_VLLM_MAX_MODEL_LEN": "32768"}):
+            self.assertEqual(_vllm_max_model_len(configuration), 32768)
+        with patch.dict(os.environ, {"QSPATIAL_VLLM_MAX_MODEL_LEN": "0"}):
+            with self.assertRaisesRegex(ValueError, "must be positive"):
+                _vllm_max_model_len(configuration)
 
     def test_gpu_selection_count_and_busy_specialized_runner_fail_closed(self):
         inventory = "0, GPU-0, NVIDIA A800, 81920, 80000, 0\n1, GPU-1, NVIDIA A800, 81920, 80000, 0\n"
@@ -221,10 +248,18 @@ class QSpatialProfilesAndInferenceTest(unittest.TestCase):
         with (
             patch("shutil.which", return_value="/usr/bin/nvidia-smi"),
             patch("subprocess.run", side_effect=[completed_inventory, empty_processes]),
-            patch.dict(os.environ, {"QSPATIAL_QWEN3_VL_8B_GPU_IDS": "0,1"}, clear=True),
+            patch.dict(os.environ, {"QSPATIAL_QWEN3_VL_8B_GPU_IDS": "0"}, clear=True),
         ):
             report = inspect_local_gpus(PROFILES["qwen3_vl_8b"], "vllm")
-        self.assertEqual(report["selected_gpu_ids"], [0, 1])
+        self.assertEqual(report["selected_gpu_ids"], [0])
+
+        with (
+            patch("shutil.which", return_value="/usr/bin/nvidia-smi"),
+            patch("subprocess.run", side_effect=[completed_inventory, empty_processes]),
+            patch.dict(os.environ, {"QSPATIAL_QWEN3_VL_8B_GPU_IDS": "0,1"}, clear=True),
+            self.assertRaisesRegex(ResourceBlockedError, "requires 1 explicit"),
+        ):
+            inspect_local_gpus(PROFILES["qwen3_vl_8b"], "vllm")
 
         with (
             patch("shutil.which", return_value="/usr/bin/nvidia-smi"),

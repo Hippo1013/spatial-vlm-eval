@@ -142,7 +142,24 @@ def _response(
     folded_prompt: str,
 ) -> dict[str, Any]:
     generation = dict(result.metadata)
-    if generation.get("num_model_image_tensors") != 1:
+    if profile.key == "spatialbot_zoedepth":
+        expected_depth_evidence = {
+            "num_model_image_tensors": 2,
+            "input_rgb_count": 1,
+            "derived_depth_count": 1,
+            "depth_derived_from_same_rgb": True,
+        }
+        mismatches = {
+            key: {"expected": expected, "actual": generation.get(key)}
+            for key, expected in expected_depth_evidence.items()
+            if generation.get(key) != expected
+        }
+        if mismatches:
+            raise ValueError(
+                "SpatialBot ZoeDepth backend must prove one input RGB plus one "
+                f"same-RGB-derived depth tensor: {mismatches}"
+            )
+    elif generation.get("num_model_image_tensors") != 1:
         raise ValueError("Specialized backend must prove exactly one model-bound image tensor")
     generation.update(
         {

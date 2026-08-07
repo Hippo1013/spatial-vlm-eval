@@ -7,6 +7,41 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 增加 Q-Spatial InternVL3-78B 独立四卡补测入口：固定 BF16/TP=4，按当前 registry/binding/scorer
+  protocol 顺序执行 test/full-271、validator、精确单轨评分，并在原 `QSPATIAL_OUTPUT_ROOT` 中把既有
+  `q-spatial-result.md` 原地重建为 21/21；提供 check/status/dry-run、严格恢复门禁和内置迁移 FAQ。
+- 增加独立 SPBench-SI 单图全链路：锁定 SpatialLadder commit `7a0d2ee` 与数据 revision
+  `03611025`，直接从锁定 ZIP 验证/解码 524 张 JPEG，提供 1,009 条防泄漏输入合同、21 条目标 profile、
+  default/direct prompt、red/blue + smoke8 绑定 gate、fsync 恢复、双卡 20 轨失败隔离调度和只读 watcher。
+- 增加 SPBench-SI 原始十阈值严格 MRA 主 scorer：唯一 final/tag 答案、冲突 fail-closed、四题型宏平均，
+  并在独立目录精确保留当前 SpatialLadder direct-mode 提取与 inclusive 边界 compatibility audit；报告
+  publication gates 只接受 21/21，或明确只缺固定四卡 InternVL3-78B 的暂行 20/21。
+- 修复 SPBench-SI 双卡 test 调度的端口可用性探针与清理失败记账，并确保共享 server env 不覆盖逐轨
+  GPU 分配和 LLaVA-NeXT 4096 上下文；服务器 20 条非 78B 轨已通过当前 binding 的完整 test gate。
+- 增加 SPBench-SI InternVL3-78B 四卡独立全链路：固定 BF16/TP=4，自有 vLLM 顺序执行 test/full-1009、
+  validator、目标双协议评分与原报告 21/21 重建，并提供只读 check/status、dry-run、恢复和内置 FAQ。
+
+- 2026-08-07 服务器现场复核：Q-Spatial 除 TP=4 blocked 的 InternVL3-78B 外，20 条计划轨均通过
+  red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
+  评分与 publication gates；全局报告为 20/21。
+
+- 修复 Q-Spatial 目录评分把 `test_artifacts/` 与 `test_artifacts.stale-*` 中的 smoke8 prediction 误纳入
+  正式候选的问题；当前发现器只冻结 20 条 full 结果，旧 `test_runs/`、shards 与 score 子树仍被排除。
+
+- Q-Spatial 双卡/API 调度器新增显式 `--stage test`：复用同一 20 轨冻结分队与失败隔离，只建立或复用
+  当前绑定的 test gate，绝不进入 full/正式 validator/评分；`--skip-completed` 仍仅服务 full 模式。
+- 修复 Q-Spatial 调度器回收自有 vLLM 时未先 reap 已退出 group leader、导致每次换模误等完整 stop
+  timeout 的问题。
+- 修复 Q-Spatial LLaVA 两阶段第二次 vLLM 请求同时启用 `continue_final_message` 与默认 generation
+  prompt 而被拒绝的问题；assistant prefill 现显式设置 `add_generation_prompt=false`。
+- Q-Spatial test gate 因 binding 更新失效时，自动把旧 test artifacts/gate 无损轮换为带旧 digest 的
+  `stale-*` 归档，避免跨 resume signature 混用或阻塞合法重测。
+- Q-Spatial 调度器停止自有 vLLM 后有限等待监听端口实际释放，消除 GPU 已清空但 socket 尚未解绑的
+  换模竞态；超时仍拒绝接管端口。
+- Q-Spatial vLLM 默认上下文固定为 32768 并纳入 test binding，覆盖 Qwen3-VL 合法图像 token 输入与
+  1024 输出预算；LLaVA-NeXT Yi/Mistral 由调度器逐 profile 保持 checkpoint 合法的 4096 上限。
+- Q-Spatial 3DThinker 为同一 RGB 的 checkpoint processor 绑定 `12544..401408` pixels 并记录
+  provenance，避免大图视觉 attention OOM；prompt、单图边界和 decoding 不变。
 - 增加独立 Q-Spatial Bench 全链路：锁定官方代码 `ebe8137` 与数据 revision `17b92e4`、两个显式
   数据根、170+101 行及 99-frame ScanNet manifest，不可泄漏的 system/user 单图输入、两字段
   prediction validator、21 条目标 profile、test/full 绑定 gate、目录评分和 publication-gated 报告。
@@ -15,8 +50,12 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   malformed/冲突答案保守记零且逐行保留差异。
 - 扩展 OpenAI-compatible client 以按 benchmark 输入可选发送 system + single-image user messages，并
   支持 vLLM `top_k`、presence/repetition penalty、seed 与自定义 token 上限；MSMU/CV-Bench 原有
-  user-only payload 保持不变。增加 LLaVA 两阶段格式修复、纯红/纯蓝 canary、smoke8、固定奇偶双
-  endpoint 分片和独立 Q-Spatial specialized JSONL bridge。
+  user-only payload 保持不变。增加 LLaVA 两阶段格式修复、纯红/纯蓝 canary、smoke8、单 endpoint
+  并发和独立 Q-Spatial specialized JSONL bridge。
+- 增加 Q-Spatial 双卡/API 分阶段控制器：冻结 20 轨计划，阶段 A 双卡与串行 API lane 并行，双卡成功
+  后阶段 B 才启动 GPU 0/1 独立 lane；每 job 复用合法 gate 或 test 后运行 full/validator，严格复核完整
+  skip provenance，隔离 lane 失败并只清理 owned process group。增加 `_scheduled_batch` 状态/日志与
+  `tmux wait-for` 只读 health watcher；控制器不评分。
 - 增加独立 CV-Bench 全链路：锁定 revision `bc284db50d036958861cb60cdd7b77612052ce0d`
   的 2D/3D 两个 Parquet（2638 条）、不可泄漏的单图输入合同、两字段 prediction validator、23 条目标
   profile registry、test/full 两阶段绑定 gate、目录驱动评分与 publication-gated Markdown 报告。
@@ -70,6 +109,22 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   provider/model/media audit，避免只凭请求结构或非空图像张量判定模型已看图。
 
 ### Changed
+
+- Q-Spatial Markdown 汇总移除旧 notebook 解析分数、主/旧差异条数及相关文字，只展示当前 v2 scorer
+  的 `δ≤2` 主结果、ScanNet 五类明细与 `δ≤1.25` 严格阈值；主表同时沿用 MSMU 命名方式，把实际派生
+  输入配置写入模型名括号并移除独立 input/comparison 列。底层兼容性审计与分组比较规则继续保留。
+
+- Q-Spatial numeric scorer 升级为 declared-final v2：接受等价重复标签、唯一 final 标签、unit-only 标签、
+  紧凑单位、LaTeX boxed/distance 与 diameter/unit wrapper、简单分数，并排除 `PS4` / `Region [0]`
+  标识数字；范围、冲突、多候选和缺单位继续 fail closed。零或未知单位保留模型声明但计零。v2 只读兼容
+  声明 v1/v2 scorer 的既有完整 inference metadata，无需重跑或改写 prediction。
+
+- 修复 Q-Spatial `spatialbot_zoedepth` 的模型边界门禁：继续强制一张源 RGB，同时严格接受一个 RGB
+  tensor 加一个由同图派生的 depth tensor；其他专用轨仍要求恰好一个 model image tensor。
+
+- Q-Spatial TP=1 vLLM 从双 GPU 双 endpoint 奇偶分片改为单 GPU 单 endpoint 内请求并发；TP=2/4 保持
+  单 tensor-parallel endpoint。endpoint/GPU/sharding 仍进入 binding，旧双 endpoint test gate 自动失效；
+  vLLM capacity 保持 `32→16→8→4→2→1`，API 独立使用 `8→4→2→1`。
 
 - 将 CV-Bench robust multiple-choice scorer 升级为 v3 declared-answer parser：仅在解析视图剥离已知
   末尾生成 token，支持首/末行独立字母和字母/完整选项文本一致的紧凑格式，为每条结果记录

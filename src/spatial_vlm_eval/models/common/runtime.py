@@ -149,9 +149,17 @@ def pixel_sha256(image: Any) -> str:
 
 def input_audit(model_input: RestrictedVisionInput, adapter_metadata: dict[str, Any]) -> dict[str, Any]:
     rgb = model_input.image.convert("RGB")
+    system_prompt = getattr(model_input, "system_prompt", None)
+    user_prompt = getattr(model_input, "user_prompt", None)
+    if system_prompt is not None or user_prompt is not None:
+        if not isinstance(system_prompt, str) or not isinstance(user_prompt, str):
+            raise TypeError("System/user benchmark prompts must both be strings")
+        question_for_audit = user_prompt
+    else:
+        question_for_audit = str(model_input.question)
     audit = {
         "index": int(model_input.index),
-        "question": str(model_input.question),
+        "question": question_for_audit,
         "image_count": 1,
         "image_mode": "RGB",
         "image_size": [int(rgb.size[0]), int(rgb.size[1])],
@@ -160,11 +168,7 @@ def input_audit(model_input: RestrictedVisionInput, adapter_metadata: dict[str, 
         "inference_protocol": adapter_metadata["inference_protocol"],
         "chat_template": adapter_metadata["chat_template"],
     }
-    system_prompt = getattr(model_input, "system_prompt", None)
-    user_prompt = getattr(model_input, "user_prompt", None)
     if system_prompt is not None or user_prompt is not None:
-        if not isinstance(system_prompt, str) or not isinstance(user_prompt, str):
-            raise TypeError("System/user benchmark prompts must both be strings")
         audit["system_prompt"] = system_prompt
         audit["user_prompt"] = user_prompt
         system_role_supported = bool(adapter_metadata.get("system_role_supported", True))

@@ -38,6 +38,10 @@ cvbench-validate = "spatial_vlm_eval.benchmarks.cv_bench.prediction_validation:m
 cvbench-score = "spatial_vlm_eval.benchmarks.cv_bench.scorer:main"
 cvbench-score-results = "spatial_vlm_eval.benchmarks.cv_bench.score_results:main"
 cvbench-report = "spatial_vlm_eval.benchmarks.cv_bench.report:main"
+spbench-si-infer = "spatial_vlm_eval.benchmarks.spbench_si.inference:main"
+spbench-si-validate = "spatial_vlm_eval.benchmarks.spbench_si.prediction_validation:main"
+spbench-si-score-results = "spatial_vlm_eval.benchmarks.spbench_si.score_results:main"
+spbench-si-report = "spatial_vlm_eval.benchmarks.spbench_si.report:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

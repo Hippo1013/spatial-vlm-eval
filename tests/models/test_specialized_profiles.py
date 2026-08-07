@@ -1,8 +1,10 @@
 import hashlib
+import os
 import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 import numpy as np
 from PIL import Image
@@ -47,6 +49,7 @@ from spatial_vlm_eval.models.ssr.infer import (
 from spatial_vlm_eval.models.three_d_thinker.infer import (
     MENTAL_3D_CONTROL_PROMPT,
     ThreeDThinkerAdapter,
+    configure_processor_pixel_bounds,
     ensure_processor_chat_template,
     extract_last_complete_answer,
     select_three_d_thinker_prediction,
@@ -416,6 +419,56 @@ class SpecializedProfileSwitchTest(unittest.TestCase):
         adapter.upstream_commit_verified = True
         adapter.device_map = "auto"
         self.assertFalse(adapter.metadata()["image_processing"]["processor_use_fast"])
+
+    def test_3dthinker_pixel_bounds_are_positive_and_provenanced(self):
+        with mock.patch.dict(
+            os.environ,
+            {
+                "THREEDTHINKER_IMAGE_MIN_PIXELS": "12544",
+                "THREEDTHINKER_IMAGE_MAX_PIXELS": "401408",
+            },
+        ), mock.patch(
+            "spatial_vlm_eval.models.three_d_thinker.infer.verify_hf_snapshot_revision",
+            return_value=True,
+        ), mock.patch(
+            "spatial_vlm_eval.models.three_d_thinker.infer.verify_git_checkout",
+            return_value=True,
+        ), mock.patch.object(Path, "exists", return_value=True):
+            adapter = ThreeDThinkerAdapter(
+                profile_key="3dthinker",
+                upstream_root="/verified/upstream",
+                model_path="/verified/model",
+            )
+        image_processing = adapter.metadata()["image_processing"]
+        self.assertEqual(image_processing["min_pixels"], 12544)
+        self.assertEqual(image_processing["max_pixels"], 401408)
+
+        processor = type(
+            "Processor",
+            (),
+            {"image_processor": type("ImageProcessor", (), {"size": {}})()},
+        )()
+        configure_processor_pixel_bounds(processor, 12544, 401408)
+        self.assertEqual(
+            processor.image_processor.size,
+            {"shortest_edge": 12544, "longest_edge": 401408},
+        )
+
+        with mock.patch.dict(
+            os.environ, {"THREEDTHINKER_IMAGE_MAX_PIXELS": "0"}, clear=True
+        ), mock.patch(
+            "spatial_vlm_eval.models.three_d_thinker.infer.verify_hf_snapshot_revision",
+            return_value=True,
+        ), mock.patch(
+            "spatial_vlm_eval.models.three_d_thinker.infer.verify_git_checkout",
+            return_value=True,
+        ), mock.patch.object(Path, "exists", return_value=True):
+            with self.assertRaisesRegex(ValueError, "must be positive"):
+                ThreeDThinkerAdapter(
+                    profile_key="3dthinker",
+                    upstream_root="/verified/upstream",
+                    model_path="/verified/model",
+                )
 
     def test_spatialbot_depth_is_mm_uint16_and_officially_packed(self):
         depth_m = np.array([[0.0, 0.031, 0.032], [1.024, 2.5, 65.535]])

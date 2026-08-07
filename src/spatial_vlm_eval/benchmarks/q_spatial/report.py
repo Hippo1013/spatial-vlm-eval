@@ -20,13 +20,25 @@ from .data import (
     STANDARD_SYSTEM_PROMPT_SHA256,
 )
 from .profiles import PROFILE_SEQUENCE, PROFILES, RGB_PROFILE_KEYS
-from .scorer import RESULT_KIND, SCORER_PROTOCOL
+from .scorer import (
+    COMPATIBLE_INFERENCE_SCORER_PROTOCOLS,
+    RESULT_KIND,
+    SCORER_PROTOCOL,
+    inference_metadata_scorer_protocol_is_compatible,
+)
 
 DEFAULT_OUTPUT_NAME = "q-spatial-result.md"
-COMPARISON_DISPLAY = {
-    "rgb_only": "RGB",
-    "rgb_derived_depth": "RGB + 派生深度",
-    "rgb_derived_xyz": "RGB + MoGe-2 XYZ",
+COMPARISON_GROUPS = (
+    "rgb_only",
+    "rgb_derived_depth",
+    "rgb_derived_xyz",
+)
+PROFILE_PRESENTATION_CONFIGS = {
+    "ssr_rgb": "RGB",
+    "ssr_native": "RGB + DepthPro + MIDI + TOR10",
+    "spatialbot_rgb": "RGB",
+    "spatialbot_zoedepth": "RGB + ZoeDepth",
+    "hispatial3b_moge2_xyz": "RGB + MoGe-2 XYZ",
 }
 TYPE_DISPLAY = {
     "object_width": "Object width",
@@ -124,7 +136,6 @@ def _validate_result(summary_path: Path) -> ReportResult:
     for label, actual, expected in (
         ("output", str(Path(str(metadata.get("output", ""))).resolve()), str(predictions)),
         ("output_sha256", metadata.get("output_sha256"), _sha256(predictions)),
-        ("scorer_protocol", metadata.get("scorer_protocol"), SCORER_PROTOCOL),
         ("dataset.revision", metadata_dataset.get("revision"), DATASET_REVISION),
         ("dataset.fingerprint", metadata_dataset.get("fingerprint"), dataset.get("fingerprint")),
         ("dataset.official_test_size", metadata_dataset.get("official_test_size"), OFFICIAL_TEST_SIZE),
@@ -134,6 +145,15 @@ def _validate_result(summary_path: Path) -> ReportResult:
             raise ValueError(f"Inference metadata {label} mismatch: {summary_path}")
 
     inference = summary.get("inference") if isinstance(summary.get("inference"), dict) else {}
+    declared_scorer_protocol = metadata.get("scorer_protocol")
+    if not inference_metadata_scorer_protocol_is_compatible(declared_scorer_protocol):
+        raise ValueError(
+            "Inference metadata scorer_protocol is not compatible: "
+            f"got={declared_scorer_protocol!r}, "
+            f"allowed={sorted(COMPATIBLE_INFERENCE_SCORER_PROTOCOLS)!r}: {summary_path}"
+        )
+    if inference.get("declared_scorer_protocol") != declared_scorer_protocol:
+        raise ValueError(f"Summary/inference scorer declaration mismatch: {summary_path}")
     profile_key = str(inference.get("profile") or "")
     if profile_key not in PROFILES:
         raise ValueError(f"Summary has an unregistered profile: {summary_path}")
@@ -242,12 +262,34 @@ def _format_percent(value: float, *, bold: bool = False) -> str:
     return f"**{rendered}**" if bold else rendered
 
 
+def _presentation_model_names(results: list[ReportResult]) -> dict[str, str]:
+    display_counts = Counter(PROFILES[result.profile].display_name for result in results)
+    names: dict[str, str] = {}
+    for result in results:
+        profile = PROFILES[result.profile]
+        configuration = PROFILE_PRESENTATION_CONFIGS.get(result.profile)
+        if (
+            configuration is None
+            and (profile.input_profile != "rgb" or display_counts[profile.display_name] > 1)
+        ):
+            raise ValueError(
+                "Q-Spatial concise report is missing an explicit input configuration for "
+                f"{result.profile}"
+            )
+        names[result.profile] = (
+            profile.display_name
+            if configuration is None
+            else f"{profile.display_name}（{configuration}）"
+        )
+    return names
+
+
 def render_markdown(results: list[ReportResult], *, generated_at: str | None = None) -> str:
     present = {result.profile for result in results}
     missing = [key for key in PROFILE_SEQUENCE if key not in present]
     rgb_present = [key for key in RGB_PROFILE_KEYS if key in present]
     maxima: dict[tuple[str, str], float] = {}
-    for comparison_group in COMPARISON_DISPLAY:
+    for comparison_group in COMPARISON_GROUPS:
         group_results = [
             result
             for result in results
@@ -270,13 +312,14 @@ def render_markdown(results: list[ReportResult], *, generated_at: str | None = N
         f"- RGB 轨完整度：{len(rgb_present)}/18",
         f"- 全轨完整度：{len(results)}/21",
         f"- 缺失 profile：{', '.join(f'`{key}`' for key in missing) if missing else '无'}",
-        "- 比较规则：加粗只在相同 comparison group 内计算，不跨 RGB、派生深度与派生 XYZ 比较。",
+        "- 展示规则：实际派生输入配置写在模型名括号内；加粗只在相同可比输入组内计算。",
         "",
         "## 主结果（δ≤2）",
         "",
-        "| 模型 | Input track | Comparison group | ScanNet | Q-Spatial++ | Overall |",
-        "| --- | --- | --- | ---: | ---: | ---: |",
+        "| 模型 | ScanNet | Q-Spatial++ | Overall |",
+        "| --- | ---: | ---: | ---: |",
     ]
+    presentation_names = _presentation_model_names(results)
     for result in results:
         profile = PROFILES[result.profile]
         scan = _split_accuracy(result, "QSpatial_scannet", "delta_le_2")
@@ -289,8 +332,7 @@ def render_markdown(results: list[ReportResult], *, generated_at: str | None = N
             _format_percent(overall, bold=overall == maxima.get((group, "overall"))),
         ]
         lines.append(
-            f"| {profile.display_name} | `{profile.input_profile}` | "
-            f"{COMPARISON_DISPLAY[group]} | " + " | ".join(values) + " |"
+            f"| {presentation_names[result.profile]} | " + " | ".join(values) + " |"
         )
     lines.extend(
         [
@@ -308,34 +350,26 @@ def render_markdown(results: list[ReportResult], *, generated_at: str | None = N
             )
             for key in SCANNET_CANONICAL_TYPES
         ]
-        lines.append(f"| {PROFILES[result.profile].display_name} | " + " | ".join(values) + " |")
+        lines.append(f"| {presentation_names[result.profile]} | " + " | ".join(values) + " |")
     lines.extend(
         [
             "",
-            "## 解析与严格阈值审计",
+            "## 严格阈值审计",
             "",
-            "| 模型 | Overall δ≤1.25 | 旧 notebook Overall δ<2 | 主/旧审计差异条数 |",
-            "| --- | ---: | ---: | ---: |",
+            "| 模型 | Overall δ≤1.25 |",
+            "| --- | ---: |",
         ]
     )
     for result in results:
         metrics = result.summary["metrics"]
         lines.append(
-            f"| {PROFILES[result.profile].display_name} | "
-            f"{_format_percent(float(metrics['overall_delta_le_1_25']))} | "
-            f"{_format_percent(float(metrics['legacy_notebook_overall_delta_lt_2']))} | "
-            f"{int(result.summary['num_main_vs_legacy_differences'])} |"
+            f"| {presentation_names[result.profile]} | "
+            f"{_format_percent(float(metrics['overall_delta_le_1_25']))} |"
         )
-    differing = [
-        result.profile
-        for result in results
-        if int(result.summary.get("num_main_vs_legacy_differences", 0)) > 0
-    ]
     lines.extend(
         [
             "",
-            "- 存在主 scorer / 旧 notebook 差异的 profile："
-            + (", ".join(f"`{key}`" for key in differing) if differing else "无"),
+            "- `δ≤1.25` 使用与主结果相同的当前 scorer，仅收紧数值误差阈值。",
             "- Overall 为 ScanNet 与 Q-Spatial++ 成功率等权平均；271 条 micro accuracy 仅保存在 summary 审计字段。",
         ]
     )

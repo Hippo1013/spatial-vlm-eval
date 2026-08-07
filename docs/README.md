@@ -10,11 +10,13 @@
 | MSMU 输入、校验、judge、阈值与聚合 | `src/spatial_vlm_eval/benchmarks/msmu/` | [canonical protocol](benchmarks/msmu/protocol.md) |
 | CV-Bench 数据、23 条轨、校验、评分与报告 | `src/spatial_vlm_eval/benchmarks/cv_bench/` | [CV-Bench protocol](benchmarks/cv_bench/protocol.md) |
 | Q-Spatial 数据、21 条轨、校验、numeric scorer 与报告 | `src/spatial_vlm_eval/benchmarks/q_spatial/` | [Q-Spatial protocol](benchmarks/q_spatial/protocol.md) |
+| SPBench-SI 数据、21 条轨、校验、双 scorer 与报告 | `src/spatial_vlm_eval/benchmarks/spbench_si/` | [SPBench-SI protocol](benchmarks/spbench_si/protocol.md) |
 | 四 benchmark 范围、推进顺序与数据准备边界 | 实现前为项目规划；实现后由各 benchmark registry/validator 固化 | [评测范围](evaluation-scope.md) |
 | 项目级目标模型身份与新增 SOTA 范围 | 实现前为项目规划 | [模型矩阵](model-matrix.md) |
 | 已注册 MSMU profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` | [模型矩阵的 MSMU profile](model-matrix.md#msmu-当前-18-条已完成目标-inference-profile) |
 | CV-Bench 23 条目标轨及顺序 | `benchmarks.cv_bench.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 CV-Bench profile](model-matrix.md#cv-bench-当前-23-条目标-inference-profile) |
 | Q-Spatial 21 条目标轨及顺序 | `benchmarks.q_spatial.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 Q-Spatial profile](model-matrix.md#q-spatial-当前-21-条目标-inference-profile) |
+| SPBench-SI 21 条目标轨及顺序 | `benchmarks.spbench_si.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 SPBench-SI profile](model-matrix.md#spbench-si-当前-21-条目标-inference-profile) |
 | 阶段三默认/Qwen3 补测轨与顺序 | `run_stage3_serial_inference.sh --list` / `--qwen3 --list` | [阶段三 runbook](msmu-stage3-full-eval.md) |
 | 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata、`summary.json` 和 publication gates | 模型矩阵只保存注明日期的已验证快照 |
 | CLI、环境变量与输出布局 | 脚本 `--help`、`configs/*server.env.example` | 对应 runbook |
@@ -50,6 +52,8 @@
   robust scorer 和 publication gates。
 - [Q-Spatial canonical protocol](benchmarks/q_spatial/protocol.md)：两根数据合同、Standard Prompt、21 条
   轨、numeric scorer 与 publication gates。
+- [SPBench-SI canonical protocol](benchmarks/spbench_si/protocol.md)：ZIP 直读单图合同、default/direct
+  prompt、21 条轨、严格原始 MRA 主分与独立 upstream audit。
 - [来源记录](source-provenance.json)：上游 commit、模型 revision 和文件哈希。
 
 ### 状态与参考
@@ -72,6 +76,13 @@
   独立校验、精确单轨评分和原有全局报告重建。
 - [Q-Spatial 简明运行指令](q-spatial-commands.md)：21 轨 test/full/评分/报告的可复制命令。
 - [Q-Spatial 两阶段 runbook](q-spatial-two-stage-runbook.md)：两根数据、endpoint、gate、full-271 与评分。
+- [Q-Spatial InternVL3-78B 四卡补测](q-spatial-internvl3-78b-evaluation.md)：沿用现有输出根完成
+  TP=4 test/full、精确单轨评分和原报告 21/21 重建，并提供内置运行 FAQ。
+- [SPBench-SI 简明运行指令](spbench-si-commands.md)：test/full、双卡 20 轨、评分与报告命令。
+- [SPBench-SI 两阶段 runbook](spbench-si-two-stage-runbook.md)：只读 ZIP 数据、绑定 gate、full-1009、
+  双卡 lane 与四卡 78B 边界。
+- [SPBench-SI InternVL3-78B 四卡完整评测](spbench-si-internvl3-78b-evaluation.md)：一键 test/full、
+  独立校验、精确双协议评分、报告重建与 FAQ。
 - [MSMU 多模型推理与验收](msmu-inference.md)：环境、模型 family 和完整产物说明。
 - [三阶段统一入口](msmu-all-model-test-commands.md)：人工测试总入口。
 - [阶段一 canary](msmu-stage1-canary.md)：接口、processor 和视觉链路检查。
@@ -87,7 +98,8 @@
 - [ADR 索引与模板](decisions/README.md)：长期设计决策及其后果。
 - [Inference/scorer protocol 分离决策](decisions/0001-separate-inference-and-scorer-protocols.md)。
 - [CV-Bench 稳健解析与发布门禁决策](decisions/0002-cv-bench-robust-parser-and-publication-gates.md)。
-- [Q-Spatial numeric parser 与发布门禁决策](decisions/0003-q-spatial-robust-numeric-parser-and-publication-gates.md)。
+- [Q-Spatial declared-final numeric parser v2 与发布门禁决策](decisions/0003-q-spatial-robust-numeric-parser-and-publication-gates.md)。
+- [SPBench-SI 原始 MRA 与 upstream audit 分离决策](decisions/0004-spbench-si-original-mra-and-upstream-audit.md)。
 - [Troubleshooting 规则](troubleshooting/README.md)与
   [服务器问题库](troubleshooting/server.md)。
 

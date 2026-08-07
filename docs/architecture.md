@@ -41,6 +41,12 @@ prediction 只保存 `index, raw_prediction`，answer/task/source 仅在 scorer 
 同样是 `index, raw_prediction`，但 Q-Spatial validator/scorer 与 CV-Bench 完全独立；`1d_horizontal`
 只在 scorer 派生分类中映射为 object width。
 
+`SPBenchSITestContract` 使用两个显式只读文件：锁定 Parquet 与 JPEG ZIP。loader 不解压 ZIP，先验证
+文件 SHA/大小、1,009 行 schema、524 张引用全集和全部图片解码。adapter 只收到
+`index, image, system_prompt, user_prompt`；答案、题型、scene、dataset 与原始 row 私有保留，评分时按
+index 重新关联。prediction 虽同为 `index, raw_prediction`，但 SPBench-SI 的 prompt、validator、MRA
+parser、四题型宏平均和结果目录都不复用 Q-Spatial/CV-Bench。
+
 每次调用前创建输入审计：index、清洗后题干、RGB 数量、mode、尺寸、像素 SHA-256、profile、
 inference protocol 和 chat template。审计禁止保存 base64/API key；它证明“送入哪张图”，但不会把
 reference 泄漏给模型。
@@ -79,6 +85,10 @@ runtime；registry 不进入 scorer 的结果发现逻辑。
 Q-Spatial 子包独立拥有两根数据合同、21 条 profile、system/user transport、LLaVA 两阶段格式修复、
 numeric parser、split-macro 聚合和发布报告。它只复用 model-neutral runtime 与已锁定 family runner，
 不复制 CV-Bench 的题目、parser 或聚合语义。
+
+SPBench-SI 子包独立拥有 ZIP 直读数据合同、21 条 profile、default/direct prompt、processor 对照、
+red/blue + smoke8 gate、full validator、严格原始 MRA 主 scorer 与当前上游兼容 audit。两种 scorer 的
+逐行产物和 protocol 目录分离；报告只能在各自 publication provenance 完整时并列表达差异。
 
 ### `spatial_vlm_eval.models`
 
@@ -122,9 +132,33 @@ GPU preflight 只读取 `nvidia-smi`；显存不足、利用率超限或已有 c
 
 `scripts/q_spatial/` 提供 registry-driven test/full、严格 validator、目录评分和报告入口。test gate 绑定
 两个数据根、Standard Prompt、profile/revision、processor/adapter digest、decoding/seed、GPU、capacity
-和 sharding；TP=1 vLLM 用两个 endpoint 固定奇偶分片，其他 backend 单 endpoint/runner。LLaVA 两阶段
+和 endpoint/sharding；TP=1 vLLM 用一个单卡 endpoint 执行请求并发，TP=2/4 用一个 tensor-parallel
+endpoint，specialized backend 使用单 persistent runner。LLaVA 两阶段
 调用都传同一张图；specialized JSONL bridge 分别传 system/user prompt 且不含评分字段。评分只发现
 271 条完整 prediction，报告按 comparison group 计算加粗且拒绝重复候选。
+
+Q-Spatial 双卡批次控制器在调度层并行四条隔离 lane，不改 benchmark/model 语义。阶段 A 双卡 lane 成功
+后才释放 GPU 0/1 两条阶段 B lane；API lane 不参与该屏障。每条 job 复用合法 gate 或重新 test，再 full
+与正式 validator；complete skip 必须复核完整 provenance。控制器只清理自己记录的进程组并等待 GPU
+释放，状态/冻结计划/日志写入仓库外 `_scheduled_batch/`，不调用 scorer。独立 health watcher 只读状态、
+journal mtime、进程存活与 GPU inventory，通过 `tmux wait-for` 阻塞等待事件，不读取回答内容或干预运行。
+
+Q-Spatial 的 InternVL3-78B 四卡补测控制器保持独立于双卡调度，固定 BF16/TP=4。它从当前 registry
+解析 canonical track，复核现有输出根仅缺该轨，顺序调用既有 test/full、validator、`--predictions`
+精确评分和同一个全局报告入口；旧 protocol/binding/hash 的 prediction 不作为 complete skip。正式
+prediction、score 与 `q-spatial-result.md` 均留在原路径，仅把编排日志写入
+`_single_model_evaluation/logs/`。
+
+`scripts/spbench_si/` 提供同一 registry 的单轨 test/full、validator、目录评分、报告、vLLM 服务和
+20 轨双卡控制器。Phase A 双卡 lane 与严格串行 API lane 并发；双卡自有进程退出、端口释放后才启动
+Phase B GPU0/GPU1。full 调度先逐轨建立或复用完全匹配的 gate，controller 仍不评分。四条 lane 各有
+独立只读 event watcher，仅报告 PASS/FAIL/COMPLETE；控制器只停止自己创建的进程组，绝不接管未知
+端口或 GPU 进程。InternVL3-78B 保持独立 TP=4 四卡入口。
+
+SPBench-SI 的 `run_internvl3_78b_evaluation.sh` 沿用同一 canonical 路径：固定 BF16/TP=4，顺序调用
+既有 test/full、完整 validator、`--predictions` 精确双协议评分和全局报告入口。控制器只清理自己创建的
+进程组；端口、GPU 或运行锁被占用时 fail closed。正式 prediction/score/report 不复制到模型专属根，
+编排日志仅位于输出根 `_single_model_evaluation/logs/`。
 
 阶段三串行调度器只编排 inference 与完整 validator，不复制模型或 benchmark 逻辑。它在独立 session/
 process group 中启动每个模型，使用 fsync journal 的文件活动做停滞 watchdog，只终止自己记录的

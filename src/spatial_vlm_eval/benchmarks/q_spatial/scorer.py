@@ -22,20 +22,37 @@ from .data import (
 )
 from .prediction_validation import read_jsonl, validate_prediction_rows
 
-SCORER_PROTOCOL = (
+LEGACY_SCORER_PROTOCOL_V1 = (
     "q_spatial_robust_numeric_v1_standard_prompt_tag_first_unique_fallback_"
     "paper_inclusive_ratio"
+)
+SCORER_PROTOCOL = (
+    "q_spatial_robust_numeric_v2_standard_prompt_declared_final_equivalent_tags_"
+    "controlled_wrappers_paper_inclusive_ratio"
+)
+COMPATIBLE_INFERENCE_SCORER_PROTOCOLS = frozenset(
+    {LEGACY_SCORER_PROTOCOL_V1, SCORER_PROTOCOL}
 )
 RESULT_KIND = "q_spatial_official_formula_robust_numeric_parser_internal_score"
 
 _TAG_TRACE_RE = re.compile(r"(?i)\b(?:scalar|distance_unit)\b")
 _SCALAR_TAG_RE = re.compile(r"(?i)\\?scalar\s*\{([^{}]*)\}")
 _UNIT_TAG_RE = re.compile(r"(?i)\\?distance_unit\s*\{([^{}]*)\}")
-_DECIMAL_TEXT_RE = re.compile(r"(?:\d+(?:\.\d*)?|\.\d+)")
-_NUMBER_TOKEN_RE = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?")
-_FALLBACK_PAIR_RE = re.compile(
-    r"(?i)([-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?)\s*([a-z]+)"
+_SIGNED_DECIMAL_TEXT_RE = re.compile(r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)")
+_FRACTION_TEXT_RE = re.compile(r"(\d+)\s*/\s*(\d+)")
+_SCALAR_TOKEN = r"[-+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][-+]?\d+)?"
+_VALUE_TOKEN = rf"(?:{_SCALAR_TOKEN}|\d+\s*/\s*\d+)"
+_NUMBER_TOKEN_RE = re.compile(rf"(?<![\w.]){_SCALAR_TOKEN}(?![\w.])")
+_RANGE_RE = re.compile(
+    r"(?i)(?<![\w.])(?:\d+(?:\.\d*)?|\.\d+)\s*(?:to|[-–—])\s*"
+    r"(?:\d+(?:\.\d*)?|\.\d+)(?![\w.])"
 )
+_REGION_IDENTIFIER_RE = re.compile(r"(?i)\bregion\s*\[[^\]]*\]")
+_ANSWER_TAG_RE = re.compile(r"(?is)<answer\b[^>]*>(.*?)</answer\s*>")
+_TRIPLE_QUOTE_RE = re.compile(r'(?s)"""(.*?)"""')
+_FENCED_RE = re.compile(r"(?s)```(?:[a-zA-Z0-9_-]+)?\s*(.*?)```")
+_DISPLAY_MATH_RE = re.compile(r"(?s)\\\[(.*?)\\\]")
+_INLINE_MATH_RE = re.compile(r"(?s)\\\((.*?)\\\)")
 
 _UNIT_MULTIPLIERS = {
     "m": Decimal("100"),
@@ -61,6 +78,53 @@ _UNIT_MULTIPLIERS = {
     "inches": Decimal("2.54"),
 }
 
+_UNIT_PATTERN = "(?:" + "|".join(
+    re.escape(unit) for unit in sorted(_UNIT_MULTIPLIERS, key=len, reverse=True)
+) + ")"
+_FULL_TAG_PAIR_RE = re.compile(
+    r"(?is)\\?scalar\s*\{(?P<value>[^{}]*)\}"
+    r"[\s\"'`.,:;=\\()\[\]-]*"
+    r"\\?distance_unit\s*\{(?P<unit>[^{}]*)\}"
+)
+_UNIT_ONLY_TAG_RE = re.compile(
+    rf"(?i)(?<![\w.])(?P<value>{_VALUE_TOKEN})(?![\w.])\s*"
+    r"\\?distance_unit\s*\{(?P<unit>[^{}]*)\}"
+)
+_PLAIN_PAIR_PATTERNS = (
+    re.compile(
+        rf"(?i)(?<![\w.])(?P<value>{_VALUE_TOKEN})(?![\d.])\s*"
+        rf"(?:\\,\s*)?\\text\s*\{{\s*(?P<unit>{_UNIT_PATTERN})\s*\}}"
+    ),
+    re.compile(
+        rf"(?i)\\boxed\s*\{{\s*(?P<value>{_VALUE_TOKEN})\s*\}}\s*"
+        rf"(?:\s|\\[()])*\\text\s*\{{\s*(?P<unit>{_UNIT_PATTERN})\s*\}}"
+    ),
+    re.compile(
+        rf"(?i)\\diameter\s*\{{\s*(?P<value>{_VALUE_TOKEN})\s*\}}\s*"
+        rf"\\units\s*\{{\s*(?P<unit>{_UNIT_PATTERN})\s*\}}"
+    ),
+    re.compile(
+        rf"(?i)(?<![\w.])(?P<value>{_VALUE_TOKEN})(?![\d.])\s*"
+        rf"\\(?P<unit>{_UNIT_PATTERN})\b"
+    ),
+    re.compile(
+        rf"(?i)(?<![\w.])(?P<value>{_VALUE_TOKEN})(?![\d.])\s*"
+        rf"\{{\s*(?P<unit>{_UNIT_PATTERN})\s*\}}"
+    ),
+    re.compile(
+        rf"(?i)(?<![\w.])(?P<value>{_VALUE_TOKEN})(?![\d.])\s*,\s*"
+        rf"(?P<unit>{_UNIT_PATTERN})\b"
+    ),
+    re.compile(
+        rf"(?i)(?<![\w.])(?P<value>{_VALUE_TOKEN})(?![\d.])\s*"
+        rf"(?P<unit>{_UNIT_PATTERN})\b"
+    ),
+)
+_GENERIC_PAIR_RE = re.compile(
+    rf"(?i)(?<![\w.])(?P<value>{_VALUE_TOKEN})(?![\d.])\s*"
+    r"(?P<unit>[a-z]+)\b"
+)
+
 
 @dataclass(frozen=True, slots=True)
 class ParsedMeasurement:
@@ -71,82 +135,308 @@ class ParsedMeasurement:
     mode: str
 
 
+@dataclass(frozen=True, slots=True)
+class _MeasurementCandidate:
+    start: int
+    end: int
+    value_text: str
+    unit_text: str
+    source: str
+
+
 def _measurement(value_text: str, unit_text: str, *, mode: str) -> ParsedMeasurement:
     stripped_value = value_text.strip()
-    if not _DECIMAL_TEXT_RE.fullmatch(stripped_value):
-        return ParsedMeasurement(None, None, None, f"{mode}_invalid_scalar", mode)
+    fraction = _FRACTION_TEXT_RE.fullmatch(stripped_value)
     try:
-        value = Decimal(stripped_value)
-    except InvalidOperation:
+        if _SIGNED_DECIMAL_TEXT_RE.fullmatch(stripped_value):
+            value = Decimal(stripped_value)
+        elif fraction is not None and int(fraction.group(2)) != 0:
+            with localcontext() as context:
+                context.prec = 40
+                value = Decimal(fraction.group(1)) / Decimal(fraction.group(2))
+        else:
+            return ParsedMeasurement(None, None, None, f"{mode}_invalid_scalar", mode)
+    except (InvalidOperation, ZeroDivisionError):
         return ParsedMeasurement(None, None, None, f"{mode}_invalid_scalar", mode)
-    if not value.is_finite() or value <= 0:
-        return ParsedMeasurement(None, None, None, f"{mode}_non_positive_scalar", mode)
     unit = re.sub(r"\s+", " ", unit_text.strip().casefold())
     multiplier = _UNIT_MULTIPLIERS.get(unit)
+    if not value.is_finite() or value <= 0:
+        centimeters = None if multiplier is None else value * multiplier
+        return ParsedMeasurement(
+            value, unit or None, centimeters, f"{mode}_non_positive_scalar", mode
+        )
     if multiplier is None:
         return ParsedMeasurement(value, unit or None, None, f"{mode}_unknown_unit", mode)
     return ParsedMeasurement(value, unit, value * multiplier, f"{mode}_valid", mode)
 
 
-def _fallback_region(text: str) -> tuple[str, str]:
+def inference_metadata_scorer_protocol_is_compatible(value: Any) -> bool:
+    return str(value) in COMPATIBLE_INFERENCE_SCORER_PROTOCOLS
+
+
+def _with_status(parsed: ParsedMeasurement, status: str, mode: str) -> ParsedMeasurement:
+    return ParsedMeasurement(parsed.value, parsed.unit, parsed.centimeters, status, mode)
+
+
+def _equivalent_measurements(values: list[ParsedMeasurement]) -> bool:
+    return (
+        bool(values)
+        and all(value.status.endswith("_valid") for value in values)
+        and len({value.centimeters for value in values}) == 1
+    )
+
+
+def _latest_final_marker(text: str) -> tuple[str, str] | None:
     markers = (
         ("final_answer", re.compile(r"(?i)\bfinal\s+answer\b\s*(?:is\s*)?(?::|=|-)?")),
         ("answer", re.compile(r"(?i)\banswer\s*:")),
         ("in_conclusion", re.compile(r"(?i)\bin\s+conclusion\b\s*[,;:]?")),
     )
+    matches: list[tuple[int, int, str]] = []
     for name, pattern in markers:
+        matches.extend((match.start(), match.end(), name) for match in pattern.finditer(text))
+    if not matches:
+        return None
+    _start, end, name = max(matches)
+    return name, text[end:].strip()
+
+
+def _terminal_regions(text: str) -> list[tuple[str, str]]:
+    """Return strong final-answer regions from narrowest to broadest."""
+
+    regions: list[tuple[str, str]] = []
+
+    def add(name: str, value: str) -> None:
+        stripped = value.strip()
+        if stripped and all(stripped != existing for _label, existing in regions):
+            regions.append((name, stripped))
+
+    for name, pattern in (
+        ("answer_tag", _ANSWER_TAG_RE),
+        ("triple_quote", _TRIPLE_QUOTE_RE),
+        ("fenced", _FENCED_RE),
+        ("display_math", _DISPLAY_MATH_RE),
+        ("inline_math", _INLINE_MATH_RE),
+    ):
         matches = list(pattern.finditer(text))
         if matches:
-            return text[matches[-1].end() :].strip(), name
+            add(name, matches[-1].group(1))
+
     lines = [line.strip() for line in text.splitlines() if line.strip()]
-    return (lines[-1] if lines else ""), "last_nonempty_line"
+    if lines:
+        add("last_nonempty_line", lines[-1])
+
+    marked = _latest_final_marker(text)
+    if marked is not None:
+        add(marked[0], marked[1])
+    return regions
+
+
+def _tag_candidates(text: str) -> list[_MeasurementCandidate]:
+    candidates = [
+        _MeasurementCandidate(
+            match.start(),
+            match.end(),
+            match.group("value"),
+            match.group("unit"),
+            "full_tag",
+        )
+        for match in _FULL_TAG_PAIR_RE.finditer(text)
+    ]
+    candidates.extend(
+        _MeasurementCandidate(
+            match.start(),
+            match.end(),
+            match.group("value"),
+            match.group("unit"),
+            "unit_only_tag",
+        )
+        for match in _UNIT_ONLY_TAG_RE.finditer(text)
+        if not any(
+            candidate.start <= match.start() and match.end() <= candidate.end
+            for candidate in candidates
+        )
+    )
+    return sorted(candidates, key=lambda candidate: (candidate.start, candidate.end))
+
+
+def _tag_result(text: str) -> tuple[ParsedMeasurement | None, bool]:
+    """Parse declared tag forms and report whether malformed tags block plain fallback."""
+
+    traces = bool(_TAG_TRACE_RE.search(text))
+    if not traces:
+        return None, False
+
+    candidates = _tag_candidates(text)
+    parsed = [
+        _measurement(candidate.value_text, candidate.unit_text, mode="tag")
+        for candidate in candidates
+    ]
+    scalar_tags = _SCALAR_TAG_RE.findall(text)
+    unit_tags = _UNIT_TAG_RE.findall(text)
+    full_count = sum(candidate.source == "full_tag" for candidate in candidates)
+    unit_only_count = sum(candidate.source == "unit_only_tag" for candidate in candidates)
+    all_traces_accounted = (
+        len(scalar_tags) == full_count and len(unit_tags) == full_count + unit_only_count
+    )
+
+    if all_traces_accounted and _equivalent_measurements(parsed):
+        if len(parsed) == 1 and candidates[0].source == "full_tag":
+            status = "tag_valid"
+        elif all(candidate.source == "unit_only_tag" for candidate in candidates):
+            status = "tag_unit_only_valid"
+        else:
+            status = "tag_equivalent_repeated_valid"
+        return _with_status(parsed[-1], status, "tag"), False
+    if all_traces_accounted and parsed and len(
+        {(value.value, value.unit, value.centimeters, value.status) for value in parsed}
+    ) == 1:
+        return parsed[-1], False
+
+    for region_name, region in _terminal_regions(text):
+        if region_name not in {"answer_tag", "triple_quote", "final_answer", "in_conclusion"}:
+            continue
+        final_candidates = _tag_candidates(region)
+        final_parsed = [
+            _measurement(candidate.value_text, candidate.unit_text, mode="tag")
+            for candidate in final_candidates
+        ]
+        final_scalars = _SCALAR_TAG_RE.findall(region)
+        final_units = _UNIT_TAG_RE.findall(region)
+        final_full = sum(candidate.source == "full_tag" for candidate in final_candidates)
+        final_unit_only = sum(
+            candidate.source == "unit_only_tag" for candidate in final_candidates
+        )
+        if (
+            final_candidates
+            and len(final_scalars) == final_full
+            and len(final_units) == final_full + final_unit_only
+            and _equivalent_measurements(final_parsed)
+            and not _RANGE_RE.search(region)
+        ):
+            return _with_status(final_parsed[-1], "tag_final_declared_valid", "tag"), False
+
+    if len(parsed) == 1 and not parsed[0].status.endswith("_valid"):
+        result = parsed[0]
+    else:
+        result = ParsedMeasurement(None, None, None, "tag_malformed_or_conflicting", "tag")
+
+    placeholder_only = bool(scalar_tags or unit_tags) and all(
+        value.strip().casefold() == "scalar" for value in scalar_tags
+    ) and all(value.strip().casefold() == "distance unit" for value in unit_tags)
+    numeric_scalar_trace = any(
+        _SIGNED_DECIMAL_TEXT_RE.fullmatch(value.strip()) for value in scalar_tags
+    )
+    block_fallback = bool(candidates or numeric_scalar_trace) and not placeholder_only
+    return result, block_fallback
+
+
+def _plain_candidates(text: str) -> list[_MeasurementCandidate]:
+    candidates: list[_MeasurementCandidate] = []
+    for pattern in _PLAIN_PAIR_PATTERNS:
+        for match in pattern.finditer(text):
+            if any(
+                not (match.end() <= candidate.start or match.start() >= candidate.end)
+                for candidate in candidates
+            ):
+                continue
+            candidates.append(
+                _MeasurementCandidate(
+                    match.start(),
+                    match.end(),
+                    match.group("value"),
+                    match.group("unit"),
+                    "plain",
+                )
+            )
+    return sorted(candidates, key=lambda candidate: (candidate.start, candidate.end))
+
+
+def _mask_non_answer_identifiers(text: str) -> str:
+    return _REGION_IDENTIFIER_RE.sub(lambda match: " " * len(match.group(0)), text)
+
+
+def _parse_plain_region(text: str, region_name: str) -> ParsedMeasurement:
+    mode = "fallback"
+    if re.search(r"(?i)(?<![\w.])\d+(?:\.\d*)?[eE][-+]?\d+", text):
+        return ParsedMeasurement(
+            None, None, None, f"fallback_{region_name}_invalid_scalar", mode
+        )
+    if _RANGE_RE.search(text):
+        return ParsedMeasurement(
+            None, None, None, f"fallback_{region_name}_multiple_numbers", mode
+        )
+
+    sanitized = _mask_non_answer_identifiers(text)
+    candidates = _plain_candidates(sanitized)
+    parsed = [
+        _measurement(candidate.value_text, candidate.unit_text, mode=mode)
+        for candidate in candidates
+    ]
+    if candidates and _equivalent_measurements(parsed):
+        unpaired_numbers = [
+            match
+            for match in _NUMBER_TOKEN_RE.finditer(sanitized)
+            if not any(
+                candidate.start <= match.start() and match.end() <= candidate.end
+                for candidate in candidates
+            )
+        ]
+        if unpaired_numbers:
+            return ParsedMeasurement(
+                None, None, None, f"fallback_{region_name}_multiple_numbers", mode
+            )
+        suffix = "equivalent_repeated_valid" if len(parsed) > 1 else "valid"
+        return _with_status(parsed[-1], f"fallback_{region_name}_{suffix}", mode)
+    if len(parsed) == 1:
+        result = parsed[0]
+        return _with_status(
+            result,
+            f"fallback_{region_name}_{result.status.removeprefix('fallback_')}",
+            mode,
+        )
+    if len(parsed) > 1:
+        return ParsedMeasurement(
+            None, None, None, f"fallback_{region_name}_conflicting_pairs", mode
+        )
+
+    numbers = list(_NUMBER_TOKEN_RE.finditer(sanitized))
+    generic_pairs = list(_GENERIC_PAIR_RE.finditer(sanitized))
+    if len(numbers) == 1 and len(generic_pairs) == 1:
+        match = generic_pairs[0]
+        result = _measurement(match.group("value"), match.group("unit"), mode=mode)
+        return _with_status(
+            result,
+            f"fallback_{region_name}_{result.status.removeprefix('fallback_')}",
+            mode,
+        )
+    if len(numbers) != 1:
+        suffix = "missing_numbers" if not numbers else "multiple_numbers"
+    else:
+        suffix = "missing_pairs" if not generic_pairs else "multiple_pairs"
+    return ParsedMeasurement(None, None, None, f"fallback_{region_name}_{suffix}", mode)
 
 
 def parse_measurement(raw_prediction: Any) -> ParsedMeasurement:
     text = str(raw_prediction)
     if not text.strip():
         return ParsedMeasurement(None, None, None, "empty", "none")
-    if _TAG_TRACE_RE.search(text):
-        scalars = _SCALAR_TAG_RE.findall(text)
-        units = _UNIT_TAG_RE.findall(text)
-        if len(scalars) != 1 or len(units) != 1:
-            return ParsedMeasurement(None, None, None, "tag_malformed_or_non_unique", "tag")
-        return _measurement(scalars[0], units[0], mode="tag")
+    tagged, block_fallback = _tag_result(text)
+    if tagged is not None and tagged.centimeters is not None:
+        return tagged
 
-    region, region_name = _fallback_region(text)
-    if not region:
-        return ParsedMeasurement(None, None, None, f"fallback_{region_name}_empty", "fallback")
-    numbers = _NUMBER_TOKEN_RE.findall(region)
-    if len(numbers) != 1:
-        return ParsedMeasurement(
-            None,
-            None,
-            None,
-            f"fallback_{region_name}_{'missing' if not numbers else 'multiple'}_numbers",
-            "fallback",
-        )
-    pairs = _FALLBACK_PAIR_RE.findall(region)
-    if len(pairs) != 1:
-        return ParsedMeasurement(
-            None,
-            None,
-            None,
-            f"fallback_{region_name}_{'missing' if not pairs else 'multiple'}_pairs",
-            "fallback",
-        )
-    number_text, unit_text = pairs[0]
-    if number_text != numbers[0]:
-        return ParsedMeasurement(None, None, None, f"fallback_{region_name}_conflict", "fallback")
-    if any(character in number_text for character in "+-eE"):
-        return ParsedMeasurement(None, None, None, f"fallback_{region_name}_invalid_scalar", "fallback")
-    parsed = _measurement(number_text, unit_text, mode="fallback")
-    return ParsedMeasurement(
-        parsed.value,
-        parsed.unit,
-        parsed.centimeters,
-        f"fallback_{region_name}_{parsed.status.removeprefix('fallback_')}",
-        "fallback",
-    )
+    failures: list[ParsedMeasurement] = []
+    for region_name, region in _terminal_regions(text):
+        parsed = _parse_plain_region(region, region_name)
+        if parsed.status.endswith("_valid") and not block_fallback:
+            return parsed
+        failures.append(parsed)
+
+    if tagged is not None:
+        return tagged
+    if failures:
+        return failures[0]
+    return _parse_plain_region(text.strip(), "whole_response")
 
 
 def parse_legacy_notebook(raw_prediction: Any) -> ParsedMeasurement:
@@ -333,7 +623,6 @@ def _load_and_validate_metadata(
     checks = {
         "metadata.output": (str(Path(metadata.get("output", "")).resolve()), str(prediction_path)),
         "metadata.output_sha256": (metadata.get("output_sha256"), _sha256(prediction_path)),
-        "metadata.scorer_protocol": (metadata.get("scorer_protocol"), SCORER_PROTOCOL),
         "metadata.dataset.fingerprint": (dataset.get("fingerprint"), contract.dataset_fingerprint),
         "metadata.dataset.official_test_size": (dataset.get("official_test_size"), OFFICIAL_TEST_SIZE),
         "metadata.dataset.revision": (dataset.get("revision"), DATASET_REVISION),
@@ -346,6 +635,13 @@ def _load_and_validate_metadata(
     for label, (actual, expected) in checks.items():
         if actual != expected:
             errors.append(f"{label} mismatch: got={actual!r}, expected={expected!r}")
+    declared_scorer_protocol = metadata.get("scorer_protocol")
+    if not inference_metadata_scorer_protocol_is_compatible(declared_scorer_protocol):
+        errors.append(
+            "metadata.scorer_protocol is not compatible with the current Q-Spatial scorer: "
+            f"got={declared_scorer_protocol!r}, "
+            f"allowed={sorted(COMPATIBLE_INFERENCE_SCORER_PROTOCOLS)!r}"
+        )
     return metadata, errors
 
 
@@ -401,6 +697,7 @@ def score_predictions(
             "backend": inference_model.get("backend"),
             "decoding": inference_model.get("decoding"),
             "seed_strategy": inference_model.get("seed_strategy"),
+            "declared_scorer_protocol": metadata.get("scorer_protocol") if metadata else None,
         },
         "num_scored_rows": len(scored),
         **aggregate,
@@ -429,6 +726,13 @@ def score_predictions(
             == set(SCANNET_CANONICAL_TYPES),
             "protocol_consistency": summary["scorer_protocol"] == SCORER_PROTOCOL,
             "inference_metadata_consistency": metadata is not None or not require_metadata,
+            "inference_scorer_protocol_compatible": (
+                metadata is not None
+                and inference_metadata_scorer_protocol_is_compatible(
+                    metadata.get("scorer_protocol")
+                )
+            )
+            or not require_metadata,
         },
         "summary": str(summary_path),
         "generated_at": utc_now(),

@@ -11,8 +11,9 @@ usage() {
 Usage:
   bash scripts/q_spatial/serve_vllm_profile.sh --model PROFILE --gpu-ids IDS --port PORT [--dry-run]
 
-TP=1 profiles require two independently started endpoints for the inference controller.
-This command starts exactly one endpoint and never adopts or terminates an existing service.
+Every profile uses one endpoint. TP=1 binds that endpoint to one GPU; TP=2/4
+uses one tensor-parallel endpoint across exactly TP GPUs. This command never
+adopts or terminates an existing service.
 EOF
 }
 

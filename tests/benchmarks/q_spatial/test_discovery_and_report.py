@@ -15,7 +15,11 @@ from spatial_vlm_eval.benchmarks.q_spatial.data import (
 from spatial_vlm_eval.benchmarks.q_spatial.profiles import PROFILE_SEQUENCE, PROFILES
 from spatial_vlm_eval.benchmarks.q_spatial.report import discover_results, render_markdown
 from spatial_vlm_eval.benchmarks.q_spatial.score_results import discover_candidates
-from spatial_vlm_eval.benchmarks.q_spatial.scorer import RESULT_KIND, SCORER_PROTOCOL
+from spatial_vlm_eval.benchmarks.q_spatial.scorer import (
+    LEGACY_SCORER_PROTOCOL_V1,
+    RESULT_KIND,
+    SCORER_PROTOCOL,
+)
 
 
 def _sha256(path):
@@ -26,7 +30,14 @@ def _metric(correct, total):
     return {"correct": correct, "total": total, "accuracy": correct / total}
 
 
-def write_result(root: Path, profile_key: str, *, run_name=None, correct=True):
+def write_result(
+    root: Path,
+    profile_key: str,
+    *,
+    run_name=None,
+    correct=True,
+    metadata_scorer_protocol=SCORER_PROTOCOL,
+):
     profile = PROFILES[profile_key]
     run = root / (run_name or profile_key)
     predictions = run / "predictions.jsonl"
@@ -39,7 +50,7 @@ def write_result(root: Path, profile_key: str, *, run_name=None, correct=True):
         "output": str(predictions.resolve()),
         "output_sha256": _sha256(predictions),
         "inference_protocol": profile.inference_protocol,
-        "scorer_protocol": SCORER_PROTOCOL,
+        "scorer_protocol": metadata_scorer_protocol,
         "publishable_inference": True,
         "dataset": {
             "revision": DATASET_REVISION,
@@ -113,6 +124,7 @@ def write_result(root: Path, profile_key: str, *, run_name=None, correct=True):
             "inference_protocol": profile.inference_protocol,
             "decoding": profile.decoding,
             "seed_strategy": profile.seed_strategy,
+            "declared_scorer_protocol": metadata_scorer_protocol,
         },
         "num_scored_rows": 271,
         "split_metrics": split_metrics,
@@ -152,14 +164,29 @@ class QSpatialDiscoveryAndReportTest(unittest.TestCase):
     def tearDown(self):
         self.temporary.cleanup()
 
-    def test_directory_scoring_excludes_test_and_shards(self):
+    def test_directory_scoring_excludes_test_gates_archives_and_shards(self):
         write_result(self.root, "qwen3_vl_2b")
-        for relative in ("test_runs/a/predictions.jsonl", "shards/worker-0/predictions.jsonl"):
+        for relative in (
+            "test_runs/a/predictions.jsonl",
+            "test_artifacts/smoke8/predictions.jsonl",
+            "test_artifacts.stale-deadbeef-123/smoke8/predictions.jsonl",
+            "shards/worker-0/predictions.jsonl",
+        ):
             path = self.root / relative
             path.parent.mkdir(parents=True)
             path.write_text("", encoding="utf-8")
         candidates = discover_candidates(self.root)
         self.assertEqual([(item.state, item.predictions.name) for item in candidates], [("complete", "predictions.jsonl")])
+
+    def test_v2_scoring_and_report_accept_v1_inference_declaration(self):
+        write_result(
+            self.root,
+            "qwen3_vl_2b",
+            metadata_scorer_protocol=LEGACY_SCORER_PROTOCOL_V1,
+        )
+        candidates = discover_candidates(self.root)
+        self.assertEqual([item.state for item in candidates], ["complete"])
+        self.assertEqual(len(discover_results(self.root)), 1)
 
     def test_report_is_gated_and_declares_both_completeness_counts(self):
         write_result(self.root, "qwen3_vl_2b", correct=False)
@@ -168,10 +195,37 @@ class QSpatialDiscoveryAndReportTest(unittest.TestCase):
         markdown = render_markdown(results, generated_at="2026-08-04T00:00:00Z")
         self.assertIn("RGB 轨完整度：2/18", markdown)
         self.assertIn("全轨完整度：2/21", markdown)
-        self.assertIn("Input track", markdown)
-        self.assertIn("Comparison group", markdown)
+        self.assertNotIn("Input track", markdown)
+        self.assertNotIn("Comparison group", markdown)
         self.assertIn("**100.00**", markdown)
         self.assertIn("`internvl3_78b`", markdown)
+        self.assertIn("## 严格阈值审计", markdown)
+        self.assertIn("Overall δ≤1.25", markdown)
+        self.assertNotIn("旧 notebook", markdown)
+        self.assertNotIn("主/旧", markdown)
+        self.assertNotIn("解析与严格阈值审计", markdown)
+
+    def test_report_folds_explicit_input_modes_into_model_names(self):
+        for profile_key in (
+            "ssr_rgb",
+            "ssr_native",
+            "spatialbot_rgb",
+            "spatialbot_zoedepth",
+            "hispatial3b_moge2_xyz",
+        ):
+            write_result(self.root, profile_key)
+        markdown = render_markdown(discover_results(self.root))
+        self.assertIn("| SSR（RGB） |", markdown)
+        self.assertIn("| SSR（RGB + DepthPro + MIDI + TOR10） |", markdown)
+        self.assertIn("| SpatialBot-3B（RGB） |", markdown)
+        self.assertIn("| SpatialBot-3B（RGB + ZoeDepth） |", markdown)
+        self.assertIn("| HiSpatial-3B（RGB + MoGe-2 XYZ） |", markdown)
+        self.assertEqual(markdown.count("SSR（RGB）"), 3)
+        self.assertEqual(markdown.count("SSR（RGB + DepthPro + MIDI + TOR10）"), 3)
+        self.assertEqual(markdown.count("SpatialBot-3B（RGB）"), 3)
+        self.assertEqual(markdown.count("SpatialBot-3B（RGB + ZoeDepth）"), 3)
+        self.assertNotIn("Input track", markdown)
+        self.assertNotIn("Comparison group", markdown)
 
     def test_duplicate_or_tampered_publishable_result_fails_closed(self):
         write_result(self.root, "qwen3_vl_2b", run_name="one")

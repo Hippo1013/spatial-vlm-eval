@@ -10,14 +10,15 @@
 |---|---|---|---|
 | MSMU-Bench | official `test`，987 条 | 已实现 input contract、validator、inference 与 scorer | 18 条既有目标 profile 已完成；本阶段告一段落 |
 | CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | contract、23-profile registry、两阶段推理、scorer 与报告已实现 | 22 条轨已通过 full-2638 validator、评分和 publication gates；仅四卡 InternVL3-78B 缺失，报告 22/23（2026-08-06） |
-| Q-Spatial Bench | Q-Spatial-ScanNet 170 + Q-Spatial++ 101，共 271 条 | contract、21-profile registry、两阶段推理、numeric scorer 与报告已实现 | 代码/回归完成；服务器模型 test/full、付费 API 与评分尚未开始（2026-08-06） |
-| SPBench-SI | SPBench 单图版本；不包含 SPBench-MV | 尚未实现 | Q-Spatial 链路实跑验收后的下一候选 |
+| Q-Spatial Bench | Q-Spatial-ScanNet 170 + Q-Spatial++ 101，共 271 条 | contract、21-profile registry、两阶段推理、numeric scorer 与报告已实现 | 除 TP=4 blocked 的 InternVL3-78B 外，20 轨 test/full-271、正式 validator、provenance、当前 v2 scorer 与 publication gates 已通过；报告 20/21（2026-08-07） |
+| SPBench-SI | official 单图 `test`，1009 条；不包含 SPBench-MV | contract、21-profile registry、两阶段推理、双 scorer 与报告已实现 | 除固定 TP=4 的 InternVL3-78B 外，20 轨当前 test gate 已通过；full 尚无终态证据，未评分或发布（2026-08-07） |
 
 “尚未实现”表示仓库中还没有可发布的 benchmark contract、validator、scorer protocol、运行入口或
 结果目录，不能因为数据已经下载就宣称可以正式评测。CV-Bench 的“已实现”只指代码、协议和本地
 验证链路，不表示 23 条服务器结果已经产生；状态必须以 test gate、validator、metadata、summary 和
 publication gates 为准。Q-Spatial 的“已实现”同样不表示已有模型结果；服务器状态必须读取其
-`test_gate.json`、validator、metadata、summary 与 publication gates。SPBench-SI 仍无可发布链路。
+`test_gate.json`、validator、metadata、summary 与 publication gates。SPBench-SI 的“已实现”只表示
+本地链路和协议就绪；当前另有 20 条非 78B 轨 test gate，但没有 full/评分/发布终态结论。
 
 ## 目标模型覆盖
 
@@ -71,6 +72,23 @@ map 或真实点云。最终 fair/native 合同仍须按各 benchmark 的官方�
 | CV-Bench | [cambrian-mllm/cambrian](https://github.com/cambrian-mllm/cambrian) | [nyu-visionx/CV-Bench](https://huggingface.co/datasets/nyu-visionx/CV-Bench) |
 | SPBench-SI | [ZJU-REAL/SpatialLadder](https://github.com/ZJU-REAL/SpatialLadder) | [hongxingli/SPBench](https://huggingface.co/datasets/hongxingli/SPBench) |
 
+## SPBench-SI 已锁定实现
+
+SPBench-SI 使用 SpatialLadder commit `7a0d2ee85c28728835300310a349a53a15967f2e` 与数据 revision
+`03611025a4e6032c558117c0e86b76c8b084c305`。单图 `test` 固定 1,009 题、524 张 ZIP 内 JPEG；loader
+直接读取 ZIP，并验证 24,423-byte Parquet 和 49,171,512-byte archive 的锁定 SHA、引用全集和全部
+图片可解码。SPBench-MV 不在本阶段范围内。
+
+21 条轨中 18 条 RGB、3 条同源派生 depth/XYZ。所有轨使用官方 `default/direct` prompt，不加入
+thinking 或 Mental-3D。主 scorer 使用原始十阈值严格 MRA 与四题型宏平均；当前 SpatialLadder 代码的
+提取、inclusive 边界和聚合另存为独立 compatibility audit。双卡计划只包含 20 条，固定 TP=4 的
+InternVL3-78B 保留四卡入口；20/21 报告必须明确标为暂行且只能缺该轨。
+
+截至 2026-08-07，仓库实现与本地回归已完成，20 条非 78B 轨已通过当前服务器 test gate；full 批次
+尚未形成终态证据，未启动正式评分或发布。详细协议见
+[SPBench-SI canonical protocol](benchmarks/spbench_si/protocol.md)，执行
+边界见 [SPBench-SI 两阶段 runbook](spbench-si-two-stage-runbook.md)。
+
 ## Q-Spatial 已锁定实现
 
 Q-Spatial 使用官方代码 commit `ebe8137eae9781aaf7e29691ce8bc68b2a498a83` 与数据 revision
@@ -79,9 +97,12 @@ Q-Spatial++ `170..270`；21 轨中 18 条是 RGB，3 条是 RGB 派生 depth/XYZ
 LLaVA 格式修复、red/blue canary、smoke8、逐请求 seed、四卡 78B 门禁、robust numeric scorer、
 split-macro Overall 与报告 provenance 都已进入 registry/validator/tests。
 
-截至 2026-08-06 已完成仓库实现与 285 项全量回归，尚未在服务器启动任何 Q-Spatial 模型或付费 API 请求，因而
-没有 test/full/评分结果。详细协议见 [Q-Spatial canonical protocol](benchmarks/q_spatial/protocol.md)，
-执行顺序见 [Q-Spatial 两阶段 runbook](q-spatial-two-stage-runbook.md)。
+截至 2026-08-07，除固定 TP=4 blocked 的 InternVL3-78B 外，其余 20 轨均已完成服务器 test gate、
+full-271、正式 validator、完整 provenance、当前 v2 scorer 评分与 publication gates；全局报告为
+20/21，唯一缺失 InternVL3-78B。逐轨实时状态仍须读取服务器 validator、metadata、summary、
+publication gates 与批次 `status.tsv`。详细协议见
+[Q-Spatial canonical protocol](benchmarks/q_spatial/protocol.md)，执行顺序见
+[Q-Spatial 两阶段 runbook](q-spatial-two-stage-runbook.md)。
 
 ## CV-Bench 已锁定实现
 

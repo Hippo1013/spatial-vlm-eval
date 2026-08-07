@@ -21,6 +21,14 @@ from spatial_vlm_eval.benchmarks.q_spatial.profiles import (
 from spatial_vlm_eval.benchmarks.q_spatial.scorer import (
     SCORER_PROTOCOL as QSPATIAL_SCORER_PROTOCOL,
 )
+from spatial_vlm_eval.benchmarks.spbench_si.data import DATASET_REVISION as SPBENCH_SI_DATASET_REVISION
+from spatial_vlm_eval.benchmarks.spbench_si.profiles import (
+    PROFILE_SEQUENCE as SPBENCH_SI_PROFILE_SEQUENCE,
+)
+from spatial_vlm_eval.benchmarks.spbench_si.scorer import (
+    AUDIT_SCORER_PROTOCOL as SPBENCH_SI_AUDIT_SCORER_PROTOCOL,
+    SCORER_PROTOCOL as SPBENCH_SI_SCORER_PROTOCOL,
+)
 from spatial_vlm_eval.models.profiles import CURRENT_TARGET_PROFILE_KEYS, PROFILES
 
 
@@ -156,11 +164,19 @@ class DocumentationConsistencyTest(unittest.TestCase):
 
         qspatial_section = matrix.split(
             "## Q-Spatial 当前 21 条目标 inference profile", 1
-        )[1].split("## MSMU 当前 18 条已完成目标 inference profile", 1)[0]
+        )[1].split("## SPBench-SI 当前 21 条目标 inference profile", 1)[0]
         documented_qspatial = re.findall(
             r"^\| `([^`]+)` \|", qspatial_section, flags=re.MULTILINE
         )
         self.assertEqual(documented_qspatial, list(QSPATIAL_PROFILE_SEQUENCE))
+
+        spbench_section = matrix.split(
+            "## SPBench-SI 当前 21 条目标 inference profile", 1
+        )[1].split("## MSMU 当前 18 条已完成目标 inference profile", 1)[0]
+        documented_spbench = re.findall(
+            r"^\| `([^`]+)` \|", spbench_section, flags=re.MULTILINE
+        )
+        self.assertEqual(documented_spbench, list(SPBENCH_SI_PROFILE_SEQUENCE))
 
     def test_cross_benchmark_scope_and_planned_sota_models_are_explicit(self) -> None:
         scope = (self.docs / "evaluation-scope.md").read_text(encoding="utf-8")
@@ -250,6 +266,15 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("δ≤2", qspatial_protocol)
         self.assertIn("170/101", qspatial_protocol.replace(" ", ""))
 
+        spbench_protocol = (
+            self.docs / "benchmarks" / "spbench_si" / "protocol.md"
+        ).read_text(encoding="utf-8")
+        self.assertIn(SPBENCH_SI_SCORER_PROTOCOL, spbench_protocol)
+        self.assertIn(SPBENCH_SI_AUDIT_SCORER_PROTOCOL, spbench_protocol)
+        self.assertIn(SPBENCH_SI_DATASET_REVISION, spbench_protocol)
+        self.assertIn("1,009", spbench_protocol)
+        self.assertIn("strict", SPBENCH_SI_SCORER_PROTOCOL)
+
     def test_cvbench_runbook_and_config_match_public_entrypoints(self) -> None:
         runbook = (self.docs / "cv-bench-two-stage-runbook.md").read_text(
             encoding="utf-8"
@@ -286,11 +311,19 @@ class DocumentationConsistencyTest(unittest.TestCase):
     def test_qspatial_runbook_config_and_registry_match_public_entrypoints(self) -> None:
         runbook = (self.docs / "q-spatial-two-stage-runbook.md").read_text(encoding="utf-8")
         commands = (self.docs / "q-spatial-commands.md").read_text(encoding="utf-8")
+        internvl78 = (
+            self.docs / "q-spatial-internvl3-78b-evaluation.md"
+        ).read_text(encoding="utf-8")
         config = (self.repository / "configs" / "q-spatial-server.env.example").read_text(encoding="utf-8")
         readme = (self.repository / "README.md").read_text(encoding="utf-8")
         for required in [
             "run_inference.sh --stage test",
             "run_inference.sh --stage full",
+            "run_scheduled_batch.sh --list",
+            "run_scheduled_batch.sh --check",
+            "run_scheduled_batch.sh --dry-run",
+            "--without-internvl78 --with-paid-api",
+            "watch_scheduled_health.sh --lane",
             "score_results.sh --predictions",
             "build_results_report.sh",
             "21",
@@ -307,6 +340,61 @@ class DocumentationConsistencyTest(unittest.TestCase):
         ]:
             self.assertIn(required, config)
         self.assertIn("QSPATIAL_OUTPUT_ROOT", readme)
+        self.assertIn("QSPATIAL_API_CAPACITY_CANDIDATES=8,4,2,1", config)
+        self.assertIn("QSPATIAL_QWEN3_VL_8B_GPU_IDS=0", config)
+        self.assertNotIn("QSPATIAL_QWEN3_VL_8B_GPU_IDS=0,1", config)
+        self.assertIn("run_scheduled_batch.sh --dry-run", readme)
+        for document in (runbook, commands, internvl78, readme):
+            with self.subTest(document=document[:40]):
+                self.assertIn("run_internvl3_78b_evaluation.sh", document)
+        self.assertIn("QSPATIAL_INTERNVL3_78B_PORT=18101", config)
+        self.assertIn("只评分 internvl3_78b", internvl78)
+        self.assertIn("原有报告原地增加 InternVL3-78B", internvl78)
+        self.assertIn("当前 `SCORER_PROTOCOL`", internvl78)
+        self.assertIn("21/21", internvl78)
+
+    def test_spbench_runbook_config_and_registry_match_public_entrypoints(self) -> None:
+        runbook = (self.docs / "spbench-si-two-stage-runbook.md").read_text(encoding="utf-8")
+        commands = (self.docs / "spbench-si-commands.md").read_text(encoding="utf-8")
+        internvl78 = (self.docs / "spbench-si-internvl3-78b-evaluation.md").read_text(encoding="utf-8")
+        config = (self.repository / "configs" / "spbench-si-server.env.example").read_text(encoding="utf-8")
+        readme = (self.repository / "README.md").read_text(encoding="utf-8")
+        for required in [
+            "run_inference.sh --stage test",
+            "run_inference.sh --stage full",
+            "run_scheduled_batch.sh --list",
+            "run_scheduled_batch.sh --check",
+            "run_scheduled_batch.sh --dry-run",
+            "--without-internvl78 --with-paid-api",
+            "watch_scheduled_health.sh",
+            "score_results.sh --predictions",
+            "build_results_report.sh",
+            "20/21",
+            "21/21",
+        ]:
+            with self.subTest(required=required):
+                self.assertIn(required, runbook)
+                self.assertIn(required, commands if required != "21/21" else runbook)
+        for required in [
+            "SPBENCH_SI_PARQUET",
+            "SPBENCH_SI_IMAGES_ARCHIVE",
+            "SPBENCH_SI_OUTPUT_ROOT",
+            "/media/datasets/lihaoran",
+            "/media/datasets/tangzecong",
+        ]:
+            self.assertIn(required, config)
+        self.assertIn("SPBENCH_SI_OUTPUT_ROOT", readme)
+        self.assertIn("SPBENCH_SI_API_CAPACITY_CANDIDATES=8,4,2,1", config)
+        self.assertIn("SPBENCH_SI_QWEN3_VL_8B_GPU_IDS=0", config)
+        self.assertIn("SPBENCH_SI_QWEN3_VL_8B_BASE_URLS=http://127.0.0.1:18101/v1", config)
+        for document in (runbook, commands, internvl78, readme):
+            with self.subTest(document=document[:40]):
+                self.assertIn("run_internvl3_78b_evaluation.sh", document)
+        self.assertIn("SPBENCH_SI_INTERNVL3_78B_GPU_IDS=0,1,2,3", config)
+        self.assertIn("只评分 internvl3_78b", internvl78)
+        self.assertIn("spbench-si-result.md", internvl78)
+        self.assertIn("21/21", internvl78)
+        self.assertIn("常见问题", internvl78)
 
     def test_results_report_uses_one_protocol_and_concise_chinese_table(self) -> None:
         architecture = (self.docs / "architecture.md").read_text(encoding="utf-8")

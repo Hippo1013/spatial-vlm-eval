@@ -26,6 +26,83 @@
 
 <!-- 按模板在此处下方插入条目，最新条目在最上方。 -->
 
+### 2026-08-07 · [Q-Spatial/scoring] smoke8 产物被误纳入正式候选
+- 场景：对 20 条 full-271 结果运行目录驱动 v2 评分预检。
+- 报错：`num_candidates=50, num_pending=20`，30 条 `test_artifacts*/smoke8` 被列为 invalid。
+- 原因：发现器只排除了旧 `test_runs/` 命名，未排除当前 test gate 目录及其 stale 归档。
+- 处理：同时排除 `test_artifacts/` 与 `test_artifacts.stale-*`，并增加真实目录命名回归。
+- 验证：服务器预检为 20 candidates/0 invalid；评分后 20 complete、publication gates 与报告 20/21 通过。
+
+### 2026-08-07 · [SPBench-SI/scheduler] server env 覆盖逐轨 GPU 与上下文
+- 场景：双卡 test 调度切换专用模型与 LLaVA-NeXT profile。
+- 报错：专用模型错误占用 GPU 0；LLaVA 仍收到全局 `max_model_len=32768`。
+- 原因：子脚本再次 source server env，覆盖调度器传入的 `CUDA_VISIBLE_DEVICES` 与逐轨 4096 上限。
+- 处理：`_env.sh` 在 source 前保存并在其后恢复已显式传入的逐 job 值。
+- 验证：环境覆盖回归通过；20 条非 78B 轨的当前绑定 test gate 全部 PASS。
+
+### 2026-08-07 · [SPBench-SI/SpatialLadder] 通用环境缺少 FlashAttention/qwen-vl-utils 组合
+- 场景：SpatialLadder 官方 BF16/FlashAttention2 smoke8，单卡 A800。
+- 报错：既有通用推理环境不能同时导入锁定 runner 所需依赖。
+- 原因：服务器上没有满足该官方组合的完整现成环境。
+- 处理：在 `/media/datasets/lihaoran/envs/` 建立复用 torch/flash-attn 的隔离 overlay，仅补 qwen-vl-utils。
+- 验证：processor/input audit、red/blue canary、smoke8 与当前 test gate 全部 PASS。
+
+### 2026-08-07 · [SPBench-SI/scheduler] 端口 connect 探针误判可复用
+- 场景：vLLM 换模清理阶段等待监听端口释放。
+- 报错：旧服务仍监听时清理被记为成功，下一条轨启动后冲突。
+- 原因：availability 探针用 connect 失败代表可用，没有验证控制器能 bind。
+- 处理：释放门禁改为实际 bind，readiness 单独使用 listener connect，并在返回前记录清理失败。
+- 验证：端口、readiness、失败事件回归通过；20 条目标 test gate 全部通过独立重算校验。
+
+### 2026-08-06 · [Q-Spatial/3DThinker] Q-Spatial++ 大图导致视觉 attention OOM
+- 场景：3DThinker RGB smoke8 的 Q-Spatial++ 索引 `205/247/250`，单卡 A800 80GB。
+- 报错：Qwen2.5-VL SDPA 尝试分配约 230.66 GiB，重试后三条仍缺失。
+- 原因：checkpoint processor 未绑定像素上限，原始大图产生不可承受的视觉 token attention。
+- 处理：Q-Spatial 私有配置显式绑定 `min_pixels=12544`、`max_pixels=401408`；仍只传同一张 RGB。
+- 验证：配置解析/metadata provenance 回归已通过；服务器需重跑 3DThinker red/blue 与 smoke8。
+
+### 2026-08-06 · [Q-Spatial/LLaVA] 全局 32768 超出 checkpoint 上下文上限
+- 场景：修复 Qwen3-VL 长图 smoke 后，调度器切换到 LLaVA-NeXT-Yi-34B。
+- 报错：vLLM 拒绝 `max_model_len=32768`，checkpoint `max_position_embeddings=4096`。
+- 原因：Qwen3-VL 所需的服务上下文被作为所有 vLLM profile 的统一值。
+- 处理：调度器对 Yi/Mistral 两条 LLaVA-NeXT 轨显式覆盖 4096；该值继续进入 test binding。
+- 验证：回归测试证明两条 LLaVA 使用 4096、Qwen3-VL-32B 保留 32768；服务器需重跑对应 test gate。
+
+### 2026-08-06 · [Q-Spatial/Qwen3-VL] 4096 服务上下文装不下图像 token
+- 场景：Qwen3-VL-32B Q-Spatial smoke8，锁定图像处理与 1024 输出预算。
+- 报错：`Input length (11954) exceeds model's maximum context length (4096)`。
+- 原因：私有服务器配置把 vLLM `max_model_len` 降到 4096，短于图像 token 化后的合法输入。
+- 处理：恢复 32768 服务上下文，并把该值加入 test binding，旧 4096 gate 自动失效。
+- 验证：配置/绑定回归锁定正整数 32768；服务器需重新通过 Qwen3-VL red/blue 与 smoke8。
+
+### 2026-08-06 · [Q-Spatial/scheduler] vLLM 退出后端口短暂晚于 GPU 释放
+- 场景：test-only 调度回收 InternVL vLLM 后立即在同一 lane/端口换下一个模型。
+- 报错：GPU/进程组已释放，但下一轨瞬时得到 `port 18101 is occupied`。
+- 原因：vLLM 监听 socket 的释放短暂晚于自有进程组退出与 GPU 清空。
+- 处理：自有服务停止后有限等待端口可 bind；超时仍 fail closed，绝不接管未知 listener。
+- 验证：回归覆盖端口从 occupied 到 available 的等待，启动器原有非接管检查保持不变。
+
+### 2026-08-06 · [Q-Spatial/test gate] binding 更新后旧 smoke journal 阻止重测
+- 场景：adapter digest 更新使已完成 test gate 失效，调度器在同一 profile 目录自动重跑 test。
+- 报错：`Journal run signature mismatch ... use a separate output directory`。
+- 原因：旧 gate 正确失效，但旧 `test_artifacts/smoke8` journal 仍占用固定 test 路径。
+- 处理：重测前把旧 artifacts/gate 无损轮换为含旧 binding digest 的 `stale-*` 归档，再建立新 signature。
+- 验证：回归证明旧 journal/gate 均保留、新 test 路径为空且不跨 signature 恢复。
+
+### 2026-08-06 · [Q-Spatial/LLaVA] vLLM 拒绝 assistant-prefill 第二阶段
+- 场景：LLaVA-NeXT 官方两阶段格式修复的第二次请求，vLLM 0.19 assistant continuation。
+- 报错：`continue_final_message and add_generation_prompt are not compatible`。
+- 原因：请求启用 continuation 时未显式关闭 vLLM 默认的 generation prompt。
+- 处理：第二阶段 payload 固定 `continue_final_message=true` 且 `add_generation_prompt=false`。
+- 验证：payload 回归锁定两个互补字段；服务器需重新通过 LLaVA red/blue 与 smoke8 gate。
+
+### 2026-08-06 · [Q-Spatial/scheduler] vLLM 换模等待已退出的 zombie group leader
+- 场景：双卡/API test-only 调度完成一个 vLLM profile 后回收自有服务并准备换模。
+- 报错：GPU 已释放且 vLLM 为 `<defunct>`，lane 仍等待完整的 stop timeout。
+- 原因：进程组存活探针早于 `Popen.wait/poll`，未先回收已退出的直属子进程。
+- 处理：owned-group 等待循环主动 `poll()` 回收 group leader，再判断进程组是否仍存活。
+- 验证：回归测试证明只向记录的进程组发信号，并在等待循环调用 `poll()`。
+
 ### 2026-08-04 · [CV-Bench/vLLM] Yi-34B 长尾请求连续超时导致 full 缺两条
 - 场景：Yi-34B TP=2、并发 32、官方 greedy/512 配置下运行 full-2638。
 - 报错：`Inference incomplete after retries; missing 2 indices: [491, 501]`。

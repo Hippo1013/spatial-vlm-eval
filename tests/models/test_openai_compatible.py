@@ -77,6 +77,19 @@ class OpenAICompatibleContractTest(unittest.TestCase):
         self.assertNotIn("top_k", legacy)
         self.assertNotIn("presence_penalty", legacy)
 
+    def test_vllm_assistant_prefill_disables_generation_prompt(self):
+        adapter = self.adapter("llava_next_mistral_7b", "vllm")
+        payload = adapter.request_payload(
+            model_input(),
+            messages=[
+                {"role": "user", "content": "question"},
+                {"role": "assistant", "content": "partial answer"},
+            ],
+            continue_final_message=True,
+        )
+        self.assertTrue(payload["continue_final_message"])
+        self.assertFalse(payload["add_generation_prompt"])
+
     def test_http_headers_request_json_and_openrouter_metadata(self):
         adapter = self.adapter("gpt5_openrouter_non_zdr", "openrouter")
         headers = adapter._headers()

@@ -443,6 +443,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             if self.backend != "vllm":
                 raise ValueError("Assistant-prefill continuation is only supported for vLLM")
             payload["continue_final_message"] = True
+            payload["add_generation_prompt"] = False
         if self.backend == "openrouter":
             payload["provider"] = self._openrouter_provider_policy()
         return payload
