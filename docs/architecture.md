@@ -160,6 +160,12 @@ SPBench-SI 的 `run_internvl3_78b_evaluation.sh` 沿用同一 canonical 路径�
 进程组；端口、GPU 或运行锁被占用时 fail closed。正式 prediction/score/report 不复制到模型专属根，
 编排日志仅位于输出根 `_single_model_evaluation/logs/`。
 
+`spatial_vlm_eval.orchestration.internvl3_78b_three_bench` 是唯一跨 benchmark 的 78B 编排层：它断言 Q-Spatial、
+SPBench-SI、CV-Bench 三个 profile 共享同一 model/revision/served name/TP/processor family，只启动一次
+BF16 TP=4 vLLM，并固定按 Q → SP → CV 调用各 benchmark 的公开 shell 入口。它不导入或复制 scorer
+算法；每项 validator 通过后启动该 benchmark 自己的 score/report worker。全局锁加三个 benchmark
+既有批次/单模型锁阻止同根并发写入，进程回收只面向 controller 记录的自有进程组。
+
 阶段三串行调度器只编排 inference 与完整 validator，不复制模型或 benchmark 逻辑。它在独立 session/
 process group 中启动每个模型，使用 fsync journal 的文件活动做停滞 watchdog，只终止自己记录的
 process group，并在进入下一条轨前等待相应 GPU 无 compute process。独占锁、同 commit 完成标记和

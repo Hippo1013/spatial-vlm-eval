@@ -8,6 +8,10 @@ test gate、full-271、validator、精确单轨评分，并把原有 `q-spatial-
 当前完整 binding，评分目录与报告直接读取当前 `SCORER_PROTOCOL`。已有 prediction 只有在 inference、
 scorer 声明、dataset、revision、binding、gate 和 artifact hash 全部仍为当前值时才可复用。
 
+该 profile 的 served name 已统一为 `internvl3-78b-three-bench`。若还要补齐 SPBench-SI 与 CV-Bench，
+优先按[三 Benchmark 单次 vLLM 手册](internvl3-78b-three-bench-evaluation.md)共享一次模型加载；本页的
+单 benchmark 入口仍可独立使用并写入同一 Q-Spatial canonical 路径。
+
 ## 1. 迁移准备
 
 先把当前仓库和已有 20 条正式结果完整同步到四卡服务器。`QSPATIAL_OUTPUT_ROOT` 必须指向这份现有

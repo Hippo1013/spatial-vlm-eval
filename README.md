@@ -72,6 +72,7 @@ src/spatial_vlm_eval/
 ├── benchmarks/cv_bench/      # 2638 条合同、23-profile registry、推理/评分/报告
 ├── benchmarks/q_spatial/     # 271 条合同、21-profile registry、numeric scorer/报告
 ├── benchmarks/spbench_si/    # 1009 条合同、21-profile registry、MRA + upstream audit
+├── orchestration/            # 跨 benchmark 控制器；不承载 benchmark 评分逻辑
 └── models/
     ├── common/               # 输入审计、journal、resume、原子 finalization
     ├── openai_compatible/    # OpenRouter/OpenAI/Google/vLLM
@@ -86,6 +87,7 @@ scripts/msmu/                 # 环境、GPU preflight、服务与 pipeline 编�
 scripts/cv_bench/             # 两阶段推理、目录驱动评分和报告入口
 scripts/q_spatial/            # Q-Spatial test/full、评分、报告与 vLLM 入口
 scripts/spbench_si/            # SPBench-SI test/full、双卡调度、双 scorer 与报告入口
+scripts/internvl3_78b/         # 三 benchmark 共用一次四卡 78B vLLM 的补测入口
 tests/                        # 协议不变量和 bug 回归
 docs/                         # 文档地图、canonical 协议、runbook、ADR 与 troubleshooting
 CHANGELOG.md                  # 影响结果、行为或操作方式的语义变化
@@ -123,6 +125,24 @@ python -m pip freeze > environment-manifests/ENV-NAME.pip-freeze.txt
 ```
 
 ## 最短运行路径
+
+### InternVL3-78B 三 Benchmark 单次 vLLM 补测
+
+四卡服务器可让 Q-Spatial、SPBench-SI、CV-Bench 共用一次 78B 模型加载；原有三个单 benchmark 入口
+仍可独立使用。将[公共配置模板](configs/internvl3-78b-three-bench.env.example)合并到一个未跟踪环境文件，
+先执行只读检查：
+
+```bash
+export INTERNVL3_78B_THREE_BENCH_ENV_FILE=/absolute/path/to/untracked-three-bench.env
+bash scripts/internvl3_78b/run_three_bench_evaluation.sh --dry-run
+bash scripts/internvl3_78b/run_three_bench_evaluation.sh --status
+bash scripts/internvl3_78b/run_three_bench_evaluation.sh --check
+```
+
+无参数命令会固定按 Q-Spatial 271 → SPBench-SI 1009 → CV-Bench 2638 串行推理，并让已通过
+validator 的 benchmark 在后台使用自己的 scorer/report 发布。两卡服务器的 `--check` 应返回资源阻塞；
+无参数正式运行必须等四张 80GB GPU 可用并再次获得推理、评分授权。恢复、锁和失败隔离规则见
+[三 Benchmark 单次 vLLM 补测手册](docs/internvl3-78b-three-bench-evaluation.md)。
 
 ### CV-Bench
 

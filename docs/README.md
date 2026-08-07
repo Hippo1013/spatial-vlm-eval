@@ -17,6 +17,7 @@
 | CV-Bench 23 条目标轨及顺序 | `benchmarks.cv_bench.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 CV-Bench profile](model-matrix.md#cv-bench-当前-23-条目标-inference-profile) |
 | Q-Spatial 21 条目标轨及顺序 | `benchmarks.q_spatial.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 Q-Spatial profile](model-matrix.md#q-spatial-当前-21-条目标-inference-profile) |
 | SPBench-SI 21 条目标轨及顺序 | `benchmarks.spbench_si.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 SPBench-SI profile](model-matrix.md#spbench-si-当前-21-条目标-inference-profile) |
+| InternVL3-78B 三 benchmark 共享服务编排 | `orchestration.internvl3_78b_three_bench` / `scripts/internvl3_78b/` | [三 Benchmark 单次 vLLM 补测](internvl3-78b-three-bench-evaluation.md) |
 | 阶段三默认/Qwen3 补测轨与顺序 | `run_stage3_serial_inference.sh --list` / `--qwen3 --list` | [阶段三 runbook](msmu-stage3-full-eval.md) |
 | 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata、`summary.json` 和 publication gates | 模型矩阵只保存注明日期的已验证快照 |
 | CLI、环境变量与输出布局 | 脚本 `--help`、`configs/*server.env.example` | 对应 runbook |
@@ -70,6 +71,8 @@
 
 ### 运行手册
 
+- [InternVL3-78B 三 Benchmark 单次 vLLM 补测](internvl3-78b-three-bench-evaluation.md)：只加载一次
+  四卡 vLLM，固定 Q-Spatial → SPBench-SI → CV-Bench 顺序并复用各自 validator/scorer/report。
 - [CV-Bench 简明运行指令](cv-bench-commands.md)：操作者直接复制的 test/full/评分/汇总命令。
 - [CV-Bench 两阶段 runbook](cv-bench-two-stage-runbook.md)：test gate、full-2638、目录评分与报告命令。
 - [CV-Bench InternVL3-78B 一键评测](cv-bench-internvl3-78b-evaluation.md)：四卡 TP=4 的 test/full、

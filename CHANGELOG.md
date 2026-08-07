@@ -7,6 +7,10 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 增加 InternVL3-78B 三 benchmark 单次 vLLM 补测入口：三个 profile 统一 served name，固定 vLLM
+  0.19.0/BF16/TP=4/四卡/32768 上下文，按 Q-Spatial 271 → SPBench-SI 1009 → CV-Bench 2638 串行
+  推理；每项 validator 通过后并行调用其现有 scorer/report，支持严格 provenance 恢复、全局与 benchmark
+  锁、评分故障隔离、推理 fail-fast 和仅清理自有进程组。SPBench-SI scheduler 同步补齐输出根互斥锁。
 - 增加 Q-Spatial InternVL3-78B 独立四卡补测入口：固定 BF16/TP=4，按当前 registry/binding/scorer
   protocol 顺序执行 test/full-271、validator、精确单轨评分，并在原 `QSPATIAL_OUTPUT_ROOT` 中把既有
   `q-spatial-result.md` 原地重建为 21/21；提供 check/status/dry-run、严格恢复门禁和内置迁移 FAQ。

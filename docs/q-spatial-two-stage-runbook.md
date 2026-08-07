@@ -152,6 +152,10 @@ bash scripts/q_spatial/run_internvl3_78b_evaluation.sh
 `_single_model_evaluation/logs/`。完整迁移、burn、恢复和验收见
 [InternVL3-78B 四卡补测](q-spatial-internvl3-78b-evaluation.md)。
 
+若还要同时补齐 SPBench-SI 和 CV-Bench，可用
+[三 Benchmark 单次 vLLM 入口](internvl3-78b-three-bench-evaluation.md)共享一次模型加载；原单 benchmark
+入口仍可独立运行。两种入口使用同一 served name、同一 Q-Spatial canonical 结果路径和互斥锁。
+
 ## 7. 评分与报告
 
 ```bash

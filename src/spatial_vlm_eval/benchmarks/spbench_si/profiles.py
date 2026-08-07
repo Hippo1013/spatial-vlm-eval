@@ -198,7 +198,7 @@ _GENERAL = [
     _general(
         "internvl3_78b", "InternVL3-78B", "internvl3", "OpenGVLab/InternVL3-78B-hf",
         "3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356", model_path_env="INTERNVL3_78B_MODEL",
-        served_model_name="internvl3-78b-spbench-si", processor_family="internvl3", tp=4,
+        served_model_name="internvl3-78b-three-bench", processor_family="internvl3", tp=4,
         min_free_gpu_mib=76_000,
     ),
     _general(

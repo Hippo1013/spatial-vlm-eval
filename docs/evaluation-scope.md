@@ -84,7 +84,7 @@ thinking 或 Mental-3D。主 scorer 使用原始十阈值严格 MRA 与四题型
 提取、inclusive 边界和聚合另存为独立 compatibility audit。双卡计划只包含 20 条，固定 TP=4 的
 InternVL3-78B 保留四卡入口；20/21 报告必须明确标为暂行且只能缺该轨。
 
-截至 2026-08-07，仓库实现与本地回归已完成，20 条非 78B 轨已通过当前服务器 test gate；full 批次
+截至 2026-08-07，代码/回归完成，20 条非 78B 轨已通过当前服务器 test gate；full 批次
 尚未形成终态证据，未启动正式评分或发布。详细协议见
 [SPBench-SI canonical protocol](benchmarks/spbench_si/protocol.md)，执行
 边界见 [SPBench-SI 两阶段 runbook](spbench-si-two-stage-runbook.md)。

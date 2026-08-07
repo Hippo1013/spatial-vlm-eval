@@ -396,6 +396,41 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("21/21", internvl78)
         self.assertIn("常见问题", internvl78)
 
+    def test_three_benchmark_internvl78_entrypoint_is_documented(self) -> None:
+        runbook = (
+            self.docs / "internvl3-78b-three-bench-evaluation.md"
+        ).read_text(encoding="utf-8")
+        config = (
+            self.repository / "configs" / "internvl3-78b-three-bench.env.example"
+        ).read_text(encoding="utf-8")
+        readme = (self.repository / "README.md").read_text(encoding="utf-8")
+        architecture = (self.docs / "architecture.md").read_text(encoding="utf-8")
+        for required in [
+            "run_three_bench_evaluation.sh --check",
+            "run_three_bench_evaluation.sh --status",
+            "run_three_bench_evaluation.sh --dry-run",
+            "Q-Spatial 271",
+            "SPBench-SI 1009",
+            "CV-Bench 2638",
+            "internvl3-78b-three-bench",
+            "vLLM `0.19.0`",
+            "退出 `4`",
+        ]:
+            with self.subTest(required=required):
+                self.assertIn(required, runbook)
+        for required in [
+            "LATENT_PYTHON",
+            "INTERNVL3_78B_THREE_BENCH_GPU_IDS=0,1,2,3",
+            "INTERNVL3_78B_THREE_BENCH_PORT=18103",
+            "INTERNVL3_78B_THREE_BENCH_CONTROL_ROOT",
+            "CVBENCH_OUTPUT_ROOT",
+            "QSPATIAL_OUTPUT_ROOT",
+            "SPBENCH_SI_OUTPUT_ROOT",
+        ]:
+            self.assertIn(required, config)
+        self.assertIn("run_three_bench_evaluation.sh --check", readme)
+        self.assertIn("orchestration.internvl3_78b_three_bench", architecture)
+
     def test_results_report_uses_one_protocol_and_concise_chinese_table(self) -> None:
         architecture = (self.docs / "architecture.md").read_text(encoding="utf-8")
         runbook = (

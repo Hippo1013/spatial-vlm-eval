@@ -115,6 +115,10 @@ bash scripts/spbench_si/run_inference.sh --stage full --model internvl3_78b
 手工模式下服务和推理应在分离的受控 session 中运行；端口、endpoint、TP、GPU 与 revision 必须进入
 同一 gate。全链路入口不会停止 burn 或未知任务，资源忙时在模型加载前 fail closed。
 
+若还要同时补齐 Q-Spatial 和 CV-Bench，可改用
+[三 Benchmark 单次 vLLM 入口](internvl3-78b-three-bench-evaluation.md)共享一次模型加载。原单 benchmark
+入口仍保留；SPBench-SI scheduler、单模型入口和三 benchmark 入口共同竞争输出根锁，不能并发写入。
+
 ## 5. 评分与报告
 
 正式评分需再取得授权。先只读检查候选：

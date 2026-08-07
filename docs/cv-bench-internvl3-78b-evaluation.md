@@ -3,6 +3,10 @@
 本页用于用四张 80GB GPU 补齐 `internvl3_78b`。入口自动完成 test gate、full-2638、独立校验、
 精确单轨评分和原有全局报告重建。
 
+该 profile 的 served name 已统一为 `internvl3-78b-three-bench`。若还要补齐 Q-Spatial 与 SPBench-SI，
+优先按[三 Benchmark 单次 vLLM 手册](internvl3-78b-three-bench-evaluation.md)共享一次模型加载；本页的
+单 benchmark 入口继续保留并写入同一 canonical CV-Bench 路径。
+
 ## 运行前准备
 
 在服务器仓库根目录执行：

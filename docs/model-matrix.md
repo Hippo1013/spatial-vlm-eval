@@ -13,6 +13,11 @@ inference protocol、prompt/template、图像处理、decoding 和 scorer protoc
 校验这些 provenance、一次只选择一个 scorer protocol，并在模型名称中区分不同 input track 时才可
 省略 protocol 列。
 
+三个 benchmark 的 `internvl3_78b` profile 共享 served name `internvl3-78b-three-bench`，model revision
+仍固定为 `3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356`，均为 BF16 TP=4、四张 80GB GPU。它们可由
+`scripts/internvl3_78b/run_three_bench_evaluation.sh` 只加载一次 vLLM 后依次补齐；各自的 prompt、
+decoding、validator、scorer protocol 和输出目录仍完全独立。
+
 ## 新增的 4 个开源 SOTA 模型
 
 以下四个模型于 2026-08-03 纳入项目级目标模型范围。其 CV-Bench snapshot revision、上游 commit、

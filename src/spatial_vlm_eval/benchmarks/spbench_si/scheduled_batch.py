@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 import argparse
+import fcntl
 import json
 import os
-import signal
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -270,11 +271,9 @@ def _start_watcher(lane: str, *, run_id: str, control_root: Path) -> subprocess.
     ])
 
 
-def run_controller(repository_root: Path, *, stage: str) -> int:
-    output_root = Path(os.environ["SPBENCH_SI_OUTPUT_ROOT"]).resolve()
-    control_root = output_root / "_scheduled_batch"
-    control_root.mkdir(parents=True, exist_ok=True)
-    (control_root / "logs").mkdir(exist_ok=True)
+def _run_controller_locked(repository_root: Path, *, stage: str, control_root: Path) -> int:
+    """Run one schedule after the caller has acquired the output-root lock."""
+
     run_id = utc_now().replace(":", "-")
     status = control_root / "status.tsv"
     if not status.exists():
@@ -304,6 +303,21 @@ def run_controller(repository_root: Path, *, stage: str) -> int:
     for watcher in watchers.values():
         watcher.wait(timeout=30)
     return 0 if all(status == 0 for status in statuses) else 1
+
+
+def run_controller(repository_root: Path, *, stage: str) -> int:
+    output_root = Path(os.environ["SPBENCH_SI_OUTPUT_ROOT"]).resolve()
+    control_root = output_root / "_scheduled_batch"
+    control_root.mkdir(parents=True, exist_ok=True)
+    (control_root / "logs").mkdir(exist_ok=True)
+    lock_path = control_root / "lock"
+    with lock_path.open("a+", encoding="utf-8") as lock:
+        try:
+            fcntl.flock(lock.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except BlockingIOError:
+            print(f"[spbench-si-schedule] another run holds {lock_path}", file=sys.stderr)
+            return 4
+        return _run_controller_locked(repository_root, stage=stage, control_root=control_root)
 
 
 def parse_args() -> argparse.Namespace:
