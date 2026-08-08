@@ -17,6 +17,7 @@ from spatial_vlm_eval.benchmarks.spbench_si.inference import (
     _spatialladder_batch_candidates,
     _vllm_runtime_version,
     binding,
+    probe_capacity,
     test_gate_errors,
 )
 from spatial_vlm_eval.benchmarks.spbench_si.processor_audit import validate_processor_audit
@@ -26,6 +27,7 @@ from spatial_vlm_eval.benchmarks.spbench_si.profiles import (
     PROFILES,
     RGB_PROFILE_KEYS,
 )
+from spatial_vlm_eval.models.common.runtime import GenerationResult
 
 
 class _Pixels:
@@ -60,7 +62,53 @@ class SPBenchSIProfilesInferenceTest(unittest.TestCase):
             )
         self.assertEqual(PROFILES["spatialbot_rgb"].decoding["max_new_tokens"], 100)
         self.assertEqual(PROFILES["spatialladder3b_rgb"].image_processing["attention"], "flash_attention_2")
+        self.assertEqual(PROFILES["spatialladder3b_rgb"].image_processing["tokenizer_padding_side"], "left")
+        self.assertEqual(
+            PROFILES["spatialladder3b_rgb"].inference_protocol,
+            "spbench_si_spatialladder3b_rgb_rgb_default_direct_folded_user_upstream_locked_v2",
+        )
         self.assertTrue(PROFILES["spatialladder3b_rgb"].native_batch_probe)
+
+    def test_spatialladder_capacity_probe_uses_unequal_prompts_and_proves_left_padding(self):
+        class Adapter:
+            profile = PROFILES["spatialladder3b_rgb"]
+
+            def set_batch_size(self, value):
+                self.batch_size = value
+
+            def generate_batch(self, values):
+                self.prompt_lengths = {len(value.user_prompt) for value in values}
+                return [
+                    GenerationResult(
+                        "red" if value.image.getpixel((0, 0)) == (255, 0, 0) else "blue",
+                        {"tokenizer_padding_side": "left"},
+                    )
+                    for value in values
+                ]
+
+        adapter = Adapter()
+        with patch(
+            "spatial_vlm_eval.benchmarks.spbench_si.inference._spatialladder_batch_candidates",
+            return_value=(4,),
+        ):
+            report = probe_capacity(adapter, backend="upstream_transformers")
+        self.assertTrue(report["passed"])
+        self.assertEqual(report["selected_capacity"], 4)
+        self.assertEqual(report["tokenizer_padding_side"], "left")
+        self.assertTrue(report["heterogeneous_prompt_lengths"])
+        self.assertGreater(len(adapter.prompt_lengths), 1)
+
+        original = adapter.generate_batch
+        adapter.generate_batch = lambda values: [
+            GenerationResult(result.text, {"tokenizer_padding_side": "right"})
+            for result in original(values)
+        ]
+        with patch(
+            "spatial_vlm_eval.benchmarks.spbench_si.inference._spatialladder_batch_candidates",
+            return_value=(4,),
+        ):
+            with self.assertRaisesRegex(RuntimeError, "No stable SpatialLadder"):
+                probe_capacity(adapter, backend="upstream_transformers")
 
     def test_generation_manifests_are_exact(self):
         required = [profile for profile in PROFILES.values() if profile.requires_runtime_generation_manifest]
@@ -122,12 +170,22 @@ class SPBenchSIProfilesInferenceTest(unittest.TestCase):
         self.assertEqual(value["runtime"]["selected_gpu_ids"], [1])
         self.assertEqual(value["capacity_candidates"], [16, 8, 4, 2, 1])
         gate = {
-            "passed": True, "binding_digest": "digest", "vision_canary": {"passed": True},
+            "profile": "spatialladder3b_rgb", "passed": True,
+            "binding_digest": "digest", "vision_canary": {"passed": True},
             "smoke_validation": {"passed": True}, "input_audit_gate": {"passed": True},
-            "processor_audit": {"passed": True}, "selected_capacity": 8,
+            "processor_audit": {"passed": True, "tokenizer_padding_side": "left"},
+            "selected_capacity": 8, "capacity_probe": {
+                "passed": True, "tokenizer_padding_side": "left",
+                "heterogeneous_prompt_lengths": True,
+            },
         }
         self.assertEqual(test_gate_errors(gate, "digest"), [])
         self.assertIn("binding digest differs", test_gate_errors(gate, "other"))
+        gate["capacity_probe"]["tokenizer_padding_side"] = "right"
+        self.assertIn(
+            "SpatialLadder capacity probe did not prove left padding",
+            test_gate_errors(gate, "digest"),
+        )
 
 
 if __name__ == "__main__":

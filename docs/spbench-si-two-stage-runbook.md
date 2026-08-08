@@ -46,6 +46,13 @@ bash scripts/spbench_si/run_inference.sh --stage test --model qwen3_vl_8b
 检查该轨 `test_gate.json`：红/蓝 canary、smoke8 subset validator、processor/template、单图证据、模型
 revision、runtime、GPU/TP、capacity/batch 与全部 binding 必须通过。smoke 分数仅作诊断。
 
+SpatialLadder 例外地使用官方 native batch 16→8→4→2→1 探测。当前 v2 gate 必须显示
+`tokenizer_padding_side=left`，并证明同一批中两种不同 prompt 长度的 red/blue canary 都通过。锁定
+checkpoint 的 tokenizer 默认是 right padding，因此只看到普通 canary PASS 或容量 16 并不充分；任何
+right-padding warning 都是硬故障。当前 inference protocol 是
+`spbench_si_spatialladder3b_rgb_rgb_default_direct_folded_user_upstream_locked_v2`；旧
+`...upstream_locked_v1` gate/full 已作废，不能 resume 或评分。
+
 获得 full 授权后：
 
 ```bash

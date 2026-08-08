@@ -8,6 +8,9 @@ from dataclasses import dataclass
 from typing import Any
 
 
+SPATIALLADDER_BATCH_PADDING_SIDE = "left"
+
+
 @dataclass(frozen=True, slots=True)
 class SPBenchSIProfile:
     key: str
@@ -139,6 +142,7 @@ def _specialized(
     requires_manifest: bool = False,
     known_deviation: str | None = None,
     native_batch_probe: bool = False,
+    inference_protocol_version: int = 1,
 ) -> SPBenchSIProfile:
     return SPBenchSIProfile(
         key=key,
@@ -151,7 +155,7 @@ def _specialized(
         comparison_group=comparison_group,
         inference_protocol=(
             f"spbench_si_{key}_{input_profile}_default_direct_folded_user_"
-            "upstream_locked_v1"
+            f"upstream_locked_v{inference_protocol_version}"
         ),
         adapter_kind="upstream_command",
         default_backend="upstream_transformers",
@@ -357,10 +361,15 @@ _SPECIALIZED = [
         upstream_commit="7a0d2ee85c28728835300310a349a53a15967f2e",
         image_processing={"source": "SPBench-SI ZIP JPEG", "image_count": 1,
                           "min_pixels": 16 * 28 * 28, "max_pixels": 512 * 28 * 28,
-                          "dtype": "bfloat16", "attention": "flash_attention_2"},
-        chat_template="SpatialLadder official Qwen2.5-VL default/direct folded-user template",
+                          "dtype": "bfloat16", "attention": "flash_attention_2",
+                          "tokenizer_padding_side": SPATIALLADDER_BATCH_PADDING_SIDE},
+        chat_template=(
+            "SpatialLadder official Qwen2.5-VL default/direct folded-user template "
+            "with left-padded native batches"
+        ),
         requires_manifest=True, known_deviation="Thinking prompt is intentionally disabled.",
         native_batch_probe=True,
+        inference_protocol_version=2,
     ),
 ]
 

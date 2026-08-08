@@ -125,8 +125,9 @@ API 轨明确标记 provider nondeterministic。执行和评分边界见
 
 SPBench-SI 使用独立的 `src/spatial_vlm_eval/benchmarks/spbench_si/profiles.py`；`PROFILE_SEQUENCE` 唯一
 确定下表顺序，其中 RGB 18 条、同一源 RGB 派生输入 3 条。代码、协议和本地回归于 2026-08-07 完成。
-截至 2026-08-08，20 条非 78B 轨有当前 test gate；其中 19 条通过 full-1009 validator，Gemini full
-失败，固定 TP=4 的 `internvl3_78b` 尚未运行。未启动正式评分，也没有全局报告。
+截至 2026-08-08，18 条非 78B 轨保留当前 full-1009；Gemini full 失败，SpatialLadder 旧 v1 full 虽通过
+结构 validator，但因 native batch 遗漏官方 left padding 已作废并等待 v2 test/full。固定 TP=4 的
+`internvl3_78b` 尚未运行。未启动正式评分，也没有全局报告。
 
 | Profile | Model / locked revision | Input track | Backend / locked decoding |
 |---|---|---|---|
@@ -150,7 +151,7 @@ SPBench-SI 使用独立的 `src/spatial_vlm_eval/benchmarks/spbench_si/profiles.
 | `robobrain25_8b_nv_rgb` | `RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | RGB | official general VQA；0.7/768/seed 42 |
 | `robobrain25_8b_mt_rgb` | `RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | RGB | official general VQA；0.7/768/seed 42 |
 | `hispatial3b_moge2_xyz` | `HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | RGB + 同图 MoGe-2 XYZ | official predictor；greedy/100/seed 42 |
-| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB，无 thinking prompt | official Qwen2.5-VL；BF16/FA2；0.01/top-p 1/repetition 1.05/128/seed 42 |
+| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB，无 thinking prompt | official Qwen2.5-VL；BF16/FA2；left-padded native batch；0.01/top-p 1/repetition 1.05/128/seed 42；v2 待重跑 |
 
 所有轨统一使用 SPBench-SI 官方 `default/direct` prompt。双卡 `scheduled_batch.SCHEDULE` 只覆盖 20 条，
 明确排除固定 TP=4 的 `internvl3_78b`；该轨由 `run_internvl3_78b_evaluation.sh` 在四卡服务器独立补齐，

@@ -29,8 +29,8 @@ publication gates，全局报告状态为 22/23。Q-Spatial Bench 的 21 轨代�
 red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
 评分与 publication gates；全局报告状态为 20/21。SPBench-SI 的 21 轨 contract、
 两阶段 gate、双 scorer、调度与报告已于 2026-08-07 完成本地实现和回归；截至 2026-08-08，20 条
-非 78B 轨均有当前 test gate，其中 19 条通过 full-1009 validator，Gemini full 失败。尚未启动正式评分，
-也没有全局报告。精确范围、
+非 78B 轨中 18 条保留当前 full-1009；Gemini full 失败，SpatialLadder 旧 v1 full 因官方 left-padding
+要求未落实而作废，等待 v2 test/full 重跑。尚未启动正式评分，也没有全局报告。精确范围、
 数据准备边界与当前阶段见
 [四 Benchmark 评测范围](docs/evaluation-scope.md)。
 

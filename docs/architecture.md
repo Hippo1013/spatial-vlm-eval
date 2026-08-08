@@ -153,7 +153,8 @@ prediction、score 与 `q-spatial-result.md` 均留在原路径，仅把编排�
 20 轨双卡控制器。Phase A 双卡 lane 与严格串行 API lane 并发；双卡自有进程退出、端口释放后才启动
 Phase B GPU0/GPU1。full 调度先逐轨建立或复用完全匹配的 gate，controller 仍不评分。四条 lane 各有
 独立只读 event watcher，仅报告 PASS/FAIL/COMPLETE；控制器只停止自己创建的进程组，绝不接管未知
-端口或 GPU 进程。InternVL3-78B 保持独立 TP=4 四卡入口。
+端口或 GPU 进程。SpatialLadder v2 另将官方 `tokenizer.padding_side=left` 与异长 prompt 的原生批处理
+探测绑定进 gate；旧 v1 的右填充输出不能续跑或评分。InternVL3-78B 保持独立 TP=4 四卡入口。
 
 SPBench-SI 的 `run_internvl3_78b_evaluation.sh` 沿用同一 canonical 路径：固定 BF16/TP=4，顺序调用
 既有 test/full、完整 validator、`--predictions` 精确双协议评分和全局报告入口。控制器只清理自己创建的

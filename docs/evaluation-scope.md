@@ -11,7 +11,7 @@
 | MSMU-Bench | official `test`，987 条 | 已实现 input contract、validator、inference 与 scorer | 18 条既有目标 profile 已完成；本阶段告一段落 |
 | CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | contract、23-profile registry、两阶段推理、scorer 与报告已实现 | 22 条轨已通过 full-2638 validator、评分和 publication gates；仅四卡 InternVL3-78B 缺失，报告 22/23（2026-08-06） |
 | Q-Spatial Bench | Q-Spatial-ScanNet 170 + Q-Spatial++ 101，共 271 条 | contract、21-profile registry、两阶段推理、numeric scorer 与报告已实现 | 除 TP=4 blocked 的 InternVL3-78B 外，20 轨 test/full-271、正式 validator、provenance、当前 v2 scorer 与 publication gates 已通过；报告 20/21（2026-08-07） |
-| SPBench-SI | official 单图 `test`，1009 条；不包含 SPBench-MV | contract、21-profile registry、两阶段推理、双 scorer 与报告已实现 | 20 条非 78B 轨有当前 test gate；其中 19 条 full-1009 validator 通过，Gemini full 失败；尚未评分或发布，78B 未运行（2026-08-08） |
+| SPBench-SI | official 单图 `test`，1009 条；不包含 SPBench-MV | contract、21-profile registry、两阶段推理、双 scorer 与报告已实现 | 18 条非 78B 轨保留当前 full-1009；Gemini full 失败，SpatialLadder right-padded v1 已作废并等待 left-padded v2 test/full；尚未评分或发布，78B 未运行（2026-08-08） |
 
 “尚未实现”表示仓库中还没有可发布的 benchmark contract、validator、scorer protocol、运行入口或
 结果目录，不能因为数据已经下载就宣称可以正式评测。CV-Bench 的“已实现”只指代码、协议和本地

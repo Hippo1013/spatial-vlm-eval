@@ -83,7 +83,10 @@ Please answer with the option's letter from the given choices (e.g., A, B, etc.)
   Gemini temperature 0。
 - specialized 轨使用 registry 锁定的官方 processor/runner/revision/decoding；SpatialRGPT 不伪造
   region/depth，3DThinker 不加 Mental-3D，SpatialLadder 使用 BF16/FlashAttention2 和
-  `12544..401408` pixels。
+  `12544..401408` pixels。SpatialLadder 锁定上游在 `padding=True` 前显式设置
+  `processor.tokenizer.padding_side = "left"`；本项目必须相同设置并 fail closed 证明，不能依赖 checkpoint
+  默认的 right padding。对应 inference protocol 固定为
+  `spbench_si_spatialladder3b_rgb_rgb_default_direct_folded_user_upstream_locked_v2`。
 
 通用 vLLM 轨在正式运行前必须通过原生 Transformers processor/template 对照：rendered prompt、视觉
 placeholder、单图 tensor 和最终 prompt 必须一致；不一致即阻塞，不静默换 backend。
@@ -99,10 +102,14 @@ provenance。固定 smoke8 是 `4,297,306,410,460,518,918,1008`，覆盖四类�
 decoding、seed、GPU/TP、endpoint、精确 vLLM 0.19.x runtime version、capacity/batch、canary/smoke
 证据。绑定变化时旧 test artifacts 无损
 轮换为 `stale-*`，不能跨 signature 恢复。vLLM 容量按 `32→16→8→4→2→1`，API 按
-`8→4→2→1`，SpatialLadder native batch 按 `16→8→4→2→1` 探测；其他 upstream runner batch=1。
+`8→4→2→1`，SpatialLadder native batch 按 `16→8→4→2→1` 探测；每个大于 1 的候选必须同时处理两种
+不同长度的 red/blue canary prompt，并在 generation、processor audit 与 gate 中证明 left padding。其他
+upstream runner batch=1。
 
 full 必须复用完全匹配的 gate，以 fsync journal 断点恢复，最终原子生成覆盖 `0..1008` 的
 `predictions.jsonl`、metadata 和 full `prediction_validation.json`。subset 永不评分。
+旧 SpatialLadder v1 gate/full 虽通过结构 validator，但因 right-padded native batch 已确认损坏，不能被
+当前 v2 profile 发现或恢复；修复后必须重新运行 test 与 full。
 
 双卡冻结调度覆盖除 InternVL3-78B 外的 20 条轨。Phase A 双卡 lane 为 InternVL3-38B → LLaVA-Yi-34B
 → Qwen3-VL-32B，同时 API lane 严格串行 GPT-5 → Gemini。双卡 lane 全部成功且自有 vLLM 退出、端口

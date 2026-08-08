@@ -383,6 +383,14 @@ ZOEDEPTH_CHECKPOINT=/local/ZoeD_M12_NK.pt \
 若 merged checkpoint 不存在，adapter 明确报告 gated 权限并退出。native 轨把 ZoeDepth 米制输出四舍五入、
 截断为 uint16 毫米，再按上游三通道编码传入 RGB-D 两图 token；不使用 GT depth。
 
+### SpatialLadder
+
+SpatialLadder 的 SPBench-SI native batch 必须保留锁定官方 runner 的
+`processor.tokenizer.padding_side = "left"`。其公开 checkpoint 默认声明 right padding；decoder-only
+Qwen2.5-VL 对不同长度 prompt 执行 `padding=True` 时若不覆盖该值，会从短样本的 pad/EOT 尾部生成。
+当前 SPBench-SI v2 adapter 在模型加载、逐批 generation metadata、异长 red/blue capacity probe 和
+test gate 四处 fail closed。该要求只改变 SpatialLadder SPBench-SI inference identity，不改变 scorer。
+
 ## 7. 正式 987 条、评分与报告
 
 本手册只保留 inference/deployment 边界，不复制阶段三操作者命令。每个 profile 仍须依次通过：

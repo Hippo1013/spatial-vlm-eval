@@ -52,7 +52,8 @@ prediction、prompt、图像、processor 或 decoding；v2 summary 和 publicati
 - 主结果标记为 original MRA definition + robust direct parser internal score，不宣称逐字节复刻上游。
 - 现有完整 raw prediction 可由 v2 重新评分，不因 parser-only 升级而要求重跑模型；v1 主分不再是当前
   发布结果。
-- SpatialLadder 的 prompt 片段/占位符输出属于独立推理故障，不能由 parser 放宽来补救。
+- SpatialLadder 的 prompt 片段/占位符输出已定位为 native batch 遗漏官方 left padding 的独立推理故障；
+  旧 v1 prediction 作废并由 inference v2 重跑，不能由 parser 放宽来补救。
 - parser、阈值、聚合或兼容实现身份变化必须更换对应 protocol id，并更新真实输出回归、本文和
   canonical protocol。
 - 暂行报告只允许 20/21 且唯一缺少固定四卡的 InternVL3-78B；其他部分状态不能发布。

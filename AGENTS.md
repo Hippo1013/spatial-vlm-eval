@@ -111,7 +111,9 @@ protocol 是
 不把自由文本 `a/an` 当作 1，只在强答案区域剥离 `A-D.` 数值标签，支持受控最终声明，并仅用题干期望
 单位选择模型显式写出的同单位数值而不做换算；十阈值严格 MRA 与四题型宏平均保持不变。当前上游
 direct-mode 只作为独立 audit，禁止混表。subset 不评分；暂行 20/21 报告只能缺固定 TP=4 的
-InternVL3-78B。
+InternVL3-78B。SpatialLadder native batch 必须逐字遵循锁定上游的 tokenizer left padding；当前
+inference protocol 是 `spbench_si_spatialladder3b_rgb_rgb_default_direct_folded_user_upstream_locked_v2`，
+旧 right-padded v1 prediction/gate 不得恢复、评分或发布。
 
 ## 修改与验证流程
 

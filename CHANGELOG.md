@@ -7,6 +7,10 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 修复 SPBench-SI SpatialLadder native batch 与锁定官方 runner 不一致的问题：processor 现在强制并
+  fail-closed 验证 tokenizer left padding，capacity probe 改用两种长度的 red/blue prompt，generation、
+  processor audit 与 gate 均保存 padding 证据。该轨 inference protocol 升为 v2；服务器旧 right-padded
+  v1 gate/full 即使通过结构 validator 也已作废，不能评分或恢复，等待获得 GPU test/full 授权后重跑。
 - SPBench-SI 主 scorer 升级为真实输出驱动的 v2 parser：自由文本 `a/an` 不再误提为 1，仅在强答案区域
   剥离 `A-D.` 数值标签，受控识别最后的 distance/longest-dimension 声明，并按题型期望单位选择模型
   显式写出的同单位数值而不做换算。v1 inference metadata 明确兼容、v1 score 不再是当前结果；锁定
@@ -33,8 +37,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
   评分与 publication gates；全局报告为 20/21。
 
-- 2026-08-08 服务器现场复核：SPBench-SI 的 20 条非 78B 轨均有当前 test gate，其中 19 条通过
-  full-1009 validator；Gemini full 失败，InternVL3-78B 尚未运行，正式 score summary 与全局报告均不存在。
+- 2026-08-08 服务器现场复核：SPBench-SI 中 18 条非 78B 轨保留当前 full-1009；Gemini full 失败，
+  SpatialLadder right-padded v1 已作废并等待 left-padded v2 test/full，InternVL3-78B 尚未运行，正式
+  score summary 与全局报告均不存在。
 
 - 修复 Q-Spatial 目录评分把 `test_artifacts/` 与 `test_artifacts.stale-*` 中的 smoke8 prediction 误纳入
   正式候选的问题；当前发现器只冻结 20 条 full 结果，旧 `test_runs/`、shards 与 score 子树仍被排除。

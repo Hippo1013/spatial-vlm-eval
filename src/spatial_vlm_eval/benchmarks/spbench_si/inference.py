@@ -48,7 +48,13 @@ from .data import (
 )
 from .prediction_validation import read_jsonl, validate_prediction_rows
 from .processor_audit import audit_processor
-from .profiles import PROFILE_SEQUENCE, PROFILES, SPBenchSIProfile, ordered_profiles
+from .profiles import (
+    PROFILE_SEQUENCE,
+    PROFILES,
+    SPATIALLADDER_BATCH_PADDING_SIDE,
+    SPBenchSIProfile,
+    ordered_profiles,
+)
 from .scorer import SCORER_PROTOCOL, score_main_row
 
 COLOR_CANARY_PROTOCOL = "spbench_si_pure_red_blue_512_single_rgb_v1"
@@ -474,6 +480,37 @@ def _color_inputs() -> list[tuple[str, SPBenchSIModelInput]]:
     ]
 
 
+def _native_batch_color_inputs(count: int) -> list[tuple[str, SPBenchSIModelInput]]:
+    if count <= 0:
+        raise ValueError("Native batch canary count must be positive")
+    prompts = (
+        "Question: What is the only color in this image?\n\n"
+        "Answer with one lowercase color word directly.",
+        "Question: Inspect the complete uniformly colored image carefully. "
+        "After checking every visible pixel, what single color fills the image?\n\n"
+        "Answer with one lowercase color word directly.",
+    )
+    combinations = (
+        ("red", prompts[0]),
+        ("blue", prompts[1]),
+        ("blue", prompts[0]),
+        ("red", prompts[1]),
+    )
+    cases: list[tuple[str, SPBenchSIModelInput]] = []
+    for offset in range(count):
+        color, prompt = combinations[offset % len(combinations)]
+        cases.append((
+            color,
+            SPBenchSIModelInput(
+                -1000 - offset,
+                Image.new("RGB", (512, 512), color),
+                SYSTEM_PROMPT,
+                prompt,
+            ),
+        ))
+    return cases
+
+
 def _color_passed(text: str, expected: str) -> bool:
     words = set(re.findall(r"[a-z]+", text.casefold()))
     other = "blue" if expected == "red" else "red"
@@ -500,11 +537,43 @@ def probe_capacity(adapter: BoundAdapter, *, backend: str) -> dict[str, Any]:
         for candidate in candidates:
             try:
                 adapter.set_batch_size(candidate)
-                results = adapter.generate_batch([model_input] * candidate)
-                passed = len(results) == candidate and all(_color_passed(result.text, expected) for result in results)
-                attempts.append({"candidate": candidate, "kind": "native_batch", "passed": passed})
+                cases = _native_batch_color_inputs(candidate)
+                results = adapter.generate_batch([value for _color, value in cases])
+                prompt_lengths = sorted({len(value.user_prompt) for _color, value in cases})
+                padding_proved = len(results) == candidate and all(
+                    result.metadata.get("tokenizer_padding_side")
+                    == SPATIALLADDER_BATCH_PADDING_SIDE
+                    for result in results
+                )
+                heterogeneous = candidate == 1 or len(prompt_lengths) > 1
+                passed = (
+                    len(results) == candidate
+                    and heterogeneous
+                    and padding_proved
+                    and all(
+                        _color_passed(result.text, color)
+                        for (color, _value), result in zip(cases, results)
+                    )
+                )
+                attempts.append({
+                    "candidate": candidate,
+                    "kind": "native_batch",
+                    "passed": passed,
+                    "prompt_character_lengths": prompt_lengths,
+                    "heterogeneous_prompt_lengths": heterogeneous,
+                    "tokenizer_padding_side": (
+                        SPATIALLADDER_BATCH_PADDING_SIDE if padding_proved else None
+                    ),
+                })
                 if passed:
-                    return {"passed": True, "selected_capacity": candidate, "capacity_kind": "native_batch", "attempts": attempts}
+                    return {
+                        "passed": True,
+                        "selected_capacity": candidate,
+                        "capacity_kind": "native_batch",
+                        "heterogeneous_prompt_lengths": heterogeneous,
+                        "tokenizer_padding_side": SPATIALLADDER_BATCH_PADDING_SIDE,
+                        "attempts": attempts,
+                    }
             except Exception as exc:  # noqa: BLE001
                 attempts.append({"candidate": candidate, "kind": "native_batch", "passed": False, "error": f"{type(exc).__name__}: {exc}"[:500]})
         raise RuntimeError(f"No stable SpatialLadder native batch candidate: {attempts}")
@@ -594,6 +663,20 @@ def test_gate_errors(gate: dict[str, Any], expected_binding_digest: str) -> list
     for message, passed in checks.items():
         if not passed:
             errors.append(message)
+    if gate.get("profile") == "spatialladder3b_rgb":
+        capacity = gate.get("capacity_probe") or {}
+        processor = gate.get("processor_audit") or {}
+        if capacity.get("passed") is not True:
+            errors.append("SpatialLadder capacity probe evidence is missing")
+        if capacity.get("tokenizer_padding_side") != SPATIALLADDER_BATCH_PADDING_SIDE:
+            errors.append("SpatialLadder capacity probe did not prove left padding")
+        if (
+            gate.get("selected_capacity", 0) > 1
+            and capacity.get("heterogeneous_prompt_lengths") is not True
+        ):
+            errors.append("SpatialLadder capacity probe did not exercise unequal prompt lengths")
+        if processor.get("tokenizer_padding_side") != SPATIALLADDER_BATCH_PADDING_SIDE:
+            errors.append("SpatialLadder processor audit did not prove left padding")
     return errors
 
 
@@ -681,6 +764,20 @@ def run_test_stage(profile: SPBenchSIProfile, contract: SPBenchSITestContract, o
         "system_transport": profile.system_transport, "system_prompt_sha256": SYSTEM_PROMPT_SHA256,
         "single_image_contract": True,
     }
+    if profile.key == "spatialladder3b_rgb":
+        processor = dict(processor)
+        processor.update({
+            "tokenizer_padding_side": capacity.get("tokenizer_padding_side"),
+            "heterogeneous_prompt_lengths": capacity.get("heterogeneous_prompt_lengths"),
+        })
+        processor["passed"] = bool(
+            processor.get("passed")
+            and processor["tokenizer_padding_side"] == SPATIALLADDER_BATCH_PADDING_SIDE
+            and (
+                int(capacity["selected_capacity"]) == 1
+                or processor["heterogeneous_prompt_lengths"] is True
+            )
+        )
     atomic_write_json(artifact_root / "processor_audit.json", processor)
     gate = {
         "schema_version": 1, "profile": profile.key,
@@ -689,6 +786,7 @@ def run_test_stage(profile: SPBenchSIProfile, contract: SPBenchSITestContract, o
         "binding": binding_value, "binding_digest": binding_digest,
         "selected_capacity": int(capacity["selected_capacity"]),
         "capacity_kind": capacity["capacity_kind"],
+        "capacity_probe": capacity,
         "batch_grouping": {
             "batch_size": int(capacity["selected_capacity"]) if profile.native_batch_probe else 1,
             "seed": profile.decoding.get("seed"),

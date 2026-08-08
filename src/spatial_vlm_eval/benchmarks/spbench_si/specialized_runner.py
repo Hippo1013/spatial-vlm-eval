@@ -20,7 +20,12 @@ from PIL import Image
 from ...models.common.provenance import verify_git_checkout, verify_hf_snapshot_revision
 from ...models.common.runtime import GenerationResult, InferenceAdapter, pixel_sha256
 from .command_adapter import fold_system_user_prompt, load_generation_manifest
-from .profiles import PROFILE_SEQUENCE, PROFILES, SPBenchSIProfile
+from .profiles import (
+    PROFILE_SEQUENCE,
+    PROFILES,
+    SPATIALLADDER_BATCH_PADDING_SIDE,
+    SPBenchSIProfile,
+)
 
 SPECIALIZED_PROFILE_KEYS = tuple(
     key for key in PROFILE_SEQUENCE if PROFILES[key].adapter_kind == "upstream_command"
@@ -83,6 +88,16 @@ def _prepare_spatialladder_config(config: Any) -> Any:
     ):
         delattr(config, "text_config")
     return config
+
+
+def _prepare_spatialladder_processor(processor: Any) -> Any:
+    tokenizer = getattr(processor, "tokenizer", None)
+    if tokenizer is None:
+        raise ValueError("SpatialLadder processor must expose its tokenizer")
+    tokenizer.padding_side = SPATIALLADDER_BATCH_PADDING_SIDE
+    if getattr(tokenizer, "padding_side", None) != SPATIALLADDER_BATCH_PADDING_SIDE:
+        raise ValueError("SpatialLadder tokenizer must use official left padding")
+    return processor
 
 
 def _seed(decoding: dict[str, Any]) -> None:
@@ -304,9 +319,11 @@ class SpatialLadderAdapter(InferenceAdapter):
         from transformers import AutoConfig, AutoProcessor, Qwen2_5_VLForConditionalGeneration
         config = AutoConfig.from_pretrained(self.model_path, local_files_only=True)
         config = _prepare_spatialladder_config(config)
-        self.processor = AutoProcessor.from_pretrained(
-            self.model_path, use_fast=True, min_pixels=16 * 28 * 28,
-            max_pixels=512 * 28 * 28, local_files_only=True,
+        self.processor = _prepare_spatialladder_processor(
+            AutoProcessor.from_pretrained(
+                self.model_path, use_fast=True, min_pixels=16 * 28 * 28,
+                max_pixels=512 * 28 * 28, local_files_only=True,
+            )
         )
         self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
             self.model_path, config=config, torch_dtype=torch.bfloat16,
@@ -316,6 +333,8 @@ class SpatialLadderAdapter(InferenceAdapter):
 
     def generate_batch(self, model_inputs: list[RunnerModelInput]) -> list[GenerationResult]:
         self._load()
+        if self.processor.tokenizer.padding_side != SPATIALLADDER_BATCH_PADDING_SIDE:
+            raise RuntimeError("SpatialLadder tokenizer padding side changed after model load")
         from qwen_vl_utils import process_vision_info
         messages_list = [[{"role": "user", "content": [
             {"type": "image", "image": value.image},
@@ -341,6 +360,7 @@ class SpatialLadderAdapter(InferenceAdapter):
         return [GenerationResult(text, {
             "num_model_image_tensors": 1, "native_batch_size": len(model_inputs),
             "attention_implementation": "flash_attention_2",
+            "tokenizer_padding_side": self.processor.tokenizer.padding_side,
             "template_sha256": hashlib.sha256(prompt.encode()).hexdigest(),
         }) for text, prompt in zip(texts, rendered)]
 
@@ -419,6 +439,11 @@ def _response(
         "user_prompt_sha256": hashlib.sha256(model_input.user_prompt.encode()).hexdigest(),
         "folded_prompt_sha256": hashlib.sha256(model_input.question.encode()).hexdigest(),
     })
+    if (
+        profile.family == "spatialladder"
+        and generation.get("tokenizer_padding_side") != SPATIALLADDER_BATCH_PADDING_SIDE
+    ):
+        raise ValueError("SpatialLadder generation did not prove official left padding")
     if profile.comparison_group != "rgb_only":
         generation["derived_from_source_rgb_sha256"] = model_input.source_rgb_sha256
     if profile.key == "ssr_native":

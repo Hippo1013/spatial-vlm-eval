@@ -23,7 +23,9 @@ from spatial_vlm_eval.benchmarks.q_spatial.scorer import (
 )
 from spatial_vlm_eval.benchmarks.spbench_si.data import DATASET_REVISION as SPBENCH_SI_DATASET_REVISION
 from spatial_vlm_eval.benchmarks.spbench_si.profiles import (
+    PROFILES as SPBENCH_SI_PROFILES,
     PROFILE_SEQUENCE as SPBENCH_SI_PROFILE_SEQUENCE,
+    SPATIALLADDER_BATCH_PADDING_SIDE,
 )
 from spatial_vlm_eval.benchmarks.spbench_si.scorer import (
     AUDIT_SCORER_PROTOCOL as SPBENCH_SI_AUDIT_SCORER_PROTOCOL,
@@ -274,6 +276,14 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn(SPBENCH_SI_DATASET_REVISION, spbench_protocol)
         self.assertIn("1,009", spbench_protocol)
         self.assertIn("strict", SPBENCH_SI_SCORER_PROTOCOL)
+        spatialladder = SPBENCH_SI_PROFILES["spatialladder3b_rgb"]
+        self.assertEqual(SPATIALLADDER_BATCH_PADDING_SIDE, "left")
+        self.assertEqual(
+            spatialladder.image_processing["tokenizer_padding_side"],
+            SPATIALLADDER_BATCH_PADDING_SIDE,
+        )
+        self.assertIn(spatialladder.inference_protocol, spbench_protocol)
+        self.assertIn("tokenizer.padding_side", spbench_protocol)
 
     def test_cvbench_runbook_and_config_match_public_entrypoints(self) -> None:
         runbook = (self.docs / "cv-bench-two-stage-runbook.md").read_text(
@@ -395,6 +405,9 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("spbench-si-result.md", internvl78)
         self.assertIn("21/21", internvl78)
         self.assertIn("常见问题", internvl78)
+        spatialladder = SPBENCH_SI_PROFILES["spatialladder3b_rgb"]
+        self.assertIn(spatialladder.inference_protocol, runbook)
+        self.assertIn("tokenizer_padding_side=left", runbook)
         self.assertNotIn(
             '$SPBENCH_SI_OUTPUT_ROOT/qwen3_vl_8b/predictions.jsonl',
             runbook,

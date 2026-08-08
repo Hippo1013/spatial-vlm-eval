@@ -11,7 +11,13 @@ from PIL import Image
 from spatial_vlm_eval.benchmarks.spbench_si.command_adapter import UpstreamCommandAdapter
 from spatial_vlm_eval.benchmarks.spbench_si.data import SPBenchSIModelInput, SYSTEM_PROMPT
 from spatial_vlm_eval.benchmarks.spbench_si.profiles import PROFILES
-from spatial_vlm_eval.benchmarks.spbench_si.specialized_runner import _prepare_spatialladder_config
+from spatial_vlm_eval.benchmarks.spbench_si.specialized_runner import (
+    RunnerModelInput,
+    _prepare_spatialladder_config,
+    _prepare_spatialladder_processor,
+    _response,
+)
+from spatial_vlm_eval.models.common.runtime import GenerationResult
 
 
 class _Input:
@@ -59,6 +65,39 @@ class SPBenchSICommandAdapterTest(unittest.TestCase):
         text_config.tie_word_embeddings = False
         with self.assertRaisesRegex(ValueError, "tied text output embeddings"):
             _prepare_spatialladder_config(config)
+
+    def test_spatialladder_forces_official_left_padding(self):
+        processor = SimpleNamespace(tokenizer=SimpleNamespace(padding_side="right"))
+        self.assertIs(_prepare_spatialladder_processor(processor), processor)
+        self.assertEqual(processor.tokenizer.padding_side, "left")
+        with self.assertRaisesRegex(ValueError, "must expose its tokenizer"):
+            _prepare_spatialladder_processor(SimpleNamespace())
+
+    def test_spatialladder_response_requires_left_padding_evidence(self):
+        profile = PROFILES["spatialladder3b_rgb"]
+        model_input = RunnerModelInput(
+            0,
+            Image.new("RGB", (4, 3), "red"),
+            "Question: q",
+            SYSTEM_PROMPT,
+            "Question: q",
+            "f" * 64,
+        )
+        with self.assertRaisesRegex(ValueError, "did not prove official left padding"):
+            _response(
+                {"index": 0},
+                profile,
+                profile.decoding,
+                GenerationResult(
+                    "A",
+                    {
+                        "num_model_image_tensors": 1,
+                        "template_sha256": "a" * 64,
+                        "tokenizer_padding_side": "right",
+                    },
+                ),
+                model_input,
+            )
 
     def test_bridge_request_has_only_safe_fields_and_same_rgb_evidence(self):
         process = _Process()
