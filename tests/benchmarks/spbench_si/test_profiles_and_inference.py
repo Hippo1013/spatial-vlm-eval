@@ -12,12 +12,16 @@ from PIL import Image
 from spatial_vlm_eval.benchmarks.spbench_si.command_adapter import load_generation_manifest
 from spatial_vlm_eval.benchmarks.spbench_si.inference import (
     ResolvedConfiguration,
+    _api_resume_binding_errors,
     _capacity_candidates,
+    _digest,
     _rotate_stale_test_artifacts,
     _spatialladder_batch_candidates,
+    _validated_openrouter_resume_seed,
     _vllm_runtime_version,
     binding,
     probe_capacity,
+    resolve_configuration,
     test_gate_errors,
 )
 from spatial_vlm_eval.benchmarks.spbench_si.processor_audit import validate_processor_audit
@@ -28,6 +32,9 @@ from spatial_vlm_eval.benchmarks.spbench_si.profiles import (
     RGB_PROFILE_KEYS,
 )
 from spatial_vlm_eval.models.common.runtime import GenerationResult
+from spatial_vlm_eval.models.common.runtime import pixel_sha256
+
+from .helpers import small_contract
 
 
 class _Pixels:
@@ -49,6 +56,9 @@ class SPBenchSIProfilesInferenceTest(unittest.TestCase):
         self.assertEqual(PROFILES["internvl3_78b"].default_tensor_parallel_size, 4)
         self.assertNotIn("3dthinker_mental3d", PROFILES)
         self.assertNotIn("spatialladder3b_thinking", PROFILES)
+        gemini = PROFILES["gemini31pro_openrouter_non_zdr"]
+        self.assertEqual(gemini.display_name, "Gemini 3.1 Pro")
+        self.assertEqual(gemini.default_backend, "openrouter")
 
     def test_locked_decoding_matches_spbench_plan(self):
         for key in ("llava_next_mistral_7b", "llava_next_yi_34b", "internvl3_8b", "internvl3_38b"):
@@ -134,6 +144,7 @@ class SPBenchSIProfilesInferenceTest(unittest.TestCase):
         with patch.dict(os.environ, {}, clear=True):
             self.assertEqual(_capacity_candidates(), (32, 16, 8, 4, 2, 1))
             self.assertEqual(_capacity_candidates("openrouter"), (8, 4, 2, 1))
+            self.assertEqual(_capacity_candidates("packyapi"), (8, 4, 2, 1))
             self.assertEqual(_spatialladder_batch_candidates(), (16, 8, 4, 2, 1))
         with tempfile.TemporaryDirectory() as directory:
             track = Path(directory)
@@ -186,6 +197,119 @@ class SPBenchSIProfilesInferenceTest(unittest.TestCase):
             "SpatialLadder capacity probe did not prove left padding",
             test_gate_errors(gate, "digest"),
         )
+
+    def test_packyapi_catalog_selects_only_exact_gemini31_and_keeps_profile_identity(self):
+        profile = PROFILES["gemini31pro_openrouter_non_zdr"]
+        environment = {
+            "PACKYAPI_API_KEY": "secret",
+            "PACKYAPI_BASE_URL": "https://www.packyapi.com/v1",
+            "SPBENCH_SI_GEMINI31PRO_OPENROUTER_NON_ZDR_BACKEND": "packyapi",
+        }
+        with (
+            patch.dict(os.environ, environment, clear=True),
+            patch(
+                "spatial_vlm_eval.benchmarks.spbench_si.inference.openai_compatible_model_ids",
+                return_value=("gemini-3-pro-preview", "gemini-3.1-pro-preview"),
+            ),
+        ):
+            configuration = resolve_configuration(profile)
+        self.assertEqual(configuration.backend, "packyapi")
+        self.assertEqual(configuration.served_model_name, "gemini-3.1-pro-preview")
+        self.assertEqual(configuration.profile.key, "gemini31pro_openrouter_non_zdr")
+        self.assertEqual(configuration.profile.model, "google/gemini-3.1-pro-preview-20260219")
+
+        with (
+            patch.dict(os.environ, environment, clear=True),
+            patch(
+                "spatial_vlm_eval.benchmarks.spbench_si.inference.openai_compatible_model_ids",
+                return_value=("gemini-3-pro-preview", "gemini-2.5-pro"),
+            ),
+        ):
+            alias_configuration = resolve_configuration(profile)
+        self.assertEqual(alias_configuration.served_model_name, "gemini-3-pro-preview")
+
+    def test_api_source_resume_allows_only_source_fields_to_change(self):
+        class Contract:
+            dataset_fingerprint = "dataset"
+
+        profile = PROFILES["gemini31pro_openrouter_non_zdr"]
+        old = ResolvedConfiguration(
+            profile, "openrouter", ("https://openrouter.ai/api/v1",),
+            profile.decoding, "a" * 64, None, None,
+        )
+        new = ResolvedConfiguration(
+            profile, "packyapi", ("https://www.packyapi.com/v1",),
+            profile.decoding, "b" * 64, None, None, "gemini-3.1-pro-preview",
+        )
+        old_binding = binding(old, Contract())
+        new_binding = binding(new, Contract())
+        gate = {
+            "profile": profile.key,
+            "passed": True,
+            "binding": old_binding,
+            "binding_digest": _digest(old_binding),
+            "vision_canary": {"passed": True},
+            "smoke_validation": {"passed": True},
+            "input_audit_gate": {"passed": True},
+            "processor_audit": {"passed": True},
+            "selected_capacity": 8,
+        }
+        self.assertEqual(_api_resume_binding_errors(gate, new_binding, profile), [])
+        changed = dict(new_binding)
+        changed["decoding"] = {**profile.decoding, "temperature": 0.5}
+        self.assertIn(
+            "non-source binding field changed: decoding",
+            _api_resume_binding_errors(gate, changed, profile),
+        )
+
+    def test_openrouter_resume_seed_revalidates_every_success_against_model_input(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            contract = small_contract(root)
+            profile = PROFILES["gemini31pro_openrouter_non_zdr"]
+            model_input = contract.model_input(0)
+            rgb_sha = pixel_sha256(model_input.image)
+            template_sha = _digest({
+                "chat_template": profile.chat_template,
+                "system_transport": profile.system_transport,
+                "system_prompt": model_input.system_prompt,
+                "user_prompt": model_input.user_prompt,
+                "image_pixel_sha256": rgb_sha,
+                "media_count": 1,
+            })
+            event = {
+                "schema_version": 1,
+                "run_signature": "old-signature",
+                "status": "success",
+                "index": 0,
+                "prediction": "2",
+                "audit": {
+                    "profile": profile.key,
+                    "inference_protocol": profile.inference_protocol,
+                    "chat_template": profile.chat_template,
+                    "system_prompt": model_input.system_prompt,
+                    "user_prompt": model_input.user_prompt,
+                    "image_count": 1,
+                    "image_pixel_sha256": rgb_sha,
+                },
+                "generation": {
+                    "canonical_model": profile.model,
+                    "provider": "Google AI Studio",
+                    "num_media_prompt": 1,
+                    "source_rgb_sha256": rgb_sha,
+                    "template_sha256": template_sha,
+                },
+            }
+            journal = root / "old.journal.jsonl"
+            journal.write_text(json.dumps(event) + "\n", encoding="utf-8")
+            seeds, provenance = _validated_openrouter_resume_seed(journal, profile, contract)
+            self.assertEqual(seeds[0].text, "2")
+            self.assertEqual(provenance["success_count"], 1)
+
+            event["audit"]["user_prompt"] = "changed"
+            journal.write_text(json.dumps(event) + "\n", encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "audit user prompt"):
+                _validated_openrouter_resume_seed(journal, profile, contract)
 
 
 if __name__ == "__main__":

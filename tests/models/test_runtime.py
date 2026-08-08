@@ -11,6 +11,7 @@ from spatial_vlm_eval.models.common.runtime import (
     InferenceAdapter,
     PredictionJournal,
     input_audit,
+    run_recoverable_inference,
     run_msmu_inference,
     select_target_indices,
 )
@@ -216,6 +217,77 @@ class RuntimeTest(unittest.TestCase):
                     target_indices=[0, 1],
                     retries=0,
                 )
+
+    def test_seeded_cross_source_resume_is_durable_and_probes_first_missing_serially(self):
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "predictions.jsonl"
+            journal = Path(directory) / "continued.journal.jsonl"
+            adapter = FakeAdapter()
+            metadata = run_recoverable_inference(
+                contract=self.contract,
+                adapter=adapter,
+                output=output,
+                journal_path=journal,
+                target_indices=[0, 1, 2],
+                benchmark="MSMU-test",
+                split="test",
+                official_size=3,
+                scorer_protocol="test-scorer",
+                workers=2,
+                seed_successes={
+                    0: GenerationResult("seed answer", {"api_source": "old-provider"})
+                },
+                seed_provenance={"source": "old-provider", "journal_sha256": "a" * 64},
+                initial_serial_requests=1,
+            )
+            self.assertEqual(adapter.calls, [1, 2])
+            self.assertEqual(metadata["resume"]["seeded_success_count"], 1)
+            self.assertEqual(metadata["resume"]["newly_seeded_indices"], [0])
+            events = [json.loads(line) for line in journal.read_text().splitlines()]
+            seeded = next(event for event in events if event["index"] == 0)
+            self.assertEqual(seeded["attempt"], 0)
+            self.assertEqual(seeded["seeded_from"]["source"], "old-provider")
+
+            resumed = FakeAdapter()
+            run_recoverable_inference(
+                contract=self.contract,
+                adapter=resumed,
+                output=output,
+                journal_path=journal,
+                target_indices=[0, 1, 2],
+                benchmark="MSMU-test",
+                split="test",
+                official_size=3,
+                scorer_protocol="test-scorer",
+                workers=2,
+                seed_successes={
+                    0: GenerationResult("seed answer", {"api_source": "old-provider"})
+                },
+                seed_provenance={"source": "old-provider", "journal_sha256": "a" * 64},
+                initial_serial_requests=1,
+            )
+            self.assertEqual(resumed.calls, [])
+
+    def test_failed_initial_serial_request_stops_before_concurrent_continuation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            adapter = FakeAdapter(failures={1: 5})
+            with self.assertRaisesRegex(RuntimeError, "Initial serial compatibility request failed"):
+                run_recoverable_inference(
+                    contract=self.contract,
+                    adapter=adapter,
+                    output=Path(directory) / "predictions.jsonl",
+                    target_indices=[0, 1, 2],
+                    benchmark="MSMU-test",
+                    split="test",
+                    official_size=3,
+                    scorer_protocol="test-scorer",
+                    workers=2,
+                    retries=0,
+                    seed_successes={0: GenerationResult("seed answer")},
+                    seed_provenance={"source": "old-provider"},
+                    initial_serial_requests=1,
+                )
+            self.assertEqual(adapter.calls, [1])
 
     def test_debug_index_parser_rejects_duplicates_and_applies_limit(self):
         self.assertEqual(select_target_indices(10, indices="1,3-5", limit=3), [1, 3, 4])

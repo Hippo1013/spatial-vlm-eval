@@ -256,6 +256,49 @@ def _curl_http_request(
     return completed.stdout[:marker_position], {}, status_code
 
 
+def openai_compatible_model_ids(
+    *,
+    base_url: str,
+    api_key: str,
+    timeout: float = 30.0,
+) -> tuple[str, ...]:
+    """Return the authenticated model catalog without exposing the bearer token."""
+
+    raw, _headers, status_code = _curl_http_request(
+        method="GET",
+        url=f"{str(base_url).rstrip('/')}/models",
+        body=None,
+        headers={
+            "Authorization": f"Bearer {api_key}",
+            "Accept": "application/json",
+        },
+        timeout=timeout,
+    )
+    if status_code >= 400:
+        detail, error_type, router_metadata = _structured_api_error(raw)
+        raise APIRequestError(
+            f"HTTP {status_code} while listing OpenAI-compatible models: {detail}",
+            status_code=status_code,
+            error_type=error_type,
+            router_metadata=router_metadata,
+        )
+    try:
+        value = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise APIRequestError("Model catalog returned non-JSON content") from exc
+    entries = value.get("data") if isinstance(value, dict) else None
+    if not isinstance(entries, list):
+        raise APIRequestError("Model catalog lacks an OpenAI-compatible data array")
+    identifiers = sorted({
+        str(entry.get("id"))
+        for entry in entries
+        if isinstance(entry, dict) and isinstance(entry.get("id"), str) and entry["id"]
+    })
+    if not identifiers:
+        raise APIRequestError("Model catalog did not contain any model ids")
+    return tuple(identifiers)
+
+
 class OpenAICompatibleAdapter(InferenceAdapter):
     """One-image chat-completions adapter with strict backend policies."""
 
@@ -319,19 +362,19 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "gpt5": {"openrouter", "openai"},
             "gpt5_openrouter_non_zdr": {"openrouter"},
             "gemini31pro": {"openrouter", "google"},
-            "gemini31pro_openrouter_non_zdr": {"openrouter"},
+            "gemini31pro_openrouter_non_zdr": {"openrouter", "packyapi"},
         }.get(self.policy_key, {"vllm"})
         if self.backend not in allowed:
             raise ValueError(
                 f"Backend {self.backend!r} is incompatible with profile {self.profile.key!r}; "
                 f"allowed={sorted(allowed)}"
             )
-        if self.backend == "vllm" and not self.served_model_name:
-            raise ValueError("vLLM profiles require a served model name")
+        if self.backend in {"vllm", "packyapi"} and not self.served_model_name:
+            raise ValueError(f"{self.backend} profiles require a served model name")
 
     @property
     def request_model(self) -> str:
-        if self.backend == "vllm":
+        if self.backend in {"vllm", "packyapi"}:
             assert self.served_model_name is not None
             return self.served_model_name
         if self.backend == "openai":
@@ -344,6 +387,13 @@ class OpenAICompatibleAdapter(InferenceAdapter):
         provider_policy: dict[str, Any] | None = None
         if self.backend == "openrouter":
             provider_policy = self._openrouter_provider_policy()
+        elif self.backend == "packyapi":
+            provider_policy = {
+                "api_source": "PackyAPI",
+                "token_group": "Gemini-slb",
+                "third_party_access": True,
+                "model_fallback": False,
+            }
         return {
             "model": self.profile.model,
             "model_revision": self.profile.revision,
@@ -415,7 +465,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
             "messages": messages if messages is not None else self.request_messages(model_input),
             "stream": False,
         }
-        if self.backend in {"vllm", "openrouter"}:
+        if self.backend in {"vllm", "openrouter", "packyapi"}:
             payload["max_tokens"] = maximum
         else:
             payload["max_completion_tokens"] = maximum
@@ -437,7 +487,7 @@ class OpenAICompatibleAdapter(InferenceAdapter):
                     "effort": self.reasoning_effort,
                     "exclude": True,
                 }
-            elif self.backend in {"openai", "google"}:
+            elif self.backend in {"openai", "google", "packyapi"}:
                 payload["reasoning_effort"] = self.reasoning_effort
         if continue_final_message:
             if self.backend != "vllm":
@@ -643,6 +693,11 @@ class OpenAICompatibleAdapter(InferenceAdapter):
                 raise APIRequestError(
                     f"vLLM served-model mismatch: got {returned_model!r}, expected {self.request_model!r}"
                 )
+            if self.backend == "packyapi" and str(returned_model or "") != self.request_model:
+                raise APIRequestError(
+                    "PackyAPI returned-model mismatch: "
+                    f"got {returned_model!r}, expected {self.request_model!r}"
+                )
             message = choice.get("message")
             if not isinstance(message, dict):
                 raise APIRequestError("Chat completion choice lacks an assistant message")
@@ -660,7 +715,13 @@ class OpenAICompatibleAdapter(InferenceAdapter):
                     "generation_id": response.data.get("id"),
                     "provider_request_id": response.headers.get("x-request-id"),
                     "canonical_model": response.data.get("model"),
-                    "provider": self.backend,
+                    "provider": (
+                        "PackyAPI Gemini-slb" if self.backend == "packyapi" else self.backend
+                    ),
+                    "api_source": self.backend,
+                    "provider_pool": "Gemini-slb" if self.backend == "packyapi" else None,
+                    "requested_model": self.request_model,
+                    "model_identity": self.profile.model,
                     "upstream_id": response.data.get("id"),
                     "finish_reason": choice.get("finish_reason"),
                     "prompt_tokens": usage.get("prompt_tokens"),

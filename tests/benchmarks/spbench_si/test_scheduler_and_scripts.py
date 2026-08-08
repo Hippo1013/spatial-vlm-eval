@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import socket
+import stat
 import subprocess
 import sys
 import tempfile
@@ -72,6 +73,34 @@ class SPBenchSISchedulerScriptsTest(unittest.TestCase):
         self.assertIn('"wait-for"', source)
         self.assertNotIn("SIGTERM", source)
         self.assertNotIn("score_results", source)
+
+    def test_packyapi_key_helper_is_hidden_atomic_and_resume_skips_test(self):
+        key_script = self.repository / "scripts/spbench_si/set_packyapi_key.sh"
+        resume_script = self.repository / "scripts/spbench_si/run_gemini_packyapi_resume.sh"
+        resume_source = resume_script.read_text(encoding="utf-8")
+        self.assertIn("--stage full", resume_source)
+        self.assertIn("--resume-api-source", resume_source)
+        self.assertNotIn("--stage test", resume_source)
+        self.assertIn("https_proxy", resume_source)
+
+        with tempfile.TemporaryDirectory() as directory:
+            env_file = Path(directory) / ".env.server"
+            env_file.write_text("KEEP_ME=yes\nPACKYAPI_API_KEY=old\n", encoding="utf-8")
+            completed = subprocess.run(
+                ["bash", str(key_script)],
+                cwd=self.repository,
+                env={**os.environ, "SPBENCH_SI_ENV_FILE": str(env_file)},
+                input="new-secret-key\n",
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            content = env_file.read_text(encoding="utf-8")
+            self.assertIn("KEEP_ME=yes", content)
+            self.assertEqual(content.count("PACKYAPI_API_KEY="), 1)
+            self.assertIn("new-secret-key", content)
+            self.assertNotIn("new-secret-key", completed.stdout + completed.stderr)
+            self.assertEqual(stat.S_IMODE(env_file.stat().st_mode), 0o600)
 
     def test_env_file_cannot_override_scheduler_job_gpu_or_context(self):
         with tempfile.TemporaryDirectory() as directory:

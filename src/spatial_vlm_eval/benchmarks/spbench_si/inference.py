@@ -20,6 +20,7 @@ from typing import Any, Sequence
 from PIL import Image
 
 from ...models.common.runtime import (
+    JOURNAL_SCHEMA_VERSION,
     GenerationResult,
     InferenceAdapter,
     atomic_write_json,
@@ -30,6 +31,7 @@ from ...models.common.runtime import (
 from ...models.openai_compatible.client import (
     OpenAICompatibleAdapter,
     image_to_png_data_uri,
+    openai_compatible_model_ids,
     single_image_user_message,
 )
 from .command_adapter import UpstreamCommandAdapter, fold_system_user_prompt, load_generation_manifest
@@ -58,6 +60,9 @@ from .profiles import (
 from .scorer import SCORER_PROTOCOL, score_main_row
 
 COLOR_CANARY_PROTOCOL = "spbench_si_pure_red_blue_512_single_rgb_v1"
+REMOTE_API_BACKENDS = frozenset({"openrouter", "packyapi"})
+PACKYAPI_DEFAULT_BASE_URL = "https://www.packyapi.com/v1"
+PACKYAPI_GEMINI_PROFILE = "gemini31pro_openrouter_non_zdr"
 
 
 class ResourceBlockedError(RuntimeError):
@@ -225,6 +230,7 @@ class ResolvedConfiguration:
     adapter_digest: str
     command: str | None
     processor_audit: dict[str, Any] | None
+    served_model_name: str | None = None
 
     @property
     def endpoint_identity(self) -> list[str]:
@@ -256,7 +262,7 @@ def _configured_gpu_ids(profile: SPBenchSIProfile) -> tuple[int, ...]:
 
 
 def inspect_local_gpus(profile: SPBenchSIProfile, backend: str) -> dict[str, Any]:
-    if backend == "openrouter":
+    if backend in REMOTE_API_BACKENDS:
         return {"applicable": False, "reason": "remote API backend"}
     executable = shutil.which("nvidia-smi")
     if not executable:
@@ -329,7 +335,7 @@ def resolve_configuration(profile: SPBenchSIProfile) -> ResolvedConfiguration:
     backend = _profile_env(profile, "BACKEND") or profile.default_backend
     if profile.adapter_kind == "upstream_command":
         return _resolved_command_configuration(profile)
-    if backend not in {"vllm", "openrouter"}:
+    if backend not in {"vllm", *REMOTE_API_BACKENDS}:
         raise ValueError(f"Unsupported backend {backend!r} for {profile.key}")
     processor_report: dict[str, Any] | None = None
     if backend == "vllm":
@@ -342,10 +348,54 @@ def resolve_configuration(profile: SPBenchSIProfile) -> ResolvedConfiguration:
         urls = tuple(value.strip().rstrip("/") for value in raw_urls.split(",") if value.strip())
         if len(urls) != 1:
             raise ValueError(f"{profile.key} requires one vLLM endpoint")
-    else:
+        served_model_name = profile.served_model_name
+    elif backend == "openrouter":
         urls = (os.environ.get("OPENROUTER_BASE_URL", "https://openrouter.ai/api/v1").rstrip("/"),)
+        served_model_name = None
+    else:
+        if profile.key != PACKYAPI_GEMINI_PROFILE:
+            raise ValueError("PackyAPI is approved only as a Gemini 3.1 Pro quota source")
+        api_key = os.environ.get("PACKYAPI_API_KEY", "")
+        if not api_key:
+            raise ValueError("Set PACKYAPI_API_KEY; keys are never accepted on the command line")
+        urls = (os.environ.get("PACKYAPI_BASE_URL", PACKYAPI_DEFAULT_BASE_URL).rstrip("/"),)
+        configured_model = os.environ.get("SPBENCH_SI_PACKYAPI_MODEL_ID", "").strip()
+        catalog = openai_compatible_model_ids(
+            base_url=urls[0],
+            api_key=api_key,
+            timeout=float(os.environ.get("SPBENCH_SI_PACKYAPI_CATALOG_TIMEOUT", "30")),
+        )
+        exact_candidates = tuple(
+            model_id for model_id in catalog
+            if re.search(r"(?:^|/)gemini-3\.1-pro(?:-preview)?(?:-20260219)?$", model_id, re.I)
+        )
+        documented_aliases = tuple(
+            model_id for model_id in catalog
+            if re.search(r"(?:^|/)gemini-3-pro-preview$", model_id, re.I)
+        )
+        candidates = exact_candidates or documented_aliases
+        if configured_model:
+            if configured_model not in catalog:
+                raise ValueError(
+                    f"Configured PackyAPI model {configured_model!r} is absent from the authenticated /models catalog"
+                )
+            if configured_model not in {*exact_candidates, *documented_aliases}:
+                raise ValueError(
+                    f"Configured PackyAPI model {configured_model!r} is not a Gemini 3.1 Pro id "
+                    "or the Packy-documented gemini-3-pro-preview route alias"
+                )
+            served_model_name = configured_model
+        elif len(candidates) == 1:
+            served_model_name = candidates[0]
+        else:
+            raise ValueError(
+                "Authenticated PackyAPI Gemini-slb catalog must expose exactly one preferred Gemini 3.1 Pro "
+                "id, or one documented gemini-3-pro-preview route alias when no 3.1 id exists; "
+                f"exact={list(exact_candidates)!r}, aliases={list(documented_aliases)!r}"
+            )
     return ResolvedConfiguration(
-        profile, backend, urls, dict(profile.decoding), _open_adapter_digest(profile), None, processor_report
+        profile, backend, urls, dict(profile.decoding), _open_adapter_digest(profile), None,
+        processor_report, served_model_name,
     )
 
 
@@ -378,7 +428,7 @@ def _runtime_retry_policy(backend: str) -> dict[str, int]:
         }
     return {
         "retries": int(os.environ.get("SPBENCH_SI_INFERENCE_RETRIES", "2")),
-        "retry_missing_passes": 1 if backend == "openrouter" else 0,
+        "retry_missing_passes": 1 if backend in REMOTE_API_BACKENDS else 0,
     }
 
 
@@ -390,12 +440,17 @@ def build_adapter(configuration: ResolvedConfiguration, *, batch_size: int = 1) 
             decoding=configuration.decoding, batch_size=batch_size,
         )
     else:
-        api_key = os.environ.get("OPENROUTER_API_KEY", "") if configuration.backend == "openrouter" else os.environ.get("VLLM_API_KEY", "local") or "local"
+        if configuration.backend == "openrouter":
+            api_key = os.environ.get("OPENROUTER_API_KEY", "")
+        elif configuration.backend == "packyapi":
+            api_key = os.environ.get("PACKYAPI_API_KEY", "")
+        else:
+            api_key = os.environ.get("VLLM_API_KEY", "local") or "local"
         if not api_key:
-            raise ValueError("Set OPENROUTER_API_KEY; keys are never accepted on the command line")
+            raise ValueError(f"Set the API key for {configuration.backend}; keys are never accepted on the command line")
         base = OpenAICompatibleAdapter(
             profile=profile, backend=configuration.backend, base_url=configuration.base_urls[0],
-            api_key=api_key, served_model_name=profile.served_model_name,
+            api_key=api_key, served_model_name=configuration.served_model_name or profile.served_model_name,
             timeout=_request_timeout_seconds(configuration.backend),
             metadata_retries=int(os.environ.get("SPBENCH_SI_OPENROUTER_METADATA_RETRIES", "10")),
             policy_key=profile.api_policy_key, image_source="SPBench-SI locked ZIP RGB only",
@@ -405,8 +460,8 @@ def build_adapter(configuration: ResolvedConfiguration, *, batch_size: int = 1) 
 
 
 def _capacity_candidates(backend: str = "vllm") -> tuple[int, ...]:
-    variable = "SPBENCH_SI_API_CAPACITY_CANDIDATES" if backend == "openrouter" else "SPBENCH_SI_CAPACITY_CANDIDATES"
-    default = "8,4,2,1" if backend == "openrouter" else "32,16,8,4,2,1"
+    variable = "SPBENCH_SI_API_CAPACITY_CANDIDATES" if backend in REMOTE_API_BACKENDS else "SPBENCH_SI_CAPACITY_CANDIDATES"
+    default = "8,4,2,1" if backend in REMOTE_API_BACKENDS else "32,16,8,4,2,1"
     values = tuple(int(item.strip()) for item in os.environ.get(variable, default).split(",") if item.strip())
     if not values or any(value <= 0 for value in values) or tuple(sorted(set(values), reverse=True)) != values:
         raise ValueError(f"{variable} must be unique positive descending integers")
@@ -447,6 +502,7 @@ def binding(
         "runtime": {
             "backend": configuration.backend,
             "endpoint_sha256": configuration.endpoint_identity,
+            "served_model_name": configuration.served_model_name,
             "tensor_parallel_size": configuration.profile.default_tensor_parallel_size,
             "selected_gpu_ids": (gpu_audit or {}).get("selected_gpu_ids"),
             "vllm_max_model_len": (
@@ -464,7 +520,7 @@ def binding(
         "seed_strategy": configuration.profile.seed_strategy,
         "capacity_candidates": (
             list(_spatialladder_batch_candidates()) if configuration.profile.native_batch_probe
-            else list(_capacity_candidates(configuration.backend)) if configuration.backend in {"vllm", "openrouter"}
+            else list(_capacity_candidates(configuration.backend)) if configuration.backend in {"vllm", *REMOTE_API_BACKENDS}
             else [1]
         ),
         "smoke8_indices": list(SMOKE8_INDICES),
@@ -803,7 +859,166 @@ def run_test_stage(profile: SPBenchSIProfile, contract: SPBenchSITestContract, o
     return gate_path
 
 
-def run_full_stage(profile: SPBenchSIProfile, contract: SPBenchSITestContract, output_root: Path) -> Path:
+def _api_resume_binding_errors(
+    gate: dict[str, Any],
+    current_binding: dict[str, Any],
+    profile: SPBenchSIProfile,
+) -> list[str]:
+    errors: list[str] = []
+    gate_digest = str(gate.get("binding_digest") or "")
+    if test_gate_errors(gate, gate_digest):
+        errors.append("the existing test gate does not pass its own locked binding")
+    if profile.key != PACKYAPI_GEMINI_PROFILE:
+        errors.append("API-source continuation is approved only for the Gemini 3.1 Pro profile")
+    gate_binding = gate.get("binding") if isinstance(gate.get("binding"), dict) else {}
+    gate_runtime = gate_binding.get("runtime") if isinstance(gate_binding.get("runtime"), dict) else {}
+    current_runtime = (
+        current_binding.get("runtime")
+        if isinstance(current_binding.get("runtime"), dict)
+        else {}
+    )
+    if gate_runtime.get("backend") != "openrouter" or current_runtime.get("backend") != "packyapi":
+        errors.append("continuation must be OpenRouter -> PackyAPI")
+    locked_fields = (
+        "dataset",
+        "prompt",
+        "profile",
+        "processor_audit",
+        "image_processing",
+        "decoding",
+        "seed_strategy",
+        "capacity_candidates",
+        "smoke8_indices",
+        "canary_protocol",
+    )
+    for field in locked_fields:
+        if gate_binding.get(field) != current_binding.get(field):
+            errors.append(f"non-source binding field changed: {field}")
+    return errors
+
+
+def _validated_openrouter_resume_seed(
+    path: Path,
+    profile: SPBenchSIProfile,
+    contract: SPBenchSITestContract,
+) -> tuple[dict[int, GenerationResult], dict[str, Any]]:
+    if not path.is_file():
+        raise FileNotFoundError(f"Missing original OpenRouter journal: {path}")
+    successes: dict[int, GenerationResult] = {}
+    signatures: set[str] = set()
+    event_count = 0
+    with path.open("r", encoding="utf-8") as handle:
+        for line_number, line in enumerate(handle, start=1):
+            if not line.strip():
+                continue
+            event_count += 1
+            try:
+                event = json.loads(line)
+            except json.JSONDecodeError as exc:
+                raise ValueError(f"Malformed OpenRouter journal JSON at line {line_number}") from exc
+            if event.get("schema_version") != JOURNAL_SCHEMA_VERSION:
+                raise ValueError(f"Unsupported OpenRouter journal schema at line {line_number}")
+            signature = str(event.get("run_signature") or "")
+            if not signature:
+                raise ValueError(f"OpenRouter journal line {line_number} lacks a run signature")
+            signatures.add(signature)
+            if event.get("status") != "success":
+                continue
+            index = int(event.get("index"))
+            if index in successes:
+                raise ValueError(f"Duplicate OpenRouter success at index {index}")
+            if not 0 <= index < OFFICIAL_TEST_SIZE:
+                raise ValueError(f"OpenRouter success index outside full split: {index}")
+            model_input = contract.model_input(index)
+            expected_pixel_sha = pixel_sha256(model_input.image)
+            audit = event.get("audit") if isinstance(event.get("audit"), dict) else {}
+            generation = event.get("generation") if isinstance(event.get("generation"), dict) else {}
+            expected_template_sha = _digest({
+                "chat_template": profile.chat_template,
+                "system_transport": profile.system_transport,
+                "system_prompt": model_input.system_prompt,
+                "user_prompt": model_input.user_prompt,
+                "image_pixel_sha256": expected_pixel_sha,
+                "media_count": 1,
+            })
+            exact_checks = {
+                "audit profile": audit.get("profile") == profile.key,
+                "audit inference protocol": audit.get("inference_protocol") == profile.inference_protocol,
+                "audit chat template": audit.get("chat_template") == profile.chat_template,
+                "audit system prompt": audit.get("system_prompt") == model_input.system_prompt,
+                "audit user prompt": audit.get("user_prompt") == model_input.user_prompt,
+                "audit image count": audit.get("image_count") == 1,
+                "audit image sha": audit.get("image_pixel_sha256") == expected_pixel_sha,
+                "generation model": generation.get("canonical_model") == profile.model,
+                "generation provider": generation.get("provider") == "Google AI Studio",
+                "generation media count": generation.get("num_media_prompt") == 1,
+                "generation source rgb": generation.get("source_rgb_sha256") == expected_pixel_sha,
+                "generation template": generation.get("template_sha256") == expected_template_sha,
+            }
+            failed = [name for name, passed in exact_checks.items() if not passed]
+            if failed:
+                raise ValueError(
+                    f"OpenRouter journal success {index} cannot be reused: {', '.join(failed)}"
+                )
+            successes[index] = GenerationResult(
+                text=str(event.get("prediction", "")),
+                metadata=dict(generation),
+                warnings=tuple(str(value) for value in event.get("warnings") or ()),
+            )
+    if len(signatures) != 1:
+        raise ValueError(f"OpenRouter journal must have one run signature, got {len(signatures)}")
+    if not successes or len(successes) >= OFFICIAL_TEST_SIZE:
+        raise ValueError(
+            f"OpenRouter resume seed must be non-empty and incomplete, got {len(successes)} successes"
+        )
+    indices = sorted(successes)
+    provenance = {
+        "source": "openrouter",
+        "provider": "Google AI Studio",
+        "canonical_model": profile.model,
+        "source_journal": str(path.resolve()),
+        "source_journal_sha256": _file_digest(path),
+        "source_run_signature": next(iter(signatures)),
+        "source_event_count": event_count,
+        "success_count": len(indices),
+        "success_indices_sha256": _digest(indices),
+        "success_index_min": indices[0],
+        "success_index_max": indices[-1],
+    }
+    return successes, provenance
+
+
+def _completed_api_source_summary(path: Path) -> list[dict[str, Any]]:
+    by_source: dict[str, list[int]] = {}
+    with path.open("r", encoding="utf-8") as handle:
+        for line in handle:
+            if not line.strip():
+                continue
+            event = json.loads(line)
+            if event.get("status") != "success":
+                continue
+            generation = event.get("generation") if isinstance(event.get("generation"), dict) else {}
+            source = "packyapi_gemini_slb" if generation.get("api_source") == "packyapi" else "openrouter_google_ai_studio"
+            by_source.setdefault(source, []).append(int(event["index"]))
+    return [
+        {
+            "source": source,
+            "count": len(indices),
+            "indices_sha256": _digest(sorted(indices)),
+            "index_min": min(indices),
+            "index_max": max(indices),
+        }
+        for source, indices in sorted(by_source.items())
+    ]
+
+
+def run_full_stage(
+    profile: SPBenchSIProfile,
+    contract: SPBenchSITestContract,
+    output_root: Path,
+    *,
+    resume_api_source: bool = False,
+) -> Path:
     track = track_directory(output_root, profile)
     gate_path = track / "test_gate.json"
     if not gate_path.is_file():
@@ -815,8 +1030,47 @@ def run_full_stage(profile: SPBenchSIProfile, contract: SPBenchSITestContract, o
         gpu_audit = inspect_local_gpus(profile, configuration.backend)
     binding_value = binding(configuration, contract, gpu_audit)
     problems = test_gate_errors(gate, _digest(binding_value))
-    if problems:
+    seed_successes: dict[int, GenerationResult] | None = None
+    seed_provenance: dict[str, Any] | None = None
+    continuation_journal: Path | None = None
+    continuation_path = track / "api_source_continuation.json"
+    if problems and resume_api_source:
+        continuation_errors = _api_resume_binding_errors(gate, binding_value, profile)
+        if continuation_errors:
+            raise ValueError(
+                "SPBench-SI API-source continuation is incompatible: "
+                + "; ".join(continuation_errors)
+            )
+        output = track / "predictions.jsonl"
+        original_journal = output.with_suffix(output.suffix + ".journal.jsonl")
+        seed_successes, seed_provenance = _validated_openrouter_resume_seed(
+            original_journal, profile, contract
+        )
+        continuation_journal = track / "predictions.jsonl.packyapi-resume.journal.jsonl"
+        atomic_write_json(continuation_path, {
+            "schema_version": 1,
+            "status": "running",
+            "profile": profile.key,
+            "model_identity": profile.model,
+            "model_revision": profile.revision,
+            "inference_protocol": profile.inference_protocol,
+            "same_model_identity": True,
+            "test_stage_reused_without_retest": True,
+            "capacity_reused_without_probe": True,
+            "selected_capacity": int(gate["selected_capacity"]),
+            "old_binding_digest": gate.get("binding_digest"),
+            "new_binding_digest": _digest(binding_value),
+            "new_backend": configuration.backend,
+            "new_endpoint_sha256": configuration.endpoint_identity,
+            "new_served_model_name": configuration.served_model_name,
+            "seed": seed_provenance,
+            "continuation_journal": str(continuation_journal),
+            "generated_at": utc_now(),
+        })
+    elif problems:
         raise ValueError("SPBench-SI test gate is stale or incomplete: " + "; ".join(problems))
+    elif resume_api_source:
+        raise ValueError("--resume-api-source is only valid for an OpenRouter -> PackyAPI binding change")
     selected = int(gate["selected_capacity"])
     output = track / "predictions.jsonl"
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -829,6 +1083,10 @@ def run_full_stage(profile: SPBenchSIProfile, contract: SPBenchSITestContract, o
             output=output, target_indices=list(range(OFFICIAL_TEST_SIZE)), benchmark="SPBench-SI",
             split="test", official_size=OFFICIAL_TEST_SIZE, scorer_protocol=SCORER_PROTOCOL,
             workers=1 if profile.native_batch_probe else selected,
+            journal_path=continuation_journal,
+            seed_successes=seed_successes,
+            seed_provenance=seed_provenance,
+            initial_serial_requests=1 if seed_successes else 0,
             **_runtime_retry_policy(configuration.backend),
         )
     finally:
@@ -843,6 +1101,27 @@ def run_full_stage(profile: SPBenchSIProfile, contract: SPBenchSITestContract, o
     metadata.setdefault("runtime", {})["gpu_preflight"] = gpu_audit
     metadata["runtime"]["selected_capacity"] = selected
     metadata["runtime"]["capacity_kind"] = gate["capacity_kind"]
+    if seed_successes and continuation_journal and seed_provenance:
+        source_summary = _completed_api_source_summary(continuation_journal)
+        metadata["api_source_continuation"] = {
+            "same_model_identity": True,
+            "test_stage_reused_without_retest": True,
+            "old_source": seed_provenance,
+            "new_source": {
+                "source": "packyapi",
+                "provider_pool": "Gemini-slb",
+                "served_model_name": configuration.served_model_name,
+                "endpoint_sha256": configuration.endpoint_identity,
+            },
+            "completed_source_summary": source_summary,
+        }
+        continuation = json.loads(continuation_path.read_text(encoding="utf-8"))
+        continuation.update({
+            "status": "complete",
+            "completed_source_summary": source_summary,
+            "finished_at": utc_now(),
+        })
+        atomic_write_json(continuation_path, continuation)
     atomic_write_json(output.with_suffix(output.suffix + ".metadata.json"), metadata)
     atomic_write_json(track / "prediction_validation.json", validation)
     print(f"[spbench-si] full-{OFFICIAL_TEST_SIZE} validation passed: {output}")
@@ -875,6 +1154,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--check", action="store_true")
     parser.add_argument("--status", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument(
+        "--resume-api-source",
+        action="store_true",
+        help="resume the approved Gemini OpenRouter journal through PackyAPI without rerunning test",
+    )
     parser.add_argument("--parquet", default=os.environ.get("SPBENCH_SI_PARQUET"))
     parser.add_argument("--images-archive", default=os.environ.get("SPBENCH_SI_IMAGES_ARCHIVE"))
     parser.add_argument("--output-root", default=os.environ.get("SPBENCH_SI_OUTPUT_ROOT"))
@@ -925,7 +1209,17 @@ def main() -> None:
     status_path.parent.mkdir(parents=True, exist_ok=True)
     for profile in profiles:
         try:
-            (run_test_stage if args.stage == "test" else run_full_stage)(profile, contract, output_root)
+            if args.stage == "test":
+                if args.resume_api_source:
+                    raise ValueError("--resume-api-source cannot be used with --stage test")
+                run_test_stage(profile, contract, output_root)
+            else:
+                run_full_stage(
+                    profile,
+                    contract,
+                    output_root,
+                    resume_api_source=args.resume_api_source,
+                )
             with status_path.open("a", encoding="utf-8") as handle:
                 handle.write(f"{utc_now()}\t{args.stage.upper()}_COMPLETE\t{profile.key}\n")
         except ResourceBlockedError as exc:

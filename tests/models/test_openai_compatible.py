@@ -15,6 +15,7 @@ from spatial_vlm_eval.models.openai_compatible.client import (
     OpenAICompatibleAdapter,
     _CURL_STATUS_MARKER,
     _curl_http_request,
+    openai_compatible_model_ids,
 )
 
 
@@ -179,6 +180,67 @@ class OpenAICompatibleContractTest(unittest.TestCase):
         self.assertEqual(payload["max_completion_tokens"], 192)
         routed = self.adapter("gemini31pro", "openrouter")
         self.assertEqual(routed.request_payload(model_input())["provider"]["only"], ["google-ai-studio"])
+
+    def test_packyapi_gemini_uses_exact_served_model_and_openai_compatible_shape(self):
+        adapter = OpenAICompatibleAdapter(
+            profile="gemini31pro_openrouter_non_zdr",
+            backend="packyapi",
+            base_url="https://www.packyapi.com/v1",
+            api_key="test-key",
+            served_model_name="gemini-3.1-pro-preview",
+        )
+        payload = adapter.request_payload(model_input())
+        self.assertEqual(payload["model"], "gemini-3.1-pro-preview")
+        self.assertEqual(payload["temperature"], 0.0)
+        self.assertEqual(payload["reasoning_effort"], "medium")
+        self.assertEqual(payload["max_tokens"], 16384)
+        self.assertNotIn("provider", payload)
+        self.assertNotIn("X-OpenRouter-Metadata", adapter._headers())
+        self.assertEqual(adapter.metadata()["provider_policy"]["token_group"], "Gemini-slb")
+
+        response = HTTPJSONResponse(
+            data={
+                "id": "packy-1",
+                "model": "gemini-3.1-pro-preview",
+                "choices": [{"message": {"content": "A"}, "finish_reason": "stop"}],
+                "usage": {"prompt_tokens": 20, "completion_tokens": 1},
+            },
+            headers={},
+            elapsed_ms=123.0,
+        )
+        with patch.object(adapter, "_request_json", return_value=response):
+            result = adapter.generate(model_input())
+        self.assertEqual(result.text, "A")
+        self.assertEqual(result.metadata["provider"], "PackyAPI Gemini-slb")
+        self.assertEqual(result.metadata["api_source"], "packyapi")
+        self.assertEqual(result.metadata["requested_model"], "gemini-3.1-pro-preview")
+
+        wrong = HTTPJSONResponse(
+            data={
+                "id": "packy-2",
+                "model": "gemini-3-pro-preview",
+                "choices": [{"message": {"content": "A"}}],
+            },
+            headers={},
+        )
+        with (
+            patch.object(adapter, "_request_json", return_value=wrong),
+            self.assertRaisesRegex(APIRequestError, "returned-model mismatch"),
+        ):
+            adapter.generate(model_input())
+
+    def test_openai_compatible_model_catalog_requires_data_array(self):
+        body = b'{"data":[{"id":"gemini-3.1-pro-preview"},{"id":"other"}]}'
+        with patch(
+            "spatial_vlm_eval.models.openai_compatible.client._curl_http_request",
+            return_value=(body, {}, 200),
+        ) as request:
+            identifiers = openai_compatible_model_ids(
+                base_url="https://www.packyapi.com/v1/",
+                api_key="test-key",
+            )
+        self.assertEqual(identifiers, ("gemini-3.1-pro-preview", "other"))
+        self.assertEqual(request.call_args.kwargs["url"], "https://www.packyapi.com/v1/models")
 
     def test_openrouter_generation_metadata_is_required_and_recorded(self):
         adapter = self.adapter("gpt5", "openrouter", "https://openrouter.ai/api/v1")

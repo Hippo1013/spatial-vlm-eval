@@ -18,7 +18,7 @@ import sys
 import tempfile
 import threading
 import time
-from collections.abc import Iterable, Sequence
+from collections.abc import Iterable, Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
@@ -286,9 +286,9 @@ class PredictionJournal:
         attempt: int,
         audit: dict[str, Any],
         result: GenerationResult,
+        seeded_from: dict[str, Any] | None = None,
     ) -> None:
-        self._append(
-            {
+        event = {
                 "schema_version": JOURNAL_SCHEMA_VERSION,
                 "run_signature": self.run_signature,
                 "timestamp": utc_now(),
@@ -300,7 +300,9 @@ class PredictionJournal:
                 "generation": result.metadata,
                 "warnings": list(result.warnings),
             }
-        )
+        if seeded_from is not None:
+            event["seeded_from"] = dict(seeded_from)
+        self._append(event)
 
     def append_failure(
         self,
@@ -415,6 +417,9 @@ def run_recoverable_inference(
     retry_missing_passes: int = 0,
     workers: int = 1,
     resume: bool = True,
+    seed_successes: Mapping[int, GenerationResult] | None = None,
+    seed_provenance: dict[str, Any] | None = None,
+    initial_serial_requests: int = 0,
 ) -> dict[str, Any]:
     """Run, resume, and atomically finalize one restricted benchmark split."""
 
@@ -445,12 +450,17 @@ def run_recoverable_inference(
     retry_count = int(retries)
     missing_retry_pass_count = int(retry_missing_passes)
     worker_count = int(workers)
+    initial_serial_request_count = int(initial_serial_requests)
     if retry_count < 0:
         raise ValueError("retries must be non-negative")
     if missing_retry_pass_count < 0:
         raise ValueError("retry_missing_passes must be non-negative")
     if worker_count <= 0:
         raise ValueError("workers must be positive")
+    if initial_serial_request_count < 0:
+        raise ValueError("initial_serial_requests must be non-negative")
+    if seed_successes and seed_provenance is None:
+        raise ValueError("seed_provenance is required when seed_successes are supplied")
 
     adapter_metadata = dict(adapter.metadata())
     validate_adapter_metadata(adapter_metadata)
@@ -474,6 +484,33 @@ def run_recoverable_inference(
     signature = _run_signature(run_identity)
     journal = PredictionJournal(resolved_journal, signature, resume=resume)
     successes = journal.successful_results(set(selected))
+    seeded_indices: list[int] = []
+    for raw_index, raw_result in sorted((seed_successes or {}).items()):
+        index = int(raw_index)
+        if index not in selected:
+            raise ValueError(f"Seed success index {index} is outside this run's targets")
+        if not isinstance(raw_result, GenerationResult):
+            raise TypeError(f"Seed success {index} is not a GenerationResult")
+        normalized_seed = GenerationResult(
+            text=str(raw_result.text).strip(),
+            metadata=dict(raw_result.metadata),
+            warnings=tuple(str(item) for item in raw_result.warnings),
+        )
+        existing = successes.get(index)
+        if existing is not None:
+            if existing != normalized_seed:
+                raise ValueError(f"Existing journal success differs from supplied seed at index {index}")
+            continue
+        model_input = contract.model_input(index)
+        journal.append_success(
+            model_input=model_input,
+            attempt=0,
+            audit=input_audit(model_input, adapter_metadata),
+            result=normalized_seed,
+            seeded_from=seed_provenance,
+        )
+        successes[index] = normalized_seed
+        seeded_indices.append(index)
     terminal_failures: set[int] = set()
     terminal_failure_lock = threading.Lock()
     if output_path.exists() and set(successes) != set(selected):
@@ -593,6 +630,16 @@ def run_recoverable_inference(
                     submit_next()
 
     try:
+        if initial_serial_request_count:
+            initial_pending = [index for index in selected if index not in successes]
+            for index in initial_pending[:initial_serial_request_count]:
+                initial_result = run_batch([contract.model_input(index)])
+                successes.update(initial_result)
+                if index not in initial_result:
+                    raise RuntimeError(
+                        "Initial serial compatibility request failed; "
+                        "no concurrent continuation requests were issued"
+                    )
         for pass_index in range(missing_retry_pass_count + 1):
             pending_indices = [
                 index
@@ -648,6 +695,12 @@ def run_recoverable_inference(
         "empty_prediction_indices": empty_indices,
         "adapter_warning_count": warning_count,
         "publishable_inference": is_full_split,
+        "resume": {
+            "seeded_success_count": len(seed_successes or {}),
+            "newly_seeded_indices": seeded_indices,
+            "seed_provenance": seed_provenance,
+            "initial_serial_requests": initial_serial_request_count,
+        },
         "started_at": started_at,
         "finished_at": finished_at,
         "duration_seconds": round(time.monotonic() - started_wall, 6),
