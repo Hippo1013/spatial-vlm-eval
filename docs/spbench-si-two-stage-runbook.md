@@ -64,6 +64,38 @@ bash scripts/spbench_si/validate_predictions.sh \
 full 不接受过期 gate；journal 可在完全相同 signature 下恢复。完成时必须有 1,009 行、index
 `0..1008`、prediction 每行只有 `index,raw_prediction`，且 `prediction_validation.json` 通过。
 
+### Gemini 额度来源续接（不重跑已有题或 test）
+
+闭源 API 轨只作补充参照；SPBench-SI Gemini 已于 2026-08-08 明确搁置，不阻塞本阶段收尾。以下流程
+仅在出现新的明确比较需求并重新取得付费 API 授权后使用：`gemini31pro_openrouter_non_zdr` 已通过
+gate、OpenRouter journal 因额度耗尽而不完整时，先用隐藏输入把 `Gemini-slb` 分组 key 原子写入未跟踪
+`.env.server`：
+
+```bash
+bash scripts/spbench_si/set_packyapi_key.sh
+```
+
+每个 API shell 必须单独开启 Mihomo 并验证美国出口；然后只调用专用续接入口：
+
+```bash
+source /media/datasets/lihaoran/tools/mihomo/proxy-on.sh
+curl -fsS --max-time 20 https://www.cloudflare.com/cdn-cgi/trace | sed -n 's/^loc=/loc=/p'
+bash scripts/spbench_si/run_gemini_packyapi_resume.sh
+```
+
+入口默认使用用户指定的 `https://www.packyapi.com/v1`，可通过 `PACKYAPI_BASE_URL` 显式覆盖。它先读取
+authenticated `/models`；`SPBENCH_SI_PACKYAPI_MODEL_ID` 留空时只接受唯一的 Gemini 3.1 Pro 候选，
+若没有显式 3.1 id，则接受 Packy 文档中的唯一 `gemini-3-pro-preview` route alias；设置时也必须存在于
+catalog 且属于这两类，Flash、2.5 或其他模型均 fail closed。它不会运行
+`--stage test`，不会请求已有 OpenRouter 成功 index；首个缺失题作为实际续接请求串行检查
+`/chat/completions`、image data URI、reasoning/temperature/token 参数、response shape 与返回 model id，
+成功后直接进入新 journal，再按旧 gate 容量继续。
+
+最终结果仍属于同一条 Gemini 3.1 Pro 模型轨，但 metadata 必须明确是 OpenRouter + PackyAPI 两段额度
+来源。原 OpenRouter journal 保持只读；续接写入
+`predictions.jsonl.packyapi-resume.journal.jsonl`，并生成 `api_source_continuation.json`。推理应在独立
+session 运行，另挂只读、事件驱动 watcher；watcher 只在 COMPLETE/FAIL/超时信号后检查，不周期轮询。
+
 ## 3. 双卡 20 轨调度
 
 仅 test 的冻结计划：
@@ -141,10 +173,17 @@ bash scripts/spbench_si/score_results.sh --dry-run
 bash scripts/spbench_si/score_results.sh --predictions /absolute/path/to/predictions.jsonl
 bash scripts/spbench_si/score_results.sh
 bash scripts/spbench_si/build_results_report.sh
+
+# 本次明确不纳入 InternVL3-78B 与 Gemini，生成 19 轨部分汇总
+bash scripts/spbench_si/build_results_report.sh \
+  --exclude-profile internvl3_78b \
+  --exclude-profile gemini31pro_openrouter_non_zdr
 ```
 
 评分器先重跑 full validator，然后分别生成主协议和 upstream audit 目录。报告只发现通过 publication
-gates 的唯一候选；20/21 暂行报告只允许明确缺少 `internvl3_78b`，四卡结果补齐后原地重建为 21/21。
+gates 的唯一候选。汇总不要求全部 21 轨已完成；默认纳入当前全部合法候选，重复使用
+`--exclude-profile` 可从本次表格中去掉指定注册轨。报告必须显示纳入数、明确排除项和其余未完成项；
+排除不会让任何未通过单轨门禁的结果入表。
 
 ## 6. 验收证据
 
@@ -153,6 +192,6 @@ gates 的唯一候选；20/21 暂行报告只允许明确缺少 `internvl3_78b`�
 - `test_gate.json` 与 `test_artifacts/prediction_validation.json`；
 - `predictions.jsonl`、`.metadata.json` 与 full `prediction_validation.json`；
 - 两个 scorer protocol 各自的 `summary.json`，以及主目录 `publication_gates.json`；
-- 全局报告的状态、missing 列表、输入 track 与 21 条唯一候选。
+- 全局报告的纳入/排除/未完成状态、输入 track 与所有入表唯一候选。
 
 日志完成、tmux 安静或推理结束都不等于评分/发布完成。

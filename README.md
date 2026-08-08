@@ -21,18 +21,15 @@ single-image test 1009 条的受限输入
 
 ## 当前评测范围
 
-项目目标覆盖 MSMU-Bench、CV-Bench、Q-Spatial Bench 和 SPBench-SI。MSMU 的既有 18 条目标 profile
-已完成；CV-Bench 已实现 23 条目标轨的链路。截至 2026-08-06，除需四张 80GB GPU 的
-InternVL3-78B 外，其余 22 条轨均已完成 full-2638、正式 validator、当前 scorer protocol 评分和
-publication gates，全局报告状态为 22/23。Q-Spatial Bench 的 21 轨代码、协议、回归与运行入口已经
-实现；截至 2026-08-07，除固定 TP=4 blocked 的 InternVL3-78B 外，其余 20 轨均已在服务器通过
-red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
-评分与 publication gates；全局报告状态为 20/21。SPBench-SI 的 21 轨 contract、
-两阶段 gate、双 scorer、调度与报告已于 2026-08-07 完成本地实现和回归；截至 2026-08-08，20 条
-非 78B 轨中 18 条保留当前 full-1009；Gemini full 失败，SpatialLadder 旧 v1 full 因官方 left-padding
-要求未落实而作废，等待 v2 test/full 重跑。尚未启动正式评分，也没有全局报告。精确范围、
-数据准备边界与当前阶段见
-[四 Benchmark 评测范围](docs/evaluation-scope.md)。
+项目目标覆盖 MSMU-Bench、CV-Bench、Q-Spatial Bench 和 SPBench-SI。核心比较对象是开源通用模型与
+空间专用模型；所有 benchmark 的闭源 API 轨只作补充参照，不是项目工作的比较重点，也不是阶段
+收尾必须补齐的形式门槛。已完成的闭源结果仍保留同等严格的 validator、provenance 与 publication
+gates；未完成轨可以明确搁置，不得因此自动发起付费调用。
+
+各 benchmark 注明日期的已验证快照、精确范围和数据准备边界只在
+[四 Benchmark 评测范围](docs/evaluation-scope.md)与[模型矩阵](docs/model-matrix.md)维护。服务器实时
+状态仍须读取结果目录中的 `status.tsv`、validator、metadata、`summary.json` 与 publication gates，
+不能从 README 推断。
 
 项目级目标范围现为 19 个模型身份：MSMU 阶段已有 15 个，加上 RoboBrain2.5-8B-NV、
 RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B。CV-Bench registry 将 fair/native、额外提示词
@@ -225,6 +222,14 @@ bash scripts/spbench_si/run_scheduled_batch.sh --dry-run
 bash scripts/spbench_si/score_results.sh --check
 bash scripts/spbench_si/score_results.sh --predictions /absolute/path/to/predictions.jsonl
 bash scripts/spbench_si/build_results_report.sh
+bash scripts/spbench_si/build_results_report.sh \
+  --exclude-profile internvl3_78b \
+  --exclude-profile gemini31pro_openrouter_non_zdr
+
+# 闭源补充轨，当前搁置；只有新的明确需求和付费授权后才续接缺失 index
+bash scripts/spbench_si/set_packyapi_key.sh
+source /media/datasets/lihaoran/tools/mihomo/proxy-on.sh
+bash scripts/spbench_si/run_gemini_packyapi_resume.sh
 
 # 四卡 InternVL3-78B：只读检查后执行 test/full/validator/精确评分/报告重建
 bash scripts/spbench_si/run_internvl3_78b_evaluation.sh --check
@@ -232,7 +237,7 @@ bash scripts/spbench_si/run_internvl3_78b_evaluation.sh
 ```
 
 正式双卡批次必须显式传入 `--without-internvl78 --with-paid-api`；控制器不自动评分。GPU test/full、
-付费 API 与正式评分分别需要后续明确授权。数据合同、20/21 暂行报告与 TP=4 边界见
+付费 API 与正式评分分别需要后续明确授权。数据合同、部分汇总选择与 TP=4 边界见
 [SPBench-SI 简明指令](docs/spbench-si-commands.md)和
 [两阶段 runbook](docs/spbench-si-two-stage-runbook.md)。迁移到四卡服务器补齐 78B 时使用
 [InternVL3-78B 四卡完整评测](docs/spbench-si-internvl3-78b-evaluation.md)；入口不会接管已有端口或

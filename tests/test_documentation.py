@@ -379,12 +379,12 @@ class DocumentationConsistencyTest(unittest.TestCase):
             "watch_scheduled_health.sh",
             "score_results.sh --predictions",
             "build_results_report.sh",
-            "20/21",
-            "21/21",
+            "--exclude-profile",
+            "部分汇总",
         ]:
             with self.subTest(required=required):
                 self.assertIn(required, runbook)
-                self.assertIn(required, commands if required != "21/21" else runbook)
+                self.assertIn(required, commands)
         for required in [
             "SPBENCH_SI_PARQUET",
             "SPBENCH_SI_IMAGES_ARCHIVE",

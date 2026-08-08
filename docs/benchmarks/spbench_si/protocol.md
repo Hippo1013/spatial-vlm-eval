@@ -79,8 +79,13 @@ Please answer with the option's letter from the given choices (e.g., A, B, etc.)
 - InternVL3 8B/38B/78B：TP=1/2/4，greedy、128、seed 42；78B 固定四张 80GB GPU。
 - Qwen3-VL 2B/4B/8B/32B：TP=1/1/1/2，temperature 0.7、top-p 0.8、top-k 20、presence
   penalty 1.5、128、逐请求 seed 3407。
-- GPT-5/Gemini 3.1 Pro：OpenRouter first-party non-ZDR，medium/16384；GPT-5 不发送 temperature，
-  Gemini temperature 0。
+- GPT-5/Gemini 3.1 Pro：模型轨身份锁定为现有 OpenRouter first-party non-ZDR profile，
+  medium/16384；GPT-5 不发送 temperature，Gemini temperature 0。Gemini 额度不足时允许同一模型轨仅把
+  缺失请求续接到 PackyAPI `Gemini-slb` 企业池；这不是新增 profile 或报告模型。续接仍发送
+  `reasoning_effort=medium`、temperature 0 和同一 16,384 token 上限，且必须在 authenticated
+  `/v1/models` 与实际 completion 中优先锁定显式 Gemini 3.1 Pro；若企业池只暴露 Packy 官方文档使用的
+  `gemini-3-pro-preview`，允许把它作为该平台的兼容 route alias，但仍拒绝 Flash、2.5 或其他模型
+  fallback，并在机器 provenance 保存实际 request/returned model id。
 - specialized 轨使用 registry 锁定的官方 processor/runner/revision/decoding；SpatialRGPT 不伪造
   region/depth，3DThinker 不加 Mental-3D，SpatialLadder 使用 BF16/FlashAttention2 和
   `12544..401408` pixels。SpatialLadder 锁定上游在 `padding=True` 前显式设置
@@ -110,6 +115,17 @@ full 必须复用完全匹配的 gate，以 fsync journal 断点恢复，最终�
 `predictions.jsonl`、metadata 和 full `prediction_validation.json`。subset 永不评分。
 旧 SpatialLadder v1 gate/full 虽通过结构 validator，但因 right-padded native batch 已确认损坏，不能被
 当前 v2 profile 发现或恢复；修复后必须重新运行 test 与 full。
+
+唯一 API-source 续接例外是已经通过 test gate、但因 OpenRouter 额度耗尽而停在 fsync journal 的
+`gemini31pro_openrouter_non_zdr`：经操作者明确要求，不重做 test，也不重发既有成功题。入口必须逐条
+重新验证原 journal 的 dataset input audit、图片 SHA、prompt/template、模型 revision、Google AI Studio
+provider 与单图 evidence；随后复制成功项到新的签名 journal，并仅从缺失 index 调 PackyAPI。旧 gate
+与新 binding 除 backend、endpoint、served model、adapter digest 外的 dataset/prompt/profile/decoding/
+image/capacity 字段必须逐项相等。首个缺失题必须串行完成并通过 OpenAI-compatible 请求/响应、返回模型
+identity、单图和 generation metadata 检查后才允许恢复 gate 中的并发容量。最终 metadata 与独立
+`api_source_continuation.json` 必须列出两种额度来源的题数和 index-set digest，明确
+`test_stage_reused_without_retest=true`；不得把混合来源伪装为纯 OpenRouter，也不得改变报告中的
+Gemini 3.1 Pro 模型身份。
 
 双卡冻结调度覆盖除 InternVL3-78B 外的 20 条轨。Phase A 双卡 lane 为 InternVL3-38B → LLaVA-Yi-34B
 → Qwen3-VL-32B，同时 API lane 严格串行 GPT-5 → Gemini。双卡 lane 全部成功且自有 vLLM 退出、端口
@@ -159,9 +175,16 @@ spbench_si_upstream_7a0d2ee_default_direct_compat_v1
 metadata、revision、prompt、decoding、input track 与 hash 不一致时拒绝发布。同 profile 多个 publishable
 候选也拒绝自动选择。
 
-报告第一表只显示主协议的模型、实际输入、四题型、NQ、MCQ、Overall；第二表明确标作 upstream
-compatibility audit 并显示差异。正式完整报告必须 21/21；当前双卡环境允许唯一一种暂行状态：20/21，
-且 missing 必须恰为 `internvl3_78b`。除此以外的部分报告全部拒绝。
+报告只显示主协议的模型（输入形式写在同一单元格括号内）、四题型、NQ、MCQ 与 Overall，
+每个指标列的并列最高分全部加粗；
+上游兼容性审计仍保留为独立评分产物和 publication provenance，但不进入汇总 Markdown。
+报告的集合完整度不再是发布前置门禁：任意非空子集都可汇总，
+但入表的每一轨仍必须通过 full validator、主协议与 audit 完整性、provenance 和
+publication gates。默认纳入所有可发布候选；操作者可重复传入 `--exclude-profile`
+明确排除已完成或未完成的注册轨。部分报告必须同时列出纳入数、明确排除项与未纳入且未排除项，
+不得伪装成全量完成。排除只作用于报告集合，不能跳过或放宽单轨发布门禁。
+Gemini 的额度来源续接只在本文和机器 provenance 中披露，不进入两张结果表，不改模型显示名，也不增加
+provider/source 列；汇总中仍只有同一行 `Gemini 3.1 Pro | RGB`。
 
 本实现的主结果是“original MRA definition + robust direct parser internal score”，不是当前上游代码的
 逐字节输出。prompt、parser、单位、边界、聚合或 publication identity 改变时必须更换 scorer protocol、

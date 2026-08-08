@@ -13,6 +13,10 @@ inference protocol、prompt/template、图像处理、decoding 和 scorer protoc
 校验这些 provenance、一次只选择一个 scorer protocol，并在模型名称中区分不同 input track 时才可
 省略 protocol 列。
 
+闭源 API profile 在全部 benchmark 中只作补充参照，不是核心比较对象或阶段完成门槛；完整范围与
+搁置规则以[评测范围的完成边界](evaluation-scope.md#比较重点与完成边界)为准。已运行结果的单轨门禁
+不因该优先级而放宽。
+
 三个 benchmark 的 `internvl3_78b` profile 共享 served name `internvl3-78b-three-bench`，model revision
 仍固定为 `3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356`，均为 BF16 TP=4、四张 80GB GPU。它们可由
 `scripts/internvl3_78b/run_three_bench_evaluation.sh` 只加载一次 vLLM 后依次补齐；各自的 prompt、
@@ -125,9 +129,10 @@ API 轨明确标记 provider nondeterministic。执行和评分边界见
 
 SPBench-SI 使用独立的 `src/spatial_vlm_eval/benchmarks/spbench_si/profiles.py`；`PROFILE_SEQUENCE` 唯一
 确定下表顺序，其中 RGB 18 条、同一源 RGB 派生输入 3 条。代码、协议和本地回归于 2026-08-07 完成。
-截至 2026-08-08，18 条非 78B 轨保留当前 full-1009；Gemini full 失败，SpatialLadder 旧 v1 full 虽通过
-结构 validator，但因 native batch 遗漏官方 left padding 已作废并等待 v2 test/full。固定 TP=4 的
-`internvl3_78b` 尚未运行。未启动正式评分，也没有全局报告。
+截至 2026-08-08，包含固定 TP=4 的 `internvl3_78b` 在内的 20 条轨已通过当前 full-1009、
+主协议与 upstream audit 评分及 publication gates。SpatialLadder 旧 right-padded v1 已作废，
+left-padded v2 已重跑并通过；Gemini 续跑仍没有可发布 summary。当前文档明确排除 Gemini 和
+InternVL3-78B，汇总其余 19 条合法轨；Gemini 作为闭源补充轨已搁置，不阻塞本阶段收尾。
 
 | Profile | Model / locked revision | Input track | Backend / locked decoding |
 |---|---|---|---|
@@ -141,7 +146,7 @@ SPBench-SI 使用独立的 `src/spatial_vlm_eval/benchmarks/spbench_si/profiles.
 | `qwen3_vl_8b` | `Qwen3-VL-8B-Instruct@0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | RGB | vLLM TP=1；同 Qwen sampling |
 | `qwen3_vl_32b` | `Qwen3-VL-32B-Instruct@0cfaf48183f594c314753d30a4c4974bc75f3ccb` | RGB | vLLM TP=2；同 Qwen sampling |
 | `gpt5_openrouter_non_zdr` | `openai/gpt-5-2025-08-07` | RGB | OpenRouter first-party non-ZDR；medium/16384；无 temperature |
-| `gemini31pro_openrouter_non_zdr` | `google/gemini-3.1-pro-preview-20260219` | RGB | OpenRouter first-party non-ZDR；temperature 0/medium/16384 |
+| `gemini31pro_openrouter_non_zdr` | `google/gemini-3.1-pro-preview-20260219` | RGB | 同一 Gemini 3.1 Pro 模型轨；OpenRouter first-party non-ZDR，可仅为缺失题续接 PackyAPI Gemini-slb 额度；temperature 0/medium/16384；来源逐 index 记 provenance |
 | `ssr_rgb` | `SSR-VLM-7B@7bcb4636f1396325f27f7fbb2f2df121128931bf` | RGB | official runner；checkpoint generation config/128/seed 42 |
 | `ssr_native` | 上述 VLM + `SSR-MIDI-7B@8ed878fa16e3e440741ed8c1fedfcfe40710258d` | RGB + DepthPro + MIDI + TOR10 | official persistent runner；128/seed 42 |
 | `spatialrgpt_rgb` | `SpatialRGPT-VILA1.5-8B@64df7902f82b5053f5a53455095805e6de3a1f87` | RGB，无伪 region/depth | official VILA；greedy/128/seed 42 |
@@ -151,11 +156,12 @@ SPBench-SI 使用独立的 `src/spatial_vlm_eval/benchmarks/spbench_si/profiles.
 | `robobrain25_8b_nv_rgb` | `RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | RGB | official general VQA；0.7/768/seed 42 |
 | `robobrain25_8b_mt_rgb` | `RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | RGB | official general VQA；0.7/768/seed 42 |
 | `hispatial3b_moge2_xyz` | `HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | RGB + 同图 MoGe-2 XYZ | official predictor；greedy/100/seed 42 |
-| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB，无 thinking prompt | official Qwen2.5-VL；BF16/FA2；left-padded native batch；0.01/top-p 1/repetition 1.05/128/seed 42；v2 待重跑 |
+| `spatialladder3b_rgb` | `SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | RGB，无 thinking prompt | official Qwen2.5-VL；BF16/FA2；left-padded native batch；0.01/top-p 1/repetition 1.05/128/seed 42；v2 full + publication gates passed（2026-08-08） |
 
 所有轨统一使用 SPBench-SI 官方 `default/direct` prompt。双卡 `scheduled_batch.SCHEDULE` 只覆盖 20 条，
 明确排除固定 TP=4 的 `internvl3_78b`；该轨由 `run_internvl3_78b_evaluation.sh` 在四卡服务器独立补齐，
-不允许量化或 TP=2 替代。20/21 报告只能暂行且必须只缺该轨。完整 prompt、processor、
+不允许量化或 TP=2 替代。报告集合可用 `--exclude-profile` 明确选择，但每条入表轨仍必须通过完整
+publication provenance。完整 prompt、processor、
 image-processing、seed strategy、test gate 与 scorer 边界见
 [SPBench-SI canonical protocol](benchmarks/spbench_si/protocol.md)。
 

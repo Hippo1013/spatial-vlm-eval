@@ -37,11 +37,16 @@ v2 parser 进一步锁定：
 
 每次评分另在独立目录生成
 `spbench_si_upstream_7a0d2ee_default_direct_compat_v1`，精确保留锁定 commit 当前 direct-mode 的提取、
-inclusive 边界和聚合。两套逐行结果、summary 和 protocol identity 不混表；报告第二表必须明确标作
-upstream compatibility audit。
+inclusive 边界和聚合。两套逐行结果、summary 和 protocol identity 保持分离；上游审计继续作为独立
+评分产物和 publication provenance，但汇总 Markdown 只展示主协议表。主表把实际输入形式写在模型名的
+同一单元格括号内，并将每个指标列的所有并列最高分加粗，与其他 benchmark 的精简结果表保持一致。
 
 评分前强制 full validator，报告再检查 dataset/profile/revision/prompt/decoding/input track、prediction
 与 scored-row hash 和 publication gates。同 profile 多候选拒绝自动选择。
+
+报告集合选择与单轨发布门禁分离。报告可以汇总任意非空的 publication-gated 子集，
+并用重复的 `--exclude-profile` 声明不进入本次表格的注册轨；Markdown 必须分开列出明确
+排除和其余未完成项。排除不能使未通过 validator/provenance/双协议/publication gates 的结果入表。
 
 v1/v2 scorer 不共享正式 score 目录。v1 inference metadata 被列为兼容输入，因为 parser-only 升级不改变
 prediction、prompt、图像、processor 或 decoding；v2 summary 和 publication gate 必须记录并验证原声明。
@@ -56,7 +61,7 @@ prediction、prompt、图像、processor 或 decoding；v2 summary 和 publicati
   旧 v1 prediction 作废并由 inference v2 重跑，不能由 parser 放宽来补救。
 - parser、阈值、聚合或兼容实现身份变化必须更换对应 protocol id，并更新真实输出回归、本文和
   canonical protocol。
-- 暂行报告只允许 20/21 且唯一缺少固定四卡的 InternVL3-78B；其他部分状态不能发布。
+- 不再为了生成结果表强制等待 21 轨全部完成；部分表的覆盖、排除与余下缺失必须显式可见。
 
 ## References
 

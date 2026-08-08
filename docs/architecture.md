@@ -71,6 +71,12 @@ CV-Bench 本地 vLLM 与付费 API 使用不同恢复策略：vLLM 长尾请求�
 revision、inference/scorer protocol、图像处理、decoding、upstream commit、runtime package、GPU、开始/
 结束时间和 subset 状态。
 
+跨 API 额度来源不能直接伪装成同一 runtime signature。SPBench-SI 的 Gemini 特批续接保留原 journal
+只读，逐成功项重新核对模型输入与 generation evidence，再把已验证结果作为带来源证明的 seed 写入新
+signature journal；新来源从首个缺失 index 开始。最终 prediction 仍按一个模型 profile 聚合，但 metadata
+必须给出每个 API source 的数量与 index-set digest，并保留旧/新 endpoint binding。该机制只改变调用
+额度来源，不允许改变 dataset、prompt、model identity、decoding、图像或 scorer protocol。
+
 ## Python 包
 
 ### `spatial_vlm_eval.benchmarks`
@@ -88,7 +94,8 @@ numeric parser、split-macro 聚合和发布报告。它只复用 model-neutral 
 
 SPBench-SI 子包独立拥有 ZIP 直读数据合同、21 条 profile、default/direct prompt、processor 对照、
 red/blue + smoke8 gate、full validator、严格原始 MRA 主 scorer 与当前上游兼容 audit。两种 scorer 的
-逐行产物和 protocol 目录分离；报告只能在各自 publication provenance 完整时并列表达差异。
+逐行产物和 protocol 目录分离；报告验证两者的 publication provenance，但只展示主协议结果。
+报告集合可以是任意非空子集，但必须把显式排除与其余未完成轨分开记录；该选择不改变单轨门禁。
 
 ### `spatial_vlm_eval.models`
 

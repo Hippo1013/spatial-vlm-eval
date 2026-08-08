@@ -45,8 +45,8 @@
 - 报错：既有通用推理环境不能同时导入锁定 runner 所需依赖。
 - 原因：服务器上没有满足该官方组合的完整现成环境。
 - 处理：在 `/media/datasets/lihaoran/envs/` 建立复用 torch/flash-attn 的隔离 overlay，仅补 qwen-vl-utils。
-- 验证：环境加载、processor/input audit 与 red/blue canary 已通过；当时的 v1 batch gate 后续因遗漏官方
-  left padding 作废，不能再作为当前推理正确性证据。
+- 验证：旧 v1 batch gate 因遗漏官方 left padding 作废；left-padded v2 已通过异长 canary、smoke8、
+  full-1009 validator 与 publication gates，1,009 条 generation metadata 均记录 left padding。
 
 ### 2026-08-07 · [SPBench-SI/scheduler] 端口 connect 探针误判可复用
 - 场景：vLLM 换模清理阶段等待监听端口释放。

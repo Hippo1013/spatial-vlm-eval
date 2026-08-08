@@ -2,7 +2,8 @@
 
 本页用于把两卡服务器上固定缺失的 `internvl3_78b` 迁移到四张 80GB GPU 补齐。独立入口自动完成
 test gate、full-1009、独立 validator、主协议与 upstream compatibility audit 精确评分，并把既有
-`spbench-si-result.md` 从暂行 20/21 原地重建为完整 21/21。
+`spbench-si-result.md` 原地重建为当前所有 publication-gated 候选的汇总；若其余 20 轨也都已完成，
+报告自然为完整 21/21，否则显式保留部分汇总状态。
 
 该 profile 的 served name 已统一为 `internvl3-78b-three-bench`。若还要补齐 Q-Spatial 与 CV-Bench，
 优先按[三 Benchmark 一键测评](internvl3-78b-three-bench-evaluation.md)共享一次模型加载；本页的
@@ -30,10 +31,10 @@ SPBENCH_SI_INTERNVL3_78B_GPU_IDS=0,1,2,3
 SPBENCH_SI_INTERNVL3_78B_PORT=18102
 ```
 
-`SPBENCH_SI_OUTPUT_ROOT` 必须指向既有 20 轨结果所在的同一个标准输出根，不能改成 78B 专属目录。
+`SPBENCH_SI_OUTPUT_ROOT` 必须指向其他 SPBench-SI 结果所在的同一个标准输出根，不能改成 78B 专属目录。
 四张 GPU 必须各有至少 79,000 MiB 总显存、76,000 MiB 空闲显存且无 compute process。脚本不会停止
-burn、未知服务或其他任务。最终报告门禁会要求该根从合法 20/21 补齐为 21/21；若 78B 曾留下可恢复的
-partial score，入口仍允许原地继续修复，而不会被一次前置报告检查阻塞。
+burn、未知服务或其他任务。若 78B 曾留下可恢复的 partial score，入口仍允许原地继续修复。
+报告的全轨完整度不阻塞 78B 本身的 validator、双协议评分和 publication gates。
 
 ## 一键运行
 
@@ -126,7 +127,8 @@ bash scripts/spbench_si/run_internvl3_78b_evaluation.sh --status
 bash scripts/spbench_si/build_results_report.sh --check
 ```
 
-目标状态是 full validator 与双协议 publication provenance 全部通过；报告显示 `21/21`、`missing` 为空。
+目标状态是 78B 的 full validator 与双协议 publication provenance 全部通过。报告会列出当前纳入、
+明确排除和其余未完成项；只有所有轨均可发布且未排除时才显示完整 `21/21`。
 
 ## 手工备用
 

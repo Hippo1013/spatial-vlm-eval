@@ -7,6 +7,20 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- SPBench-SI 结果表对齐其他 benchmark 的精简展示：模型名与实际输入形式合并为
+  `模型（输入）` 单元格，每个指标列的并列最高分全部加粗，Markdown 只展示主协议结果表；
+  上游兼容审计仍作为独立评分与
+  publication provenance 产物保留，但不进入汇总文档。该变更只影响报告展示，不改 scorer protocol
+  或分数。
+- SPBench-SI 报告集合不再强制 21/21 或唯一的 20/21 形态：任意非空、逐轨通过完整
+  publication gates 的子集都可汇总；可重复使用 `--exclude-profile` 明确排除注册轨，
+  Markdown 分开声明排除项与其余未完成项。这只改变报告集合门禁，不改 scorer protocol
+  或单轨 validator/provenance/双协议/publication 门禁。
+- SPBench-SI Gemini 3.1 Pro 增加 PackyAPI `Gemini-slb` 企业池作为同一模型轨的补充额度来源：隐藏输入
+  key 工具只写未跟踪 `.env.server`；专用入口不重跑 test 或 OpenRouter 已成功题，逐条验证旧 journal
+  后用新 signature 只补缺失 index。authenticated `/models`、首个缺失题串行 request/response、返回
+  model id、reasoning/temperature/token 参数与单图证据均 fail closed；最终 metadata 单列两个 API
+  source 的计数和 index digest，报告模型身份与 scorer protocol 不变。
 - 调整 InternVL3-78B 三 benchmark 一键入口的完成边界：其他 profile 的报告源不完整或发现失败不再
   阻塞 78B 推理与评分；三个 benchmark 均强制完成目标 validator、精确单轨评分和 publication gates，
   仅当对应基线恰好只缺 78B（或恢复时已完整）才重建全局报告，否则明确记录 `report=skipped`。
@@ -29,8 +43,8 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   `03611025`，直接从锁定 ZIP 验证/解码 524 张 JPEG，提供 1,009 条防泄漏输入合同、21 条目标 profile、
   default/direct prompt、red/blue + smoke8 绑定 gate、fsync 恢复、双卡 20 轨失败隔离调度和只读 watcher。
 - 增加 SPBench-SI 原始十阈值严格 MRA 主 scorer：唯一 final/tag 答案、冲突 fail-closed、四题型宏平均，
-  并在独立目录精确保留当前 SpatialLadder direct-mode 提取与 inclusive 边界 compatibility audit；报告
-  publication gates 只接受 21/21，或明确只缺固定四卡 InternVL3-78B 的暂行 20/21。
+  并在独立目录精确保留当前 SpatialLadder direct-mode 提取与 inclusive 边界 compatibility audit；入表轨
+  必须逐条通过完整 publication gates。
 - 修复 SPBench-SI 双卡 test 调度的端口可用性探针与清理失败记账，并确保共享 server env 不覆盖逐轨
   GPU 分配和 LLaVA-NeXT 4096 上下文；服务器 20 条非 78B 轨已通过当前 binding 的完整 test gate。
 - 增加 SPBench-SI InternVL3-78B 四卡独立全链路：固定 BF16/TP=4，自有 vLLM 顺序执行 test/full-1009、
@@ -40,9 +54,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
   评分与 publication gates；全局报告为 20/21。
 
-- 2026-08-08 服务器现场复核：SPBench-SI 中 18 条非 78B 轨保留当前 full-1009；Gemini full 失败，
-  SpatialLadder right-padded v1 已作废并等待 left-padded v2 test/full，InternVL3-78B 尚未运行，正式
-  score summary 与全局报告均不存在。
+- 2026-08-08 服务器现场复核：SPBench-SI 报告发现器逐轨验证出 20 条当前可发布候选，包含
+  InternVL3-78B 与 left-padded v2 SpatialLadder；Gemini 续跑仍未形成可发布 summary。按操作者本次选择，
+  结果文档明确排除 Gemini 与 InternVL3-78B，汇总其余 19 条可发布轨。
 
 - 修复 Q-Spatial 目录评分把 `test_artifacts/` 与 `test_artifacts.stale-*` 中的 smoke8 prediction 误纳入
   正式候选的问题；当前发现器只冻结 20 条 full 结果，旧 `test_runs/`、shards 与 score 子树仍被排除。
@@ -128,6 +142,11 @@ Git 历史为准；临时调试过程和未定位问题不写入。
   provider/model/media audit，避免只凭请求结构或非空图像张量判定模型已看图。
 
 ### Changed
+
+- 明确所有 benchmark 的闭源 API 轨只作补充参照，不是项目核心比较对象或阶段收尾的强制完成条件；
+  未完成轨可以显式搁置，不能为了形式完整度自动发起付费调用。已经运行并准备入表的闭源结果仍须
+  通过原有 validator、provenance、scorer protocol 与 publication gates。SPBench-SI Gemini 轨按此
+  共识搁置，保留恢复入口但只在新的明确需求和付费授权后使用。
 
 - Q-Spatial Markdown 汇总移除旧 notebook 解析分数、主/旧差异条数及相关文字，只展示当前 v2 scorer
   的 `δ≤2` 主结果、ScanNet 五类明细与 `δ≤1.25` 严格阈值；主表同时沿用 MSMU 命名方式，把实际派生
