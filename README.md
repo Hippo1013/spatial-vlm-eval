@@ -130,6 +130,8 @@ python -m pip freeze > environment-manifests/ENV-NAME.pip-freeze.txt
 
 四卡服务器可让 Q-Spatial、SPBench-SI、CV-Bench 共用一次 78B 模型加载。入口默认自动加载仓库根
 `.env.server`；首次使用时按[公共配置模板](configs/internvl3-78b-three-bench.env.example)补齐配置。
+三个 benchmark 都会独立完成 78B 评分；只有该 benchmark 的既有报告源仅缺 78B 时才重建全局报告，
+其他模型结果不完整只会跳过对应汇总，不阻塞 78B 测评。
 
 ```bash
 cd /media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval

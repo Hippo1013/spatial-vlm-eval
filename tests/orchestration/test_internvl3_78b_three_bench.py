@@ -18,10 +18,13 @@ from spatial_vlm_eval.orchestration.internvl3_78b_three_bench import (
     BenchmarkSpec,
     Controller,
     MultiLock,
+    ReportPlan,
     ResourceBlocked,
     assert_shared_profile_identity,
-    baseline_errors,
     execute_workflow,
+    report_rebuild_plan,
+    run_preflight,
+    run_publication_worker,
 )
 
 
@@ -98,6 +101,8 @@ class ThreeBenchControllerTest(unittest.TestCase):
         self.assertEqual(positions, sorted(positions))
         self.assertIn("background bash", output)
         self.assertIn("wait for all background publication workers", output)
+        self.assertIn("rebuild report only when the existing baseline is", output)
+        self.assertIn("reports may be complete or skipped", output)
         self.assertIn("no files, GPU processes, inference, scoring, or reports were changed", output)
 
     def test_publication_starts_before_next_inference_and_failures_are_isolated(self) -> None:
@@ -195,29 +200,148 @@ class ThreeBenchControllerTest(unittest.TestCase):
         )
         self.assertTrue(outcome.passed)
 
-    def test_baseline_requires_exact_registry_set_or_only_internvl78_missing(self) -> None:
+    def test_report_plan_builds_only_for_complete_or_internvl78_only_missing(self) -> None:
+        from spatial_vlm_eval.benchmarks.cv_bench.profiles import (
+            PROFILE_SEQUENCE as CV_SEQUENCE,
+        )
         from spatial_vlm_eval.benchmarks.q_spatial.profiles import PROFILE_SEQUENCE
+        from spatial_vlm_eval.benchmarks.spbench_si.profiles import (
+            PROFILE_SEQUENCE as SP_SEQUENCE,
+        )
 
         with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            sequences = {
+                "q_spatial": PROFILE_SEQUENCE,
+                "spbench_si": SP_SEQUENCE,
+                "cv_bench": CV_SEQUENCE,
+            }
+            for key, sequence in sequences.items():
+                with self.subTest(benchmark=key):
+                    spec = _spec(root, key)
+                    expected = set(sequence)
+                    without_78b = expected - {PROFILE_KEY}
+                    with mock.patch(
+                        "spatial_vlm_eval.orchestration."
+                        "internvl3_78b_three_bench._report_profiles",
+                        return_value=without_78b,
+                    ):
+                        plan = report_rebuild_plan(spec)
+                        self.assertTrue(plan.rebuild)
+                        self.assertIn("only internvl3_78b missing", plan.detail)
+                    with mock.patch(
+                        "spatial_vlm_eval.orchestration."
+                        "internvl3_78b_three_bench._report_profiles",
+                        return_value=expected,
+                    ):
+                        self.assertTrue(report_rebuild_plan(spec).rebuild)
+                    invalid = (without_78b - {next(iter(without_78b))}) | {
+                        "unexpected_profile"
+                    }
+                    with mock.patch(
+                        "spatial_vlm_eval.orchestration."
+                        "internvl3_78b_three_bench._report_profiles",
+                        return_value=invalid,
+                    ):
+                        plan = report_rebuild_plan(spec)
+                        self.assertFalse(plan.rebuild)
+                        self.assertIn("report baseline incomplete", plan.detail)
+
+    def test_report_discovery_failure_skips_report_instead_of_blocking_score(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            spec = _spec(Path(directory), "spbench_si")
+            with mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench._report_profiles",
+                side_effect=ValueError("synthetic unrelated result failure"),
+            ):
+                plan = report_rebuild_plan(spec)
+        self.assertFalse(plan.rebuild)
+        self.assertIn("report discovery unavailable", plan.detail)
+
+    def test_preflight_does_not_require_other_profile_report_baselines(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            specs = tuple(_spec(root, key) for key in BENCHMARK_ORDER)
+            with mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench._environment_errors",
+                return_value=[],
+            ), mock.patch.object(
+                MultiLock,
+                "unavailable",
+                return_value=[],
+            ), mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench._run_checked",
+                return_value=0,
+            ) as run_checked, mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench._report_profiles"
+            ) as report_profiles:
+                run_preflight(root, specs, root / "control", {})
+        self.assertEqual(run_checked.call_count, 1 + len(BENCHMARK_ORDER))
+        report_profiles.assert_not_called()
+
+    def test_publication_worker_stops_after_target_score_when_report_is_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            spec = _spec(Path(directory), "spbench_si")
+            with mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench.subprocess.run",
+                return_value=SimpleNamespace(returncode=0),
+            ) as run, mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench.target_result_errors",
+                return_value=[],
+            ):
+                status = run_publication_worker(
+                    spec,
+                    ReportPlan(False, "report baseline incomplete: 0/21"),
+                )
+        self.assertEqual(status, 0)
+        run.assert_called_once_with(
+            ["bash", str(spec.scoring_script), "--predictions", str(spec.predictions)],
+            check=False,
+        )
+
+    def test_publication_worker_builds_report_for_ready_baseline(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
             spec = _spec(Path(directory), "q_spatial")
-            expected = set(PROFILE_SEQUENCE)
-            without_78b = expected - {PROFILE_KEY}
             with mock.patch(
-                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench._report_profiles",
-                return_value=without_78b,
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench.subprocess.run",
+                return_value=SimpleNamespace(returncode=0),
+            ) as run, mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench.target_result_errors",
+                return_value=[],
+            ), mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench.report_result_errors",
+                return_value=[],
             ):
-                self.assertEqual(baseline_errors([spec]), [])
+                status = run_publication_worker(
+                    spec,
+                    ReportPlan(True, "report baseline ready: 20/21"),
+                )
+        self.assertEqual(status, 0)
+        self.assertEqual(
+            [call.args[0] for call in run.call_args_list],
+            [
+                ["bash", str(spec.scoring_script), "--predictions", str(spec.predictions)],
+                ["bash", str(spec.report_script), "--check"],
+                ["bash", str(spec.report_script)],
+            ],
+        )
+
+    def test_publication_worker_never_hides_incomplete_target_score(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            spec = _spec(Path(directory), "cv_bench")
             with mock.patch(
-                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench._report_profiles",
-                return_value=expected,
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench.subprocess.run",
+                return_value=SimpleNamespace(returncode=0),
+            ) as run, mock.patch(
+                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench.target_result_errors",
+                return_value=["target score did not reach complete publication gates"],
             ):
-                self.assertEqual(baseline_errors([spec]), [])
-            invalid = (without_78b - {next(iter(without_78b))}) | {"unexpected_profile"}
-            with mock.patch(
-                "spatial_vlm_eval.orchestration.internvl3_78b_three_bench._report_profiles",
-                return_value=invalid,
-            ):
-                self.assertTrue(baseline_errors([spec]))
+                status = run_publication_worker(
+                    spec,
+                    ReportPlan(False, "report baseline incomplete"),
+                )
+        self.assertEqual(status, 1)
+        self.assertEqual(run.call_count, 1)
 
     def test_multi_lock_conflict_fails_closed_without_releasing_owner(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -7,6 +7,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 调整 InternVL3-78B 三 benchmark 一键入口的完成边界：其他 profile 的报告源不完整或发现失败不再
+  阻塞 78B 推理与评分；三个 benchmark 均强制完成目标 validator、精确单轨评分和 publication gates，
+  仅当对应基线恰好只缺 78B（或恢复时已完整）才重建全局报告，否则明确记录 `report=skipped`。
 - 修复 SPBench-SI SpatialLadder native batch 与锁定官方 runner 不一致的问题：processor 现在强制并
   fail-closed 验证 tokenizer left padding，capacity probe 改用两种长度的 red/blue prompt，generation、
   processor audit 与 gate 均保存 padding 证据。该轨 inference protocol 升为 v2；服务器旧 right-padded

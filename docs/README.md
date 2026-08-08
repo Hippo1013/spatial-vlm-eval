@@ -72,7 +72,8 @@
 ### 运行手册
 
 - [InternVL3-78B 三 Benchmark 一键测评](internvl3-78b-three-bench-evaluation.md)：只加载一次
-  四卡 vLLM，固定 Q-Spatial → SPBench-SI → CV-Bench 顺序并复用各自 validator/scorer/report。
+  四卡 vLLM，固定 Q-Spatial → SPBench-SI → CV-Bench 顺序，独立完成各自 validator/scorer，并仅在
+  对应历史报告源齐全时重建 report。
 - [CV-Bench 简明运行指令](cv-bench-commands.md)：操作者直接复制的 test/full/评分/汇总命令。
 - [CV-Bench 两阶段 runbook](cv-bench-two-stage-runbook.md)：test gate、full-2638、目录评分与报告命令。
 - [CV-Bench InternVL3-78B 一键评测](cv-bench-internvl3-78b-evaluation.md)：四卡 TP=4 的 test/full、

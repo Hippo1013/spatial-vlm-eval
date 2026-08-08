@@ -83,6 +83,12 @@ class WorkflowOutcome:
         )
 
 
+@dataclass(frozen=True, slots=True)
+class ReportPlan:
+    rebuild: bool
+    detail: str
+
+
 def repository_root() -> Path:
     return Path(__file__).resolve().parents[3]
 
@@ -293,36 +299,66 @@ def _expected_profiles(spec: BenchmarkSpec) -> set[str]:
     return set(PROFILE_SEQUENCE)
 
 
-def baseline_errors(specs: Sequence[BenchmarkSpec]) -> list[str]:
-    errors: list[str] = []
-    for spec in specs:
-        try:
-            present = _report_profiles(spec)
-        except Exception as exc:  # noqa: BLE001 - preflight must fail closed.
-            errors.append(f"{spec.label} report discovery failed: {type(exc).__name__}: {exc}")
-            continue
-        baseline = EXPECTED_BASELINE[spec.key]
-        expected = _expected_profiles(spec)
-        missing = expected - present
-        unexpected = present - expected
-        if present == expected:
-            continue
-        if len(present) == baseline and missing == {PROFILE_KEY} and not unexpected:
-            continue
-        errors.append(
-            f"{spec.label} baseline differs: present={len(present)}/{spec.total_profiles}, "
-            f"missing={sorted(missing)}, unexpected={sorted(unexpected)}; expected only "
-            f"{PROFILE_KEY} missing or a complete resumable result set"
+def report_rebuild_plan(spec: BenchmarkSpec) -> ReportPlan:
+    try:
+        present = _report_profiles(spec)
+    except Exception as exc:  # noqa: BLE001 - unrelated report sources must not block scoring.
+        return ReportPlan(
+            rebuild=False,
+            detail=f"report discovery unavailable: {type(exc).__name__}: {exc}",
         )
+    expected = _expected_profiles(spec)
+    missing = expected - present
+    unexpected = present - expected
+    if present == expected:
+        return ReportPlan(
+            rebuild=True,
+            detail=f"report sources already complete: {len(present)}/{spec.total_profiles}",
+        )
+    if (
+        len(present) == EXPECTED_BASELINE[spec.key]
+        and missing == {PROFILE_KEY}
+        and not unexpected
+    ):
+        return ReportPlan(
+            rebuild=True,
+            detail=(
+                f"report baseline ready: {len(present)}/{spec.total_profiles}; "
+                f"only {PROFILE_KEY} missing"
+            ),
+        )
+    return ReportPlan(
+        rebuild=False,
+        detail=(
+            f"report baseline incomplete: {len(present)}/{spec.total_profiles}; "
+            f"missing={sorted(missing)}, unexpected={sorted(unexpected)}"
+        ),
+    )
+
+
+def _score_state(spec: BenchmarkSpec) -> str:
+    if spec.key == "spbench_si":
+        from spatial_vlm_eval.benchmarks.spbench_si.score_results import score_state
+    elif spec.key == "q_spatial":
+        from spatial_vlm_eval.benchmarks.q_spatial.score_results import score_state
+    else:
+        from spatial_vlm_eval.benchmarks.cv_bench.score_results import score_state
+    return score_state(spec.predictions).state
+
+
+def target_result_errors(spec: BenchmarkSpec) -> list[str]:
+    errors = prediction_reuse_errors(spec)
+    if _score_state(spec) != "complete":
+        errors.append("target score did not reach complete publication gates")
     return errors
 
 
-def final_result_errors(spec: BenchmarkSpec) -> list[str]:
-    errors = prediction_reuse_errors(spec)
+def report_result_errors(spec: BenchmarkSpec) -> list[str]:
+    errors: list[str] = []
     try:
         present = _report_profiles(spec)
     except Exception as exc:  # noqa: BLE001
-        return [*errors, f"report discovery failed: {type(exc).__name__}: {exc}"]
+        return [f"report discovery failed: {type(exc).__name__}: {exc}"]
     if len(present) != spec.total_profiles or PROFILE_KEY not in present:
         errors.append(
             f"report sources are incomplete: {len(present)}/{spec.total_profiles}, "
@@ -330,14 +366,6 @@ def final_result_errors(spec: BenchmarkSpec) -> list[str]:
         )
     if not spec.report.is_file() or spec.report.stat().st_size == 0:
         errors.append(f"global report is missing: {spec.report}")
-    if spec.key == "spbench_si":
-        from spatial_vlm_eval.benchmarks.spbench_si.score_results import score_state
-    elif spec.key == "q_spatial":
-        from spatial_vlm_eval.benchmarks.q_spatial.score_results import score_state
-    else:
-        from spatial_vlm_eval.benchmarks.cv_bench.score_results import score_state
-    if score_state(spec.predictions).state != "complete":
-        errors.append("target score did not reach complete publication gates")
     return errors
 
 
@@ -656,10 +684,21 @@ class Controller:
         if errors:
             raise StepFailed(f"{spec.label} full provenance audit failed: {'; '.join(errors)}")
 
-    def start_publication(self, spec: BenchmarkSpec) -> subprocess.Popen[Any]:
+    def start_publication(
+        self, spec: BenchmarkSpec, report_plan: ReportPlan
+    ) -> subprocess.Popen[Any]:
         log = self.logs_root / f"{self.run_id}.{spec.key}.publication.log"
-        self.log(f"START background publication benchmark={spec.label} log={log}")
-        self.status(spec.key, "publication", "START", str(log))
+        report_mode = "build" if report_plan.rebuild else "skip"
+        self.log(
+            f"START background scoring benchmark={spec.label} "
+            f"report={report_mode} log={log}"
+        )
+        self.status(
+            spec.key,
+            "publication",
+            "START",
+            f"report={report_mode}; {report_plan.detail}; log={log}",
+        )
         handle = log.open("a", encoding="utf-8")
         try:
             process = subprocess.Popen(
@@ -671,6 +710,8 @@ class Controller:
                     spec.key,
                     "--predictions",
                     str(spec.predictions),
+                    "--report-mode",
+                    report_mode,
                 ],
                 cwd=self.root,
                 env=self.environment,
@@ -697,7 +738,7 @@ class Controller:
             statuses[key] = status
             state = "PASS" if status == 0 else "FAIL"
             self.status(key, "publication", state, f"exit={status}")
-            self.log(f"{state} background publication benchmark={spec.label} exit={status}")
+            self.log(f"{state} background scoring/report benchmark={spec.label} exit={status}")
         return statuses
 
 
@@ -771,9 +812,6 @@ def run_preflight(
     unavailable = MultiLock.unavailable(lock_paths(control_root, specs))
     if unavailable:
         raise ResourceBlocked("workflow lock is already held: " + ", ".join(map(str, unavailable)))
-    errors = baseline_errors(specs)
-    if errors:
-        raise ConfigurationError("; ".join(errors))
     for spec in specs:
         status = _run_checked(
             ["bash", str(spec.inference_script), "--check", "--model", PROFILE_KEY],
@@ -786,20 +824,40 @@ def run_preflight(
             raise ConfigurationError(f"{spec.label} preflight exited {status}")
 
 
-def run_publication_worker(spec: BenchmarkSpec) -> int:
-    commands = (
-        ["bash", str(spec.scoring_script), "--predictions", str(spec.predictions)],
+def run_publication_worker(spec: BenchmarkSpec, report_plan: ReportPlan) -> int:
+    score_command = [
+        "bash",
+        str(spec.scoring_script),
+        "--predictions",
+        str(spec.predictions),
+    ]
+    status = subprocess.run(score_command, check=False).returncode
+    if status != 0:
+        return status
+    errors = target_result_errors(spec)
+    if errors:
+        print(
+            f"[{spec.key}-publication] target score verification failed: {'; '.join(errors)}",
+            file=sys.stderr,
+        )
+        return 1
+    if not report_plan.rebuild:
+        print(
+            f"[{spec.key}-publication] SKIP report; target score complete; "
+            f"{report_plan.detail}"
+        )
+        return 0
+    for command in (
         ["bash", str(spec.report_script), "--check"],
         ["bash", str(spec.report_script)],
-    )
-    for command in commands:
+    ):
         status = subprocess.run(command, check=False).returncode
         if status != 0:
             return status
-    errors = final_result_errors(spec)
+    errors = report_result_errors(spec)
     if errors:
         print(
-            f"[{spec.key}-publication] final verification failed: {'; '.join(errors)}",
+            f"[{spec.key}-publication] report verification failed: {'; '.join(errors)}",
             file=sys.stderr,
         )
         return 1
@@ -820,10 +878,12 @@ def print_dry_run(root: Path, specs: Sequence[BenchmarkSpec], environment: Mappi
         )
         print(
             f"[three-bench-dry-run] {spec.label}: background bash {spec.scoring_script} "
-            f"--predictions {spec.predictions} && report-check && report"
+            f"--predictions {spec.predictions}; rebuild report only when the existing "
+            f"baseline is {EXPECTED_BASELINE[spec.key]}/{spec.total_profiles} with only "
+            f"{PROFILE_KEY} missing"
         )
     print("[three-bench-dry-run] stop owned shared vLLM; wait for all background publication workers")
-    print("[three-bench-dry-run] verify CV 23/23, Q-Spatial 21/21, SPBench-SI 21/21")
+    print("[three-bench-dry-run] verify all three target scores; reports may be complete or skipped")
     print("[three-bench-dry-run] no files, GPU processes, inference, scoring, or reports were changed")
     return 0
 
@@ -910,6 +970,12 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     operation.add_argument("--dry-run", action="store_true")
     operation.add_argument("--publication-worker", choices=BENCHMARK_ORDER, help=argparse.SUPPRESS)
     parser.add_argument("--predictions", help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--report-mode",
+        choices=("auto", "build", "skip"),
+        default="auto",
+        help=argparse.SUPPRESS,
+    )
     return parser.parse_args(argv)
 
 
@@ -924,7 +990,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             spec = next(item for item in specs if item.key == args.publication_worker)
             if not args.predictions or Path(args.predictions).resolve() != spec.predictions:
                 raise ConfigurationError("publication worker prediction path differs from canonical track")
-            return run_publication_worker(spec)
+            if args.report_mode == "auto":
+                report_plan = report_rebuild_plan(spec)
+            else:
+                report_plan = ReportPlan(
+                    rebuild=args.report_mode == "build",
+                    detail=f"controller selected report mode: {args.report_mode}",
+                )
+            return run_publication_worker(spec, report_plan)
         if args.dry_run:
             return print_dry_run(root, specs, environment)
         control_value = environment.get("INTERNVL3_78B_THREE_BENCH_CONTROL_ROOT")
@@ -936,7 +1009,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         run_preflight(root, specs, control_root, environment)
         if args.check:
             print("[internvl3-78b-three-bench] CHECK shared_profile_identity=passed")
-            print("[internvl3-78b-three-bench] CHECK baseline=CV22/23,Q20/21,SP20/21_or_resume")
+            for spec in specs:
+                plan = report_rebuild_plan(spec)
+                mode = "build" if plan.rebuild else "skip"
+                print(
+                    f"[internvl3-78b-three-bench] CHECK report benchmark={spec.label} "
+                    f"mode={mode} detail={plan.detail}"
+                )
+            print("[internvl3-78b-three-bench] CHECK report_gaps_do_not_block_target_scoring")
             print("[internvl3-78b-three-bench] CHECK service=BF16,TP4,vLLM0.19.0,max_model_len32768")
             print("[internvl3-78b-three-bench] CHECK locks=available")
             return 0
@@ -954,15 +1034,22 @@ def main(argv: Sequence[str] | None = None) -> int:
             signal.signal(signum, interrupt_controller)
         with MultiLock(lock_paths(control_root, specs)):
             try:
-                errors = baseline_errors(specs)
-                if errors:
-                    raise ConfigurationError("; ".join(errors))
+                report_plans = {spec.key: report_rebuild_plan(spec) for spec in specs}
+                for spec in specs:
+                    plan = report_plans[spec.key]
+                    mode = "READY" if plan.rebuild else "SKIP"
+                    controller.status(spec.key, "report", mode, plan.detail)
+                    controller.log(
+                        f"REPORT {mode} benchmark={spec.label} detail={plan.detail}"
+                    )
                 outcome = execute_workflow(
                     specs,
                     is_reusable=controller.is_reusable,
                     ensure_service=controller.ensure_service,
                     run_inference=controller.run_inference,
-                    start_publication=controller.start_publication,
+                    start_publication=lambda spec: controller.start_publication(
+                        spec, report_plans[spec.key]
+                    ),
                     stop_service=controller.stop_service,
                     wait_publications=controller.wait_publications,
                 )
@@ -974,16 +1061,26 @@ def main(argv: Sequence[str] | None = None) -> int:
                 ):
                     for spec in specs:
                         final_errors.extend(
-                            f"{spec.label}: {error}" for error in final_result_errors(spec)
+                            f"{spec.label}: {error}" for error in target_result_errors(spec)
                         )
+                        if report_plans[spec.key].rebuild:
+                            final_errors.extend(
+                                f"{spec.label}: {error}"
+                                for error in report_result_errors(spec)
+                            )
                 if not outcome.passed or final_errors:
                     detail = outcome.inference_error or "; ".join(final_errors) or str(
                         dict(outcome.publication_status)
                     )
                     controller.status("workflow", "final", "FAIL", detail)
                     return 1
-                controller.status("workflow", "final", "COMPLETE", "CV23/23 Q21/21 SP21/21")
-                controller.log("COMPLETE CV=23/23 Q-Spatial=21/21 SPBench-SI=21/21")
+                completion = "; ".join(
+                    f"{spec.label}:score=complete,report="
+                    f"{'complete' if report_plans[spec.key].rebuild else 'skipped'}"
+                    for spec in specs
+                )
+                controller.status("workflow", "final", "COMPLETE", completion)
+                controller.log(f"COMPLETE {completion}")
                 return 0
             finally:
                 for signum, handler in previous_handlers.items():

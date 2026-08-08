@@ -450,6 +450,8 @@ class DocumentationConsistencyTest(unittest.TestCase):
             "internvl3-78b-three-bench",
             "vLLM `0.19.0`",
             "退出 `4`",
+            "report=skipped",
+            "其他模型的既有",
         ]:
             with self.subTest(required=required):
                 self.assertIn(required, runbook)

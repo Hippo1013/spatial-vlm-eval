@@ -164,8 +164,11 @@ SPBench-SI 的 `run_internvl3_78b_evaluation.sh` 沿用同一 canonical 路径�
 `spatial_vlm_eval.orchestration.internvl3_78b_three_bench` 是唯一跨 benchmark 的 78B 编排层：它断言 Q-Spatial、
 SPBench-SI、CV-Bench 三个 profile 共享同一 model/revision/served name/TP/processor family，只启动一次
 BF16 TP=4 vLLM，并固定按 Q → SP → CV 调用各 benchmark 的公开 shell 入口。它不导入或复制 scorer
-算法；每项 validator 通过后启动该 benchmark 自己的 score/report worker。全局锁加三个 benchmark
-既有批次/单模型锁阻止同根并发写入，进程回收只面向 controller 记录的自有进程组。
+算法；每项 validator 通过后都启动该 benchmark 自己的精确单轨评分。既有 publishable 报告源若恰好
+只缺 `internvl3_78b`，或恢复时已经完整，worker 才继续检查并重建全局报告；其他轨缺失、异常或报告
+发现失败只会令该 benchmark 记录 `report=skipped`，不阻塞 78B 推理、validator、评分及其 publication
+gates。全局锁加三个 benchmark 既有批次/单模型锁阻止同根并发写入，进程回收只面向 controller 记录
+的自有进程组。
 
 阶段三串行调度器只编排 inference 与完整 validator，不复制模型或 benchmark 逻辑。它在独立 session/
 process group 中启动每个模型，使用 fsync journal 的文件活动做停滞 watchdog，只终止自己记录的

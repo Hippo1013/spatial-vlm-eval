@@ -32,8 +32,8 @@ bash scripts/internvl3_78b/run_three_bench_evaluation.sh --status
 bash scripts/internvl3_78b/run_three_bench_evaluation.sh --check
 ```
 
-GPU、端口或锁不可用时，`--check` 退出 `4`。正式运行前必须保证四张 GPU 空闲且三个 benchmark
-的既有基线完整。
+GPU、端口或锁不可用时，`--check` 退出 `4`。正式运行前必须保证四张 GPU 空闲；其他模型的既有
+评分或报告不再是 78B 推理与评分的前置门禁。
 
 ## 正式运行
 
@@ -41,7 +41,17 @@ GPU、端口或锁不可用时，`--check` 退出 `4`。正式运行前必须保
 bash scripts/internvl3_78b/run_three_bench_evaluation.sh
 ```
 
-脚本自动完成共享 vLLM 启停、三个 benchmark 的 test/full、validator、评分和报告生成。
+脚本自动完成共享 vLLM 启停，以及三个 benchmark 各自的 test/full、validator 和 78B 精确单轨评分。
+每个 benchmark 独立决定是否继续汇总：
+
+- Q-Spatial 既有报告源为 `20/21` 且只缺 `internvl3_78b` 时，评分后重建 `21/21`；
+- SPBench-SI 既有报告源为 `20/21` 且只缺 `internvl3_78b` 时，评分后重建 `21/21`；
+- CV-Bench 既有报告源为 `22/23` 且只缺 `internvl3_78b` 时，评分后重建 `23/23`；
+- 任一 benchmark 未达到上述基线，或其他结果无法发现，只完成该 benchmark 的 78B 评分并记录
+  `report=skipped`，不会阻塞后续 benchmark。
+
+评分仍须通过该 benchmark 的完整 validator、summary、scored rows 和 publication gates；跳过报告不等于
+跳过评分验收。
 
 ## 查看与恢复
 
@@ -55,6 +65,6 @@ bash scripts/internvl3_78b/run_three_bench_evaluation.sh
 完成后确认：
 
 - control root 的 `status.tsv` 最后一条为 `workflow final COMPLETE`；
-- `q-spatial-result.md` 为 21/21；
-- `spbench-si-result.md` 为 21/21；
-- `cv-bench-result.md` 为 23/23。
+- 三条 `internvl3_78b` score 均为 `complete`；
+- `status.tsv` 分别标记 `report=complete` 或 `report=skipped`；
+- 只有 `report=complete` 的 benchmark 才要求对应 Markdown 报告达到 21/21 或 23/23。
