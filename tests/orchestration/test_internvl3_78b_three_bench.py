@@ -88,6 +88,7 @@ class ThreeBenchControllerTest(unittest.TestCase):
             env={
                 **os.environ,
                 "INTERNVL3_78B_THREE_BENCH_ENV_FILE": "/dev/null",
+                "INTERNVL3_78B_THREE_BENCH_VLLM": "vllm",
                 "LATENT_PYTHON": sys.executable,
             },
             check=True,
