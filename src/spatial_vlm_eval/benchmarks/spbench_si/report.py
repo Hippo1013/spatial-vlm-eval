@@ -8,7 +8,7 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Iterable
 
 from ...models.common.runtime import _atomic_write_text, utc_now
 from .data import DATASET_REVISION, EXPECTED_TASK_COUNTS, OFFICIAL_TEST_SIZE, TASK_SEQUENCE
@@ -33,7 +33,7 @@ TYPE_DISPLAY = {
 }
 INPUT_DISPLAY = {
     "rgb": "RGB",
-    "rgb_depthpro_midi_tor10": "RGB + DepthPro/MIDI/TOR10",
+    "rgb_depthpro_midi_tor10": "RGB + DepthPro + MIDI + TOR10",
     "rgb_zoedepth": "RGB + ZoeDepth",
     "rgb_moge2_xyz": "RGB + MoGe-2 XYZ",
 }
@@ -45,6 +45,20 @@ class ReportResult:
     summary_path: Path
     summary: dict[str, Any]
     audit: dict[str, Any]
+
+
+def _normalize_excluded_profiles(values: Iterable[str]) -> tuple[str, ...]:
+    requested = [str(value).strip() for value in values]
+    if any(not value for value in requested):
+        raise ValueError("Excluded SPBench-SI profile keys must be non-empty")
+    duplicates = sorted({value for value in requested if requested.count(value) > 1})
+    if duplicates:
+        raise ValueError(f"Duplicate excluded SPBench-SI profiles: {duplicates}")
+    unknown = sorted(set(requested) - set(PROFILE_SEQUENCE))
+    if unknown:
+        raise ValueError(f"Unknown excluded SPBench-SI profiles: {unknown}")
+    selected = set(requested)
+    return tuple(key for key in PROFILE_SEQUENCE if key in selected)
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -169,13 +183,25 @@ def _validate_result(summary_path: Path) -> ReportResult:
     return ReportResult(profile_key, summary_path, summary, audit)
 
 
-def discover_results(output_root: str | Path) -> list[ReportResult]:
+def discover_results(
+    output_root: str | Path,
+    *,
+    excluded_profiles: Iterable[str] = (),
+) -> list[ReportResult]:
     root = Path(output_root).resolve()
+    excluded = set(_normalize_excluded_profiles(excluded_profiles))
     suffix = Path("scores") / SCORER_PROTOCOL / "summary.json"
     found: list[ReportResult] = []
     errors: list[str] = []
     for path in sorted(root.rglob("summary.json")):
         if not str(path).endswith(str(suffix)):
+            continue
+        relative_parts = path.relative_to(root).parts
+        if (
+            len(relative_parts) >= 2
+            and relative_parts[0] == "runs"
+            and relative_parts[1] in excluded
+        ):
             continue
         try:
             found.append(_validate_result(path))
@@ -199,72 +225,118 @@ def _percent(value: float) -> str:
     return f"{value * 100:.2f}"
 
 
-def render_markdown(results: list[ReportResult], *, generated_at: str | None = None) -> str:
-    present = {result.profile for result in results}
-    missing = [key for key in PROFILE_SEQUENCE if key not in present]
-    provisional = missing == ["internvl3_78b"] and len(results) == 20
-    complete = not missing and len(results) == 21
-    if not (complete or provisional):
+def _presentation_model_name(profile_key: str) -> str:
+    profile = PROFILES[profile_key]
+    try:
+        input_display = INPUT_DISPLAY[profile.input_profile]
+    except KeyError as exc:
         raise ValueError(
-            "SPBench-SI report requires 21/21, or exactly the approved 20/21 state missing internvl3_78b"
+            f"SPBench-SI concise report lacks an input display for {profile.input_profile!r}"
+        ) from exc
+    return f"{profile.display_name}（{input_display}）"
+
+
+def _main_metric_values(result: ReportResult) -> list[float]:
+    task = result.summary["task_metrics"]
+    metrics = result.summary["metrics"]
+    values = [float(task[key]["mean"]) for key in TASK_SEQUENCE]
+    values.extend([
+        float(metrics["nq_macro"]),
+        float(metrics["mcq_macro"]),
+        float(metrics["overall_four_task_macro"]),
+    ])
+    return values
+
+
+def render_markdown(
+    results: list[ReportResult],
+    *,
+    generated_at: str | None = None,
+    excluded_profiles: Iterable[str] = (),
+) -> str:
+    excluded = _normalize_excluded_profiles(excluded_profiles)
+    excluded_set = set(excluded)
+    profiles = [result.profile for result in results]
+    unknown = sorted(set(profiles) - set(PROFILE_SEQUENCE))
+    if unknown:
+        raise ValueError(f"Unknown SPBench-SI result profiles: {unknown}")
+    duplicates = sorted({profile for profile in profiles if profiles.count(profile) > 1})
+    if duplicates:
+        raise ValueError(f"Duplicate SPBench-SI result profiles: {duplicates}")
+    overlap = sorted(set(profiles) & excluded_set)
+    if overlap:
+        raise ValueError(f"Excluded SPBench-SI profiles were still supplied as results: {overlap}")
+    if not results:
+        raise ValueError("SPBench-SI report requires at least one publication-gated result")
+    present = set(profiles)
+    missing = [
+        key for key in PROFILE_SEQUENCE
+        if key not in present and key not in excluded_set
+    ]
+    total = len(PROFILE_SEQUENCE)
+    complete = len(results) == total and not excluded and not missing
+    metric_rows = [_main_metric_values(result) for result in results]
+    maxima = [max(row[index] for row in metric_rows) for index in range(len(metric_rows[0]))]
+    title = (
+        "# SPBench-SI 评测结果"
+        if complete
+        else f"# SPBench-SI 评测结果（部分 {len(results)}/{total}）"
+    )
+    status = (
+        f"完整 {total}/{total}"
+        if complete
+        else (
+            f"部分汇总 {len(results)}/{total}；"
+            f"明确排除 {len(excluded)} 条；未完成 {len(missing)} 条"
         )
-    title = "# SPBench-SI 评测结果" if complete else "# SPBench-SI 评测结果（暂行 20/21）"
-    status = "完整 21/21" if complete else "暂行 20/21；仅缺四卡 InternVL3-78B"
+    )
     lines = [
         title,
         "",
         f"- 状态：{status}",
-        f"- 缺失 profile：{', '.join(f'`{key}`' for key in missing) if missing else '无'}",
+        f"- 明确排除 profile：{', '.join(f'`{key}`' for key in excluded) if excluded else '无'}",
+        f"- 未纳入且未排除 profile：{', '.join(f'`{key}`' for key in missing) if missing else '无'}",
         f"- 数据 revision：`{DATASET_REVISION}`（test {OFFICIAL_TEST_SIZE} 题）",
         f"- 主 scorer：`{SCORER_PROTOCOL}`",
         f"- 生成时间：{generated_at or utc_now()}",
-        "- 主表按四题型等权宏平均；NQ/MCQ 各自为两题型等权。输入配置不同的轨不混同。",
+        "- 仅纳入逐轨通过 full validator、主协议评分与 publication gates 的候选；"
+        "部分汇总不降低单轨门禁。",
+        "- 展示规则：实际输入形式写在模型名括号内；主表按四题型等权宏平均，"
+        "NQ/MCQ 各自为两题型等权；每列并列最高分均加粗。",
         "",
         "## 主协议结果",
         "",
-        "| 模型 | 实际输入配置 | Absolute distance | Object size | Relative distance | Relative direction | NQ | MCQ | Overall |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        "| 模型（输入形式） | Absolute distance | Object size | Relative distance | Relative direction | NQ | MCQ | Overall |",
+        "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
     ]
-    for result in results:
-        profile = PROFILES[result.profile]
-        task = result.summary["task_metrics"]
-        metrics = result.summary["metrics"]
-        values = [_percent(float(task[key]["mean"])) for key in TASK_SEQUENCE]
-        values.extend([
-            _percent(float(metrics["nq_macro"])),
-            _percent(float(metrics["mcq_macro"])),
-            _percent(float(metrics["overall_four_task_macro"])),
-        ])
+    for result, metric_values in zip(results, metric_rows):
+        values = [
+            f"**{_percent(value)}**" if value == maxima[index] else _percent(value)
+            for index, value in enumerate(metric_values)
+        ]
         lines.append(
-            f"| {profile.display_name} | {INPUT_DISPLAY[profile.input_profile]} | "
+            f"| {_presentation_model_name(result.profile)} | "
             + " | ".join(values) + " |"
-        )
-    lines.extend([
-        "",
-        "## Upstream compatibility audit（非主分）",
-        "",
-        "下表逐行复刻锁定 SpatialLadder 代码的 direct-mode 提取、`<=` MRA 边界与四题型聚合；"
-        "它使用独立 score 目录，不与主协议逐行混表。",
-        "",
-        "| 模型 | Input | 主协议 Overall | Upstream audit Overall | 差值（主-audit） | 逐行差异数 |",
-        "| --- | --- | ---: | ---: | ---: | ---: |",
-    ])
-    for result in results:
-        profile = PROFILES[result.profile]
-        main = float(result.summary["metrics"]["overall_four_task_macro"])
-        audit = float(result.audit["metrics"]["overall_four_task_macro"])
-        differences = int(result.audit["num_main_vs_audit_differences"])
-        lines.append(
-            f"| {profile.display_name} | {INPUT_DISPLAY[profile.input_profile]} | {_percent(main)} | "
-            f"{_percent(audit)} | {(main - audit) * 100:+.2f} | {differences} |"
         )
     return "\n".join(lines) + "\n"
 
 
-def build_report(output_root: str | Path, output: str | Path | None = None) -> Path:
+def build_report(
+    output_root: str | Path,
+    output: str | Path | None = None,
+    *,
+    excluded_profiles: Iterable[str] = (),
+) -> Path:
     root = Path(output_root).resolve()
     destination = Path(output).resolve() if output else root / DEFAULT_OUTPUT_NAME
-    _atomic_write_text(destination, render_markdown(discover_results(root)))
+    excluded = _normalize_excluded_profiles(excluded_profiles)
+    _atomic_write_text(
+        destination,
+        render_markdown(
+            discover_results(root, excluded_profiles=excluded),
+            excluded_profiles=excluded,
+        ),
+    )
     return destination
 
 
@@ -272,6 +344,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--output-root", default=os.environ.get("SPBENCH_SI_OUTPUT_ROOT"))
     parser.add_argument("--output")
+    parser.add_argument(
+        "--exclude-profile",
+        action="append",
+        default=[],
+        choices=PROFILE_SEQUENCE,
+        help="exclude one registered profile from this report; repeat as needed",
+    )
     parser.add_argument("--list", action="store_true")
     parser.add_argument("--check", action="store_true")
     return parser.parse_args()
@@ -281,17 +360,27 @@ def main() -> None:
     args = parse_args()
     if not args.output_root:
         raise ValueError("Set SPBENCH_SI_OUTPUT_ROOT or pass --output-root")
-    results = discover_results(args.output_root)
+    excluded = _normalize_excluded_profiles(args.exclude_profile)
+    results = discover_results(args.output_root, excluded_profiles=excluded)
     if args.list or args.check:
         for result in results:
             print(f"{result.profile}\t{result.summary_path}")
-        missing = [key for key in PROFILE_SEQUENCE if key not in {result.profile for result in results}]
-        print(f"completeness\t{len(results)}/21")
+        present = {result.profile for result in results}
+        missing = [
+            key for key in PROFILE_SEQUENCE
+            if key not in present and key not in set(excluded)
+        ]
+        print(f"completeness\t{len(results)}/{len(PROFILE_SEQUENCE)}")
+        print(f"excluded\t{','.join(excluded)}")
         print(f"missing\t{','.join(missing)}")
-        if args.check and not (not missing or missing == ["internvl3_78b"]):
+        if args.check and not results:
             raise SystemExit(1)
         return
-    destination = build_report(args.output_root, args.output)
+    destination = build_report(
+        args.output_root,
+        args.output,
+        excluded_profiles=excluded,
+    )
     print(f"[spbench-si-report] wrote {destination}")
 
 

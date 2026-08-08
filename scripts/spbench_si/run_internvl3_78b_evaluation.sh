@@ -56,7 +56,7 @@ Q: 脚本会停止 burn、未知服务或别人的 GPU 进程吗？
 A: 不会。端口或任一 GPU 忙时 fail closed，只清理脚本自己启动的进程组。
 
 Q: 是否会创建一套模型专属结果目录？
-A: 不会。结果写回标准 SPBENCH_SI_OUTPUT_ROOT，并原地把 20/21 报告重建为 21/21。
+A: 不会。结果写回标准 SPBENCH_SI_OUTPUT_ROOT，并原地重建当前 publication-gated 汇总。
 EOF
 }
 
