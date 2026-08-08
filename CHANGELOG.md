@@ -7,6 +7,10 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- SPBench-SI 主 scorer 升级为真实输出驱动的 v2 parser：自由文本 `a/an` 不再误提为 1，仅在强答案区域
+  剥离 `A-D.` 数值标签，受控识别最后的 distance/longest-dimension 声明，并按题型期望单位选择模型
+  显式写出的同单位数值而不做换算。v1 inference metadata 明确兼容、v1 score 不再是当前结果；锁定
+  SpatialLadder upstream compatibility audit 的提取与 inclusive MRA 字节语义保持不变。
 - 增加 InternVL3-78B 三 benchmark 单次 vLLM 补测入口：三个 profile 统一 served name，固定 vLLM
   0.19.0/BF16/TP=4/四卡/32768 上下文，按 Q-Spatial 271 → SPBench-SI 1009 → CV-Bench 2638 串行
   推理；每项 validator 通过后并行调用其现有 scorer/report，支持严格 provenance 恢复、全局与 benchmark
@@ -28,6 +32,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 - 2026-08-07 服务器现场复核：Q-Spatial 除 TP=4 blocked 的 InternVL3-78B 外，20 条计划轨均通过
   red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
   评分与 publication gates；全局报告为 20/21。
+
+- 2026-08-08 服务器现场复核：SPBench-SI 的 20 条非 78B 轨均有当前 test gate，其中 19 条通过
+  full-1009 validator；Gemini full 失败，InternVL3-78B 尚未运行，正式 score summary 与全局报告均不存在。
 
 - 修复 Q-Spatial 目录评分把 `test_artifacts/` 与 `test_artifacts.stale-*` 中的 smoke8 prediction 误纳入
   正式候选的问题；当前发现器只冻结 20 条 full 结果，旧 `test_runs/`、shards 与 score 子树仍被排除。

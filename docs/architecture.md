@@ -256,20 +256,45 @@ Q-Spatial 使用平行但独立的仓库外根：
 ```text
 QSPATIAL_OUTPUT_ROOT/
 ├── runs/PROFILE/MODEL_REVISION/INFERENCE_PROTOCOL/
+│   ├── test_gate.json
 │   ├── test_artifacts/
 │   │   ├── dataset_manifest.json
 │   │   ├── vision_canary.json
-│   │   ├── capacity_probe.json
-│   │   └── test_gate.json
+│   │   └── capacity_probe.json
 │   ├── predictions.jsonl
 │   ├── predictions.jsonl.journal.jsonl
 │   ├── predictions.jsonl.metadata.json
+│   ├── prediction_validation.json
 │   └── scores/SCORER_PROTOCOL/
 │       ├── prediction_validation.json
 │       ├── scored_rows.jsonl
 │       ├── summary.json
 │       └── publication_gates.json
 └── q-spatial-result.md
+```
+
+SPBench-SI 继续使用独立的仓库外根；主 scorer 与 upstream compatibility audit 的逐行产物和
+summary 位于不同 protocol 目录，只有主目录保存正式 validation 与 publication gates：
+
+```text
+SPBENCH_SI_OUTPUT_ROOT/
+├── runs/PROFILE/MODEL_REVISION/INFERENCE_PROTOCOL/
+│   ├── test_gate.json
+│   ├── test_artifacts/
+│   ├── predictions.jsonl
+│   ├── predictions.jsonl.journal.jsonl
+│   ├── predictions.jsonl.metadata.json
+│   ├── prediction_validation.json
+│   └── scores/
+│       ├── MAIN_SCORER_PROTOCOL/
+│       │   ├── prediction_validation.json
+│       │   ├── scored_rows.jsonl
+│       │   ├── summary.json
+│       │   └── publication_gates.json
+│       └── UPSTREAM_AUDIT_PROTOCOL/
+│           ├── scored_rows.jsonl
+│           └── summary.json
+└── spbench-si-result.md
 ```
 
 以下是 MSMU 的既有布局：

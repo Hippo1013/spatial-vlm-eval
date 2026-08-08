@@ -114,12 +114,23 @@ full 必须复用完全匹配的 gate，以 fsync journal 断点恢复，最终�
 主 scorer protocol：
 
 ```text
-spbench_si_original_mra10_strict_robust_direct_four_task_macro_v1
+spbench_si_original_mra10_strict_robust_direct_controlled_final_expected_unit_four_task_macro_v2
 ```
 
-解析优先唯一完整 `<answer>`，其次唯一显式 final-answer 区域。选择题只接受唯一独立 A-D，冲突即失败；
-数值题只接受唯一有限非负数或官方简单英文数字词。重复同值可去重；冲突、多值、range、负数或非有限
-值均为提取失败。单位文字可存在，但不换算单位，因为题干已规定米或厘米。
+解析优先唯一完整 `<answer>`，其次唯一显式 final-answer 区域。选择题只接受唯一独立 A-D，冲突即失败。
+数值题只接受唯一有限非负数或 `zero..ninety` 范围内的官方简单英文数字词；自由文本中的 `a/an` 不是
+数值。只有 `<answer>` / 显式 final-answer 强区域允许剥离开头的 `A-D.` 误带选项标签，普通全文中的
+同形标签继续 fail closed。range、上下界、负数、非有限值和冲突值均为提取失败。
+
+没有强答案区域时，parser 只额外识别受控的最后声明：`distance ... is ...`、含等式的最终 distance、
+`longest dimension ... is ...` 与 `provide ... as the longest dimension`；它不会从任意推理句中选择最后一个
+数字。`object_abs_distance` 的期望单位固定为 meter，`object_size_estimation` 固定为 centimeter；若回答
+显式包含期望单位数值，冲突判断只使用这些数值，否则仍按唯一数值处理。该选择不进行单位换算，例如只
+回答 `0.42 meters` 时不会变成 `42 centimeters`，但 `0.42 m (42 cm)` 在 centimeter 题中选择显式的
+`42 cm`。
+
+v1 inference metadata 可被 v2 scorer 读取，因为 parser-only 升级没有改变模型输入、图像或生成；summary
+必须记录原 metadata 声明并通过兼容门禁。v1 score 目录不是当前主结果，需从原始 prediction 重新评分。
 
 数值题使用 Decimal 计算相对误差 `e=|pred-gt|/|gt|`（GT=0 时为绝对误差），对
 `θ=0.50,0.55,...,0.95` 十个阈值严格判断 `e < 1-θ` 并取平均。四个题型各自在本题型全部样本上平均；

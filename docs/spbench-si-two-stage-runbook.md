@@ -51,7 +51,7 @@ revision、runtime、GPU/TP、capacity/batch 与全部 binding 必须通过。sm
 ```bash
 bash scripts/spbench_si/run_inference.sh --stage full --model qwen3_vl_8b
 bash scripts/spbench_si/validate_predictions.sh \
-  --predictions "$SPBENCH_SI_OUTPUT_ROOT/qwen3_vl_8b/predictions.jsonl"
+  --predictions /absolute/path/to/predictions.jsonl
 ```
 
 full 不接受过期 gate；journal 可在完全相同 signature 下恢复。完成时必须有 1,009 行、index
@@ -116,7 +116,7 @@ bash scripts/spbench_si/run_inference.sh --stage full --model internvl3_78b
 同一 gate。全链路入口不会停止 burn 或未知任务，资源忙时在模型加载前 fail closed。
 
 若还要同时补齐 Q-Spatial 和 CV-Bench，可改用
-[三 Benchmark 单次 vLLM 入口](internvl3-78b-three-bench-evaluation.md)共享一次模型加载。原单 benchmark
+[三 Benchmark 一键测评](internvl3-78b-three-bench-evaluation.md)共享一次模型加载。原单 benchmark
 入口仍保留；SPBench-SI scheduler、单模型入口和三 benchmark 入口共同竞争输出根锁，不能并发写入。
 
 ## 5. 评分与报告

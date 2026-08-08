@@ -124,9 +124,9 @@ API 轨明确标记 provider nondeterministic。执行和评分边界见
 ## SPBench-SI 当前 21 条目标 inference profile
 
 SPBench-SI 使用独立的 `src/spatial_vlm_eval/benchmarks/spbench_si/profiles.py`；`PROFILE_SEQUENCE` 唯一
-确定下表顺序，其中 RGB 18 条、同一源 RGB 派生输入 3 条。代码、协议和本地回归于 2026-08-07 完成；
-除固定 TP=4 blocked 的 `internvl3_78b` 外，其余 20 轨已通过服务器当前 test gate。full 批次尚未形成
-终态证据，未启动正式评分或发布；下表不把 test gate 写成 full 结果。
+确定下表顺序，其中 RGB 18 条、同一源 RGB 派生输入 3 条。代码、协议和本地回归于 2026-08-07 完成。
+截至 2026-08-08，20 条非 78B 轨有当前 test gate；其中 19 条通过 full-1009 validator，Gemini full
+失败，固定 TP=4 的 `internvl3_78b` 尚未运行。未启动正式评分，也没有全局报告。
 
 | Profile | Model / locked revision | Input track | Backend / locked decoding |
 |---|---|---|---|

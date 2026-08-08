@@ -4,8 +4,11 @@ import unittest
 from decimal import Decimal
 
 from spatial_vlm_eval.benchmarks.spbench_si.scorer import (
+    LEGACY_SCORER_PROTOCOL_V1,
     MRA_THRESHOLDS,
+    SCORER_PROTOCOL,
     aggregate_rows,
+    inference_metadata_scorer_protocol_is_compatible,
     mean_relative_accuracy_strict,
     mean_relative_accuracy_upstream,
     parse_choice,
@@ -26,9 +29,72 @@ class SPBenchSIScorerTest(unittest.TestCase):
         self.assertEqual(parse_numeric("Final answer: forty").value, "40")
         self.assertEqual(parse_numeric("<answer>2 meters; 2 m</answer>").value, "2")
         self.assertEqual(parse_numeric("1 or 2").status, "conflict")
+        self.assertEqual(parse_numeric("1 and 2 meters").status, "conflict")
         self.assertEqual(parse_numeric("1-2 meters").status, "range")
         self.assertEqual(parse_numeric("NaN").status, "nonfinite")
         self.assertEqual(parse_numeric("-1").status, "negative")
+
+    def test_numeric_parser_does_not_treat_articles_or_choice_a_as_one(self):
+        refusal = "I can’t determine that from the image alone without a known scale."
+        self.assertEqual(parse_numeric(refusal).status, "no_number")
+        self.assertEqual(parse_numeric("The object is a meter away.").status, "no_number")
+        self.assertEqual(parse_numeric("<answer>A. No distance</answer>").status, "no_number")
+
+    def test_numeric_parser_strips_standard_choice_labels_only_in_strong_regions(self):
+        self.assertEqual(parse_numeric("<answer>A. 20</answer>").value, "20")
+        self.assertEqual(parse_numeric("Final answer: C.1").value, "1")
+        self.assertEqual(parse_numeric("<answer>M.1</answer>").status, "no_number")
+        self.assertEqual(parse_numeric("A. 20").status, "conflict")
+        self.assertEqual(parse_numeric("<answer>A. More than 90 meters</answer>").status, "bound")
+
+    def test_numeric_parser_uses_controlled_declared_final_regions(self):
+        spatialbot = (
+            "The monitor is 40 inches and the door is 36 inches wide, so 40 + 36 = 76 inches. "
+            "Converting inches to meters, the distance is approximately 1.9 meters."
+        )
+        equation = (
+            "The table is 1 meter long and the mirror is 0.5 meters wide, so the distance "
+            "between them is 1 + 0.5 = 1.5 meters."
+        )
+        longest = (
+            "Width: 0.95 m; height: 0.75 m; depth: 0.46 m.\n"
+            "The longest dimension of the table is 0.46 meters.<eos>"
+        )
+        provide = "Width: 3.60 m; height: 0.12 m. Provide 3.60 m as the longest dimension."
+        self.assertEqual(parse_numeric(spatialbot, expected_unit="meter").value, "1.9")
+        self.assertEqual(parse_numeric(equation, expected_unit="meter").value, "1.5")
+        self.assertEqual(parse_numeric(longest, expected_unit="centimeter").value, "0.46")
+        self.assertEqual(parse_numeric(provide, expected_unit="centimeter").value, "3.6")
+
+    def test_numeric_parser_prefers_explicit_expected_unit_without_converting(self):
+        paired = parse_numeric("Width: 0.42 m (42 cm)<eos>", expected_unit="centimeter")
+        self.assertEqual(paired.value, "42")
+        self.assertTrue(paired.evidence["unit_filter_applied"])
+        self.assertEqual(
+            parse_numeric("Answer: 1.44 meters; 42 centimeters.<eos>", expected_unit="centimeter").value,
+            "42",
+        )
+        self.assertEqual(parse_numeric("0.42 meters", expected_unit="centimeter").value, "0.42")
+        self.assertEqual(parse_numeric("0.42 meters; 42 centimeters").status, "conflict")
+
+    def test_score_row_supplies_the_question_type_expected_unit(self):
+        scoring = {
+            "index": 0,
+            "official_id": 1,
+            "question_type": "object_size_estimation",
+            "ground_truth": "42",
+            "options": [],
+        }
+        scored = score_main_row(
+            {"index": 0, "raw_prediction": "Width: 0.42 m (42 cm)<eos>"}, scoring
+        )
+        self.assertEqual(scored["parsed_answer"], "42")
+        self.assertEqual(scored["score"], 1.0)
+
+    def test_v1_inference_metadata_remains_compatible_with_parser_only_v2(self):
+        self.assertTrue(inference_metadata_scorer_protocol_is_compatible(LEGACY_SCORER_PROTOCOL_V1))
+        self.assertTrue(inference_metadata_scorer_protocol_is_compatible(SCORER_PROTOCOL))
+        self.assertFalse(inference_metadata_scorer_protocol_is_compatible("unknown"))
 
     def test_original_mra_has_ten_strict_thresholds_and_audit_is_inclusive(self):
         self.assertEqual(MRA_THRESHOLDS, tuple(Decimal(value) / 100 for value in range(50, 100, 5)))
@@ -59,6 +125,23 @@ class SPBenchSIScorerTest(unittest.TestCase):
             score_upstream_row({"index": 0, "raw_prediction": "The answer is A"}, scoring)["score"],
             0.0,
         )
+
+    def test_upstream_numeric_audit_keeps_a_as_one_while_main_rejects_it(self):
+        scoring = {
+            "index": 0,
+            "official_id": 1,
+            "question_type": "object_abs_distance",
+            "ground_truth": "1",
+            "options": [],
+        }
+        prediction = {
+            "index": 0,
+            "raw_prediction": "I cannot determine that without a known scale.",
+        }
+        self.assertEqual(score_main_row(prediction, scoring)["parse_status"], "no_number")
+        audit = score_upstream_row(prediction, scoring)
+        self.assertEqual(audit["upstream_extracted_answer"], "1")
+        self.assertEqual(audit["score"], 1.0)
 
     def test_four_task_macro_is_not_micro(self):
         rows = []

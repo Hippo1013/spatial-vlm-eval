@@ -395,6 +395,28 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("spbench-si-result.md", internvl78)
         self.assertIn("21/21", internvl78)
         self.assertIn("常见问题", internvl78)
+        self.assertNotIn(
+            '$SPBENCH_SI_OUTPUT_ROOT/qwen3_vl_8b/predictions.jsonl',
+            runbook,
+        )
+
+    def test_qspatial_and_spbench_output_layouts_match_implementation(self) -> None:
+        architecture = (self.docs / "architecture.md").read_text(encoding="utf-8")
+        qspatial_layout = architecture.split(
+            "Q-Spatial 使用平行但独立的仓库外根：", 1
+        )[1].split("SPBench-SI 继续使用独立的仓库外根", 1)[0]
+        spbench_layout = architecture.split(
+            "SPBench-SI 继续使用独立的仓库外根", 1
+        )[1].split("以下是 MSMU 的既有布局", 1)[0]
+
+        for layout in (qspatial_layout, spbench_layout):
+            with self.subTest(layout=layout[:40]):
+                self.assertIn("├── test_gate.json", layout)
+                self.assertIn("├── prediction_validation.json", layout)
+        self.assertNotIn("│   │   └── test_gate.json", qspatial_layout)
+        self.assertIn("MAIN_SCORER_PROTOCOL", spbench_layout)
+        self.assertIn("UPSTREAM_AUDIT_PROTOCOL", spbench_layout)
+        self.assertIn("spbench-si-result.md", spbench_layout)
 
     def test_three_benchmark_internvl78_entrypoint_is_documented(self) -> None:
         runbook = (

@@ -28,9 +28,9 @@ publication gates，全局报告状态为 22/23。Q-Spatial Bench 的 21 轨代�
 实现；截至 2026-08-07，除固定 TP=4 blocked 的 InternVL3-78B 外，其余 20 轨均已在服务器通过
 red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
 评分与 publication gates；全局报告状态为 20/21。SPBench-SI 的 21 轨 contract、
-两阶段 gate、双 scorer、调度与报告已于 2026-08-07 完成本地实现和回归；除固定 TP=4 blocked 的
-InternVL3-78B 外，其余 20 轨已通过服务器当前 test gate。full 批次尚未形成终态证据，未启动正式评分
-或发布。精确范围、
+两阶段 gate、双 scorer、调度与报告已于 2026-08-07 完成本地实现和回归；截至 2026-08-08，20 条
+非 78B 轨均有当前 test gate，其中 19 条通过 full-1009 validator，Gemini full 失败。尚未启动正式评分，
+也没有全局报告。精确范围、
 数据准备边界与当前阶段见
 [四 Benchmark 评测范围](docs/evaluation-scope.md)。
 
@@ -126,23 +126,25 @@ python -m pip freeze > environment-manifests/ENV-NAME.pip-freeze.txt
 
 ## 最短运行路径
 
-### InternVL3-78B 三 Benchmark 单次 vLLM 补测
+### InternVL3-78B 三 Benchmark 一键测评
 
-四卡服务器可让 Q-Spatial、SPBench-SI、CV-Bench 共用一次 78B 模型加载；原有三个单 benchmark 入口
-仍可独立使用。将[公共配置模板](configs/internvl3-78b-three-bench.env.example)合并到一个未跟踪环境文件，
-先执行只读检查：
+四卡服务器可让 Q-Spatial、SPBench-SI、CV-Bench 共用一次 78B 模型加载。入口默认自动加载仓库根
+`.env.server`；首次使用时按[公共配置模板](configs/internvl3-78b-three-bench.env.example)补齐配置。
 
 ```bash
-export INTERNVL3_78B_THREE_BENCH_ENV_FILE=/absolute/path/to/untracked-three-bench.env
+cd /media/datasets/lihaoran/latent_reasoning/spatial-vlm-eval
 bash scripts/internvl3_78b/run_three_bench_evaluation.sh --dry-run
 bash scripts/internvl3_78b/run_three_bench_evaluation.sh --status
 bash scripts/internvl3_78b/run_three_bench_evaluation.sh --check
 ```
 
-无参数命令会固定按 Q-Spatial 271 → SPBench-SI 1009 → CV-Bench 2638 串行推理，并让已通过
-validator 的 benchmark 在后台使用自己的 scorer/report 发布。两卡服务器的 `--check` 应返回资源阻塞；
-无参数正式运行必须等四张 80GB GPU 可用并再次获得推理、评分授权。恢复、锁和失败隔离规则见
-[三 Benchmark 单次 vLLM 补测手册](docs/internvl3-78b-three-bench-evaluation.md)。
+正式运行：
+
+```bash
+bash scripts/internvl3_78b/run_three_bench_evaluation.sh
+```
+
+完整指令见[三 Benchmark 一键测评](docs/internvl3-78b-three-bench-evaluation.md)。
 
 ### CV-Bench
 

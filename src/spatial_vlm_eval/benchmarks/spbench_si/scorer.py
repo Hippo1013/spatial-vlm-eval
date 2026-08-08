@@ -26,7 +26,14 @@ from .data import (
 )
 from .prediction_validation import read_jsonl, validate_prediction_rows
 
-SCORER_PROTOCOL = "spbench_si_original_mra10_strict_robust_direct_four_task_macro_v1"
+LEGACY_SCORER_PROTOCOL_V1 = "spbench_si_original_mra10_strict_robust_direct_four_task_macro_v1"
+SCORER_PROTOCOL = (
+    "spbench_si_original_mra10_strict_robust_direct_controlled_final_expected_unit_"
+    "four_task_macro_v2"
+)
+COMPATIBLE_INFERENCE_SCORER_PROTOCOLS = frozenset(
+    {LEGACY_SCORER_PROTOCOL_V1, SCORER_PROTOCOL}
+)
 AUDIT_SCORER_PROTOCOL = "spbench_si_upstream_7a0d2ee_default_direct_compat_v1"
 RESULT_KIND = "spbench_si_official_definition_robust_internal_score"
 AUDIT_RESULT_KIND = "spbench_si_upstream_code_compatibility_audit"
@@ -50,8 +57,9 @@ _FINAL_REGION = re.compile(
     r"(?im)^\s*(?:the\s+)?(?:final\s+answer|answer)\s*(?:is|:)\s*(.+?)\s*$"
 )
 _CHOICE = re.compile(r"(?<![A-Za-z0-9])([A-D])(?![A-Za-z0-9])")
+_NUMBER_TOKEN = r"\+?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?"
 _NUMBER = re.compile(
-    r"(?<![A-Za-z0-9_.])(?:\+?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?)(?![A-Za-z0-9_.])"
+    rf"(?<![A-Za-z0-9_.])(?:{_NUMBER_TOKEN})(?![A-Za-z0-9_.])"
 )
 _NONFINITE = re.compile(r"(?<![A-Za-z])(?:nan|[+-]?inf(?:inity)?)(?![A-Za-z])", re.IGNORECASE)
 _RANGE = re.compile(
@@ -60,8 +68,72 @@ _RANGE = re.compile(
     r"(?:\d|\b(?:zero|one|two|three|four|five|six|seven|eight|nine|ten)\b)",
     re.IGNORECASE,
 )
+_BOUND = re.compile(
+    rf"\b(?:more\s+than|less\s+than|greater\s+than|at\s+least|at\s+most|over|under)\s+"
+    rf"{_NUMBER_TOKEN}",
+    re.IGNORECASE,
+)
+_NUMERIC_LEADING_CHOICE_LABEL = re.compile(r"^\s*[A-D]\s*[.):\]-]\s*", re.IGNORECASE)
 
-_WORD_VALUES = {
+_UNIT_ALIASES = {
+    "m": "meter",
+    "meter": "meter",
+    "meters": "meter",
+    "metre": "meter",
+    "metres": "meter",
+    "cm": "centimeter",
+    "centimeter": "centimeter",
+    "centimeters": "centimeter",
+    "centimetre": "centimeter",
+    "centimetres": "centimeter",
+    "ft": "foot",
+    "foot": "foot",
+    "feet": "foot",
+    "degree": "degree",
+    "degrees": "degree",
+    "°": "degree",
+}
+_UNIT_TOKEN = "(?:" + "|".join(
+    re.escape(unit) for unit in sorted(_UNIT_ALIASES, key=len, reverse=True)
+) + ")"
+_UNIT_AFTER = re.compile(rf"\s*(?P<unit>{_UNIT_TOKEN})(?![A-Za-z])", re.IGNORECASE)
+_ANSWER_VALUE_WITH_OPTIONAL_UNIT = rf"{_NUMBER_TOKEN}\s*(?:{_UNIT_TOKEN})?"
+_CONTROLLED_NUMERIC_FINALS = (
+    (
+        "distance_equation_result",
+        re.compile(
+            rf"\b(?:the\s+)?distance(?:\s+between[^.!?\n]{{0,100}})?\s+is"
+            rf"[^!?\n]{{0,160}}?=\s*(?P<answer>{_ANSWER_VALUE_WITH_OPTIONAL_UNIT})",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "distance_declared",
+        re.compile(
+            rf"\b(?:the\s+)?distance(?:\s+between[^.!?\n]{{0,100}})?\s+is\s+"
+            rf"(?:approximately|about|roughly)?\s*(?P<answer>{_ANSWER_VALUE_WITH_OPTIONAL_UNIT})",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "longest_dimension_declared",
+        re.compile(
+            rf"\b(?:the\s+)?longest\s+dimension(?:\s+of[^.!?\n]{{0,100}})?\s+is\s+"
+            rf"(?:approximately|about|roughly)?\s*(?P<answer>{_ANSWER_VALUE_WITH_OPTIONAL_UNIT})",
+            re.IGNORECASE,
+        ),
+    ),
+    (
+        "provide_as_longest_dimension",
+        re.compile(
+            rf"\bprovide\s+(?P<answer>{_ANSWER_VALUE_WITH_OPTIONAL_UNIT})\s+as\s+"
+            rf"(?:the\s+)?longest\s+dimension\b",
+            re.IGNORECASE,
+        ),
+    ),
+)
+
+_ROBUST_WORD_VALUES = {
     "zero": Decimal(0), "one": Decimal(1), "two": Decimal(2), "three": Decimal(3),
     "four": Decimal(4), "five": Decimal(5), "six": Decimal(6), "seven": Decimal(7),
     "eight": Decimal(8), "nine": Decimal(9), "ten": Decimal(10), "eleven": Decimal(11),
@@ -70,12 +142,20 @@ _WORD_VALUES = {
     "eighteen": Decimal(18), "nineteen": Decimal(19), "twenty": Decimal(20),
     "thirty": Decimal(30), "forty": Decimal(40), "fifty": Decimal(50),
     "sixty": Decimal(60), "seventy": Decimal(70), "eighty": Decimal(80),
-    "ninety": Decimal(90), "a": Decimal(1), "an": Decimal(1),
+    "ninety": Decimal(90),
 }
+_UPSTREAM_WORD_VALUES = {**_ROBUST_WORD_VALUES, "a": Decimal(1), "an": Decimal(1)}
 _WORD_PATTERN = re.compile(
-    r"(?<![A-Za-z])(" + "|".join(sorted(_WORD_VALUES, key=len, reverse=True)) + r")(?![A-Za-z])",
+    r"(?<![A-Za-z])(" + "|".join(
+        sorted(_ROBUST_WORD_VALUES, key=len, reverse=True)
+    ) + r")(?![A-Za-z])",
     re.IGNORECASE,
 )
+
+_EXPECTED_NUMERIC_UNITS = {
+    "object_abs_distance": "meter",
+    "object_size_estimation": "centimeter",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,43 +200,122 @@ def parse_choice(raw_prediction: Any, allowed_letters: Iterable[str] = ("A", "B"
     return ParseResult("conflict", None, details)
 
 
+def inference_metadata_scorer_protocol_is_compatible(value: Any) -> bool:
+    return str(value) in COMPATIBLE_INFERENCE_SCORER_PROTOCOLS
+
+
 def _decimal_string(value: Decimal) -> str:
     if value == value.to_integral():
         return str(value.quantize(Decimal(1)))
     return format(value.normalize(), "f")
 
 
-def parse_numeric(raw_prediction: Any) -> ParseResult:
+def _normalized_unit_after(text: str, end: int) -> str | None:
+    match = _UNIT_AFTER.match(text, end)
+    if match is None:
+        return None
+    return _UNIT_ALIASES[match.group("unit").casefold()]
+
+
+def _controlled_numeric_final(text: str) -> tuple[str | None, dict[str, Any] | None]:
+    matches: list[dict[str, Any]] = []
+    for kind, pattern in _CONTROLLED_NUMERIC_FINALS:
+        for match in pattern.finditer(text):
+            matches.append({
+                "kind": kind,
+                "answer": match.group("answer").strip(),
+                "start": match.start("answer"),
+                "end": match.end("answer"),
+            })
+    if not matches:
+        return None, None
+    ordered = sorted(matches, key=lambda value: (value["end"], value["start"], value["kind"]))
+    selected = ordered[-1]
+    return str(selected["answer"]), {
+        "source": "controlled_final",
+        "kind": selected["kind"],
+        "selected_last": True,
+        "declaration_candidates": ordered,
+    }
+
+
+def parse_numeric(raw_prediction: Any, *, expected_unit: str | None = None) -> ParseResult:
     if not isinstance(raw_prediction, str) or not raw_prediction.strip():
         return ParseResult("empty", None, {"reason": "empty_or_non_string"})
     region, evidence = _focus_region(raw_prediction)
     if region is None:
         return ParseResult("conflict", None, evidence)
+    if evidence.get("source") == "full_response":
+        controlled_region, controlled_evidence = _controlled_numeric_final(region)
+        if controlled_region is not None and controlled_evidence is not None:
+            region = controlled_region
+            evidence = controlled_evidence
+        elif _NUMERIC_LEADING_CHOICE_LABEL.match(region):
+            return ParseResult(
+                "conflict",
+                None,
+                {
+                    **evidence,
+                    "region": region,
+                    "reason": "numeric_choice_label_outside_strong_answer_region",
+                },
+            )
+    if evidence.get("source") in {"answer_tag", "explicit_final"}:
+        stripped = _NUMERIC_LEADING_CHOICE_LABEL.sub("", region, count=1)
+        if stripped != region:
+            evidence = {**evidence, "stripped_leading_choice_label": region[: len(region) - len(stripped)]}
+            region = stripped
     if _NONFINITE.search(region):
         return ParseResult("nonfinite", None, {**evidence, "region": region})
     if _RANGE.search(region):
         return ParseResult("range", None, {**evidence, "region": region})
-    candidates: list[tuple[str, Decimal]] = []
+    if _BOUND.search(region):
+        return ParseResult("bound", None, {**evidence, "region": region})
+    normalized_expected_unit = None
+    if expected_unit is not None:
+        normalized_expected_unit = _UNIT_ALIASES.get(str(expected_unit).casefold())
+        if normalized_expected_unit not in {"meter", "centimeter"}:
+            raise ValueError(f"Unsupported SPBench-SI expected numeric unit: {expected_unit!r}")
+    candidates: list[tuple[str, Decimal, str | None]] = []
     occupied: list[tuple[int, int]] = []
     for match in _NUMBER.finditer(region):
         try:
             value = Decimal(match.group(0).lstrip("+"))
         except InvalidOperation:
             continue
-        candidates.append((match.group(0), value))
+        candidates.append((match.group(0), value, _normalized_unit_after(region, match.end())))
         occupied.append(match.span())
     for match in _WORD_PATTERN.finditer(region):
         if any(start <= match.start() < end for start, end in occupied):
             continue
-        candidates.append((match.group(0), _WORD_VALUES[match.group(1).casefold()]))
+        candidates.append((
+            match.group(0),
+            _ROBUST_WORD_VALUES[match.group(1).casefold()],
+            _normalized_unit_after(region, match.end()),
+        ))
     negatives = re.search(r"(?<![A-Za-z0-9_.])-\s*(?:\d|\.\d)", region)
     if negatives:
         return ParseResult("negative", None, {**evidence, "region": region})
-    unique = sorted({value for _raw, value in candidates})
+    matching_unit_candidates = (
+        [candidate for candidate in candidates if candidate[2] == normalized_expected_unit]
+        if normalized_expected_unit is not None
+        else []
+    )
+    considered = matching_unit_candidates if matching_unit_candidates else candidates
+    unique = sorted({value for _raw, value, _unit in considered})
     details = {
         **evidence,
         "region": region,
-        "candidates": [{"raw": raw, "value": _decimal_string(value)} for raw, value in candidates],
+        "expected_unit": normalized_expected_unit,
+        "unit_filter_applied": bool(matching_unit_candidates),
+        "candidates": [
+            {"raw": raw, "value": _decimal_string(value), "unit": unit}
+            for raw, value, unit in candidates
+        ],
+        "considered_candidates": [
+            {"raw": raw, "value": _decimal_string(value), "unit": unit}
+            for raw, value, unit in considered
+        ],
         "unique": [_decimal_string(value) for value in unique],
     }
     if len(unique) == 1 and unique[0].is_finite() and unique[0] >= 0:
@@ -193,7 +352,7 @@ def _upstream_fuzzy_numeric(raw_prediction: str) -> str:
     # ``fuzzy_match_number`` audit implementation: one..ninety, then
     # zero/a/an.  This is intentionally separate from the robust parser.
     upstream_words = tuple(
-        (word, value) for word, value in _WORD_VALUES.items()
+        (word, value) for word, value in _UPSTREAM_WORD_VALUES.items()
         if word not in {"zero", "a", "an"}
     ) + (
         ("zero", Decimal(0)), ("a", Decimal(1)), ("an", Decimal(1)),
@@ -223,7 +382,7 @@ def score_main_row(prediction_row: dict[str, Any], scoring_row: dict[str, Any]) 
         parsed = parse_choice(raw, allowed)
         score = Decimal(1) if parsed.value == target else Decimal(0)
     else:
-        parsed = parse_numeric(raw)
+        parsed = parse_numeric(raw, expected_unit=_EXPECTED_NUMERIC_UNITS[question_type])
         try:
             prediction = Decimal(parsed.value) if parsed.succeeded else None
             target_value = Decimal(target)
@@ -321,6 +480,13 @@ def _validate_inference_metadata(
         raise ValueError("Inference metadata dataset fingerprint mismatch")
     if dataset.get("official_test_size") != OFFICIAL_TEST_SIZE:
         raise ValueError("Inference metadata official size mismatch")
+    declared_scorer_protocol = metadata.get("scorer_protocol")
+    if not inference_metadata_scorer_protocol_is_compatible(declared_scorer_protocol):
+        raise ValueError(
+            "Inference metadata scorer_protocol is not compatible with the current "
+            f"SPBench-SI scorer: got={declared_scorer_protocol!r}, "
+            f"allowed={sorted(COMPATIBLE_INFERENCE_SCORER_PROTOCOLS)!r}"
+        )
 
 
 def score_predictions(
@@ -349,6 +515,8 @@ def score_predictions(
     atomic_write_jsonl(audit_scored, audit_rows)
     main_aggregate = aggregate_rows(main_rows)
     audit_aggregate = aggregate_rows(audit_rows)
+    inference = dict(metadata.get("model")) if isinstance(metadata.get("model"), dict) else {}
+    inference["declared_scorer_protocol"] = metadata.get("scorer_protocol")
     common = {
         "dataset": {
             "repository": "hongxingli/SPBench",
@@ -358,7 +526,7 @@ def score_predictions(
             "task_counts": EXPECTED_TASK_COUNTS,
         },
         "num_scored_rows": len(main_rows),
-        "inference": metadata.get("model"),
+        "inference": inference,
         "generated_at": utc_now(),
     }
     metadata_path = predictions.with_suffix(predictions.suffix + ".metadata.json")
@@ -418,6 +586,9 @@ def score_predictions(
             "complete_main_scored_rows": len(main_rows) == OFFICIAL_TEST_SIZE,
             "separate_upstream_compatibility_audit": audit_summary_path.is_file(),
             "publishable_inference_metadata": metadata.get("publishable_inference") is True,
+            "compatible_inference_scorer_protocol": (
+                inference_metadata_scorer_protocol_is_compatible(metadata.get("scorer_protocol"))
+            ),
             "locked_main_formula": main_summary["formula"] == MAIN_FORMULA,
             "locked_upstream_audit_formula": audit_summary["formula"] == AUDIT_FORMULA,
         },

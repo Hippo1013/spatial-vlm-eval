@@ -11,14 +11,14 @@
 | MSMU-Bench | official `test`，987 条 | 已实现 input contract、validator、inference 与 scorer | 18 条既有目标 profile 已完成；本阶段告一段落 |
 | CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | contract、23-profile registry、两阶段推理、scorer 与报告已实现 | 22 条轨已通过 full-2638 validator、评分和 publication gates；仅四卡 InternVL3-78B 缺失，报告 22/23（2026-08-06） |
 | Q-Spatial Bench | Q-Spatial-ScanNet 170 + Q-Spatial++ 101，共 271 条 | contract、21-profile registry、两阶段推理、numeric scorer 与报告已实现 | 除 TP=4 blocked 的 InternVL3-78B 外，20 轨 test/full-271、正式 validator、provenance、当前 v2 scorer 与 publication gates 已通过；报告 20/21（2026-08-07） |
-| SPBench-SI | official 单图 `test`，1009 条；不包含 SPBench-MV | contract、21-profile registry、两阶段推理、双 scorer 与报告已实现 | 除固定 TP=4 的 InternVL3-78B 外，20 轨当前 test gate 已通过；full 尚无终态证据，未评分或发布（2026-08-07） |
+| SPBench-SI | official 单图 `test`，1009 条；不包含 SPBench-MV | contract、21-profile registry、两阶段推理、双 scorer 与报告已实现 | 20 条非 78B 轨有当前 test gate；其中 19 条 full-1009 validator 通过，Gemini full 失败；尚未评分或发布，78B 未运行（2026-08-08） |
 
 “尚未实现”表示仓库中还没有可发布的 benchmark contract、validator、scorer protocol、运行入口或
 结果目录，不能因为数据已经下载就宣称可以正式评测。CV-Bench 的“已实现”只指代码、协议和本地
 验证链路，不表示 23 条服务器结果已经产生；状态必须以 test gate、validator、metadata、summary 和
 publication gates 为准。Q-Spatial 的“已实现”同样不表示已有模型结果；服务器状态必须读取其
-`test_gate.json`、validator、metadata、summary 与 publication gates。SPBench-SI 的“已实现”只表示
-本地链路和协议就绪；当前另有 20 条非 78B 轨 test gate，但没有 full/评分/发布终态结论。
+`test_gate.json`、validator、metadata、summary 与 publication gates。SPBench-SI 当前有 20 条非 78B
+轨 test gate 和 19 条完整 prediction/validator；Gemini full 失败，且尚无 score summary 或全局报告。
 
 ## 目标模型覆盖
 
@@ -84,8 +84,8 @@ thinking 或 Mental-3D。主 scorer 使用原始十阈值严格 MRA 与四题型
 提取、inclusive 边界和聚合另存为独立 compatibility audit。双卡计划只包含 20 条，固定 TP=4 的
 InternVL3-78B 保留四卡入口；20/21 报告必须明确标为暂行且只能缺该轨。
 
-截至 2026-08-07，代码/回归完成，20 条非 78B 轨已通过当前服务器 test gate；full 批次
-尚未形成终态证据，未启动正式评分或发布。详细协议见
+截至 2026-08-08，代码/回归完成；20 条非 78B 轨有当前 test gate，其中 19 条已通过 full-1009 validator；Gemini
+full 失败，InternVL3-78B 尚未运行，正式评分与全局报告均不存在。详细协议见
 [SPBench-SI canonical protocol](benchmarks/spbench_si/protocol.md)，执行
 边界见 [SPBench-SI 两阶段 runbook](spbench-si-two-stage-runbook.md)。
 

@@ -17,9 +17,11 @@ from .scorer import (
     AUDIT_FORMULA,
     AUDIT_SCORER_PROTOCOL,
     AUDIT_RESULT_KIND,
+    COMPATIBLE_INFERENCE_SCORER_PROTOCOLS,
     MAIN_FORMULA,
     RESULT_KIND,
     SCORER_PROTOCOL,
+    inference_metadata_scorer_protocol_is_compatible,
 )
 
 DEFAULT_OUTPUT_NAME = "spbench-si-result.md"
@@ -104,6 +106,16 @@ def _validate_result(summary_path: Path) -> ReportResult:
         raise ValueError(f"Inference metadata artifact mismatch: {summary_path}")
     if artifacts.get("inference_metadata_sha256") != _sha256(inference_metadata):
         raise ValueError(f"Inference metadata digest mismatch: {summary_path}")
+    metadata = _load_json(inference_metadata)
+    declared_scorer_protocol = metadata.get("scorer_protocol")
+    if not inference_metadata_scorer_protocol_is_compatible(declared_scorer_protocol):
+        raise ValueError(
+            "Inference metadata scorer_protocol is not compatible: "
+            f"got={declared_scorer_protocol!r}, "
+            f"allowed={sorted(COMPATIBLE_INFERENCE_SCORER_PROTOCOLS)!r}: {summary_path}"
+        )
+    if inference.get("declared_scorer_protocol") != declared_scorer_protocol:
+        raise ValueError(f"Summary/inference scorer declaration mismatch: {summary_path}")
     prediction_validation = Path(str(artifacts.get("prediction_validation", ""))).resolve()
     if prediction_validation != (score_dir / "prediction_validation.json").resolve() or not prediction_validation.is_file():
         raise ValueError(f"Prediction validation artifact mismatch: {summary_path}")

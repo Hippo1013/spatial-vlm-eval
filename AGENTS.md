@@ -106,9 +106,12 @@ canonical 文档是 `docs/benchmarks/spbench_si/protocol.md`。本阶段只评�
 SPBench-MV。loader 必须显式读取锁定 Parquet 与 ZIP，直接解码 524 张 JPEG；adapter 只能看到
 `index, image, system_prompt, user_prompt`，prediction 只有 `index, raw_prediction`。21 轨中 18 条 RGB、
 3 条同图派生 depth/XYZ，统一使用官方 `default/direct`，禁止 thinking/Mental-3D/GT depth。主 scorer
-protocol 是 `spbench_si_original_mra10_strict_robust_direct_four_task_macro_v1`，使用十阈值严格 MRA 与
-四题型宏平均；当前上游 direct-mode 只作为独立 audit，禁止混表。subset 不评分；暂行 20/21 报告只能
-缺固定 TP=4 的 InternVL3-78B。
+protocol 是
+`spbench_si_original_mra10_strict_robust_direct_controlled_final_expected_unit_four_task_macro_v2`：主 parser
+不把自由文本 `a/an` 当作 1，只在强答案区域剥离 `A-D.` 数值标签，支持受控最终声明，并仅用题干期望
+单位选择模型显式写出的同单位数值而不做换算；十阈值严格 MRA 与四题型宏平均保持不变。当前上游
+direct-mode 只作为独立 audit，禁止混表。subset 不评分；暂行 20/21 报告只能缺固定 TP=4 的
+InternVL3-78B。
 
 ## 修改与验证流程
 

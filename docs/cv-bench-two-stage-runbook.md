@@ -181,7 +181,7 @@ bash scripts/cv_bench/run_internvl3_78b_evaluation.sh
 [InternVL3-78B 一键完整评测](cv-bench-internvl3-78b-evaluation.md)。
 
 若 Q-Spatial、SPBench-SI 与 CV-Bench 三项都待补 78B，可改用
-[三 Benchmark 单次 vLLM 入口](internvl3-78b-three-bench-evaluation.md)共享一次模型加载；本单 benchmark
+[三 Benchmark 一键测评](internvl3-78b-three-bench-evaluation.md)共享一次模型加载；本单 benchmark
 入口仍保留。两种入口使用同一 served name 和 canonical CV-Bench 结果路径，互斥锁禁止并发写入。
 
 另开终端可用只读 watcher 自动跟随当前及后续模型的正式 journal，并逐条打印精简后的 prediction；

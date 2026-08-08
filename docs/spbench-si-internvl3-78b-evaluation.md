@@ -5,7 +5,7 @@ test gate、full-1009、独立 validator、主协议与 upstream compatibility a
 `spbench-si-result.md` 从暂行 20/21 原地重建为完整 21/21。
 
 该 profile 的 served name 已统一为 `internvl3-78b-three-bench`。若还要补齐 Q-Spatial 与 CV-Bench，
-优先按[三 Benchmark 单次 vLLM 手册](internvl3-78b-three-bench-evaluation.md)共享一次模型加载；本页的
+优先按[三 Benchmark 一键测评](internvl3-78b-three-bench-evaluation.md)共享一次模型加载；本页的
 单 benchmark 入口继续保留并写入同一 SPBench-SI canonical 路径。
 
 ## 运行前准备
@@ -109,7 +109,7 @@ $SPBENCH_SI_OUTPUT_ROOT/
 │   ├── predictions.jsonl.metadata.json
 │   ├── prediction_validation.json
 │   └── scores/
-│       ├── spbench_si_original_mra10_strict_robust_direct_four_task_macro_v1/
+│       ├── spbench_si_original_mra10_strict_robust_direct_controlled_final_expected_unit_four_task_macro_v2/
 │       │   ├── scored_rows.jsonl
 │       │   ├── summary.json
 │       │   └── publication_gates.json
