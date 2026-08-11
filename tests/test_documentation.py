@@ -107,6 +107,11 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertLessEqual(len(agents.splitlines()), 300)
         self.assertLessEqual(len(agents.encode("utf-8")), 15 * 1024)
 
+        readme = (self.repository / "README.md").read_text(encoding="utf-8")
+        self.assertLessEqual(len(readme.splitlines()), 220)
+        self.assertIn("## 新 agent 快速接手", readme)
+        self.assertIn("docs/evaluation-scope.md", readme)
+
         oversized = [
             path.relative_to(self.repository).as_posix()
             for path in sorted(self.docs.rglob("*.md"))
@@ -209,8 +214,11 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertIn("代码/回归完成", scope)
         self.assertIn("不是本项目复现结果", scope)
         self.assertIn("CV-Bench 的 23 条目标轨由独立 registry 维护", scope)
-        self.assertIn("22 条目标轨均已通过当前 test gate、full-2638", scope)
-        self.assertIn("全局 `cv-bench-result.md` 有 22 行", scope)
+        self.assertIn("23/23 条轨可发布", scope)
+        self.assertIn("21/21 条轨可发布", scope)
+        self.assertIn("20/21 条轨可发布，仅 Gemini 无 summary", scope)
+        self.assertIn("当前报告按操作者选择纳入 19/21", scope)
+        self.assertIn("## 已验证进度快照", scope)
         self.assertIn("/media/datasets/tangzecong/huggingface/", scope)
         self.assertIn("/media/datasets/lihaoran/huggingface/", scope)
 

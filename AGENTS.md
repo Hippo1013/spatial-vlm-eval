@@ -51,7 +51,7 @@
 | 配置、操作或修改服务器显式出站代理 | `docs/server-network-proxy.md` | 输入订阅或执行代理命令前 |
 | 运行三阶段人工测试 | `docs/msmu-all-model-test-commands.md` 与当前阶段文档 | 启动模型前 |
 | 启动 judge 或正式评分 | MSMU protocol、`docs/msmu-stage3-scoring-commands.md`、`docs/architecture.md` | readiness 检查与评分前 |
-| 查询当前进度、汇报或发布结果 | `docs/model-matrix.md`，并现场检查服务器 validator/metadata/status/summary | 写结论前 |
+| 查询当前进度、汇报或发布结果 | `docs/evaluation-scope.md`、`docs/model-matrix.md`，并现场检查服务器 validator/metadata/status/summary/report | 写结论前 |
 | 追溯行为变化、设计原因或已知故障 | `CHANGELOG.md`、相关 ADR、`docs/troubleshooting/` 与原始运行日志 | 下结论或修复前 |
 | 新增 benchmark | 本文件“新增 benchmark”、`docs/evaluation-scope.md`、`docs/model-matrix.md`、`docs/README.md` 和已有 benchmark 的同类文件 | 创建目录或协议前 |
 
@@ -110,8 +110,9 @@ protocol 是
 `spbench_si_original_mra10_strict_robust_direct_controlled_final_expected_unit_four_task_macro_v2`：主 parser
 不把自由文本 `a/an` 当作 1，只在强答案区域剥离 `A-D.` 数值标签，支持受控最终声明，并仅用题干期望
 单位选择模型显式写出的同单位数值而不做换算；十阈值严格 MRA 与四题型宏平均保持不变。当前上游
-direct-mode 只作为独立 audit，禁止混表。subset 不评分；暂行 20/21 报告只能缺固定 TP=4 的
-InternVL3-78B。SpatialLadder native batch 必须逐字遵循锁定上游的 tokenizer left padding；当前
+direct-mode 只作为独立 audit，禁止混表。subset 不评分；报告可选择任意非空、逐轨通过完整 publication
+gates 的子集，但必须分开记录显式排除与其余未完成轨。SpatialLadder native batch 必须逐字遵循锁定
+上游的 tokenizer left padding；当前
 inference protocol 是 `spbench_si_spatialladder3b_rgb_rgb_default_direct_folded_user_upstream_locked_v2`，
 旧 right-padded v1 prediction/gate 不得恢复、评分或发布。
 

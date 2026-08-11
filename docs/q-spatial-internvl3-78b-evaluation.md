@@ -1,5 +1,8 @@
 # Q-Spatial InternVL3-78B 四卡补测
 
+截至 2026-08-11，该轨已在 canonical 输出根完成并通过 publication gates；当前项目进度见
+[评测范围](evaluation-scope.md#已验证进度快照)。本页保留为同一路径的复核、恢复或重建手册。
+
 本页用于在四张 80GB GPU 上补齐 `internvl3_78b`。入口沿用现有 Q-Spatial 正式输出根：自动完成
 test gate、full-271、validator、精确单轨评分，并把原有 `q-spatial-result.md` 从 20/21 原地重建为
 21/21；不会建立另一套 78B 正式结果根。

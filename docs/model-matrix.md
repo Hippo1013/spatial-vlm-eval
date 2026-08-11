@@ -13,6 +13,9 @@ inference protocol、prompt/template、图像处理、decoding 和 scorer protoc
 校验这些 provenance、一次只选择一个 scorer protocol，并在模型名称中区分不同 input track 时才可
 省略 protocol 列。
 
+本文件维护稳定的模型/profile 身份，不维护实时进度。日期化项目快照统一见
+[评测范围与项目进度](evaluation-scope.md#已验证进度快照)，新结论仍须现场检查服务器产物。
+
 闭源 API profile 在全部 benchmark 中只作补充参照，不是核心比较对象或阶段完成门槛；完整范围与
 搁置规则以[评测范围的完成边界](evaluation-scope.md#比较重点与完成边界)为准。已运行结果的单轨门禁
 不因该优先级而放宽。
@@ -46,19 +49,17 @@ map，因此不建立虚假的 RGB-only 轨。实现 adapter 时分别
 ## CV-Bench 当前 23 条目标 inference profile
 
 以下 23 条轨已在 registry、CLI、validator、scorer 和报告发现中注册。prompt 修复后的两条 reasoning
-gate 使用 v2，其他轨可在仅 adapter digest 变化时审计迁移。截至 2026-08-06，除四卡
-InternVL3-78B 外的 22 条轨均已通过 full-2638 validator、当前 scorer v3 评分和 publication gates；
-全局报告为 22/23。下表保留逐轨已验证的静态状态；实时完成情况必须读取服务器 validator、metadata、
-summary 和 publication gates。通用轨先审计官方 Transformers processor/template，再使用 vLLM 0.19；
-不一致时只能显式回退到锁定 runner。
+gate 使用 v2，其他轨可在仅 adapter digest 变化时审计迁移。通用轨先审计官方 Transformers
+processor/template，再使用 vLLM 0.19；不一致时只能显式回退到锁定 runner。表内状态是历史验收证据，
+项目级最新进度只查评测范围和 live artifacts。
 
-| Profile | Model / locked revision | Input track | Backend / decoding | 当前状态 |
+| Profile | Model / locked revision | Input track | Backend / decoding | 历史验收证据 |
 |---|---|---|---|---|
 | `llava_next_mistral_7b` | `llava-hf/llava-v1.6-mistral-7b-hf@2424fdd47412fccc66d91719126b420e9fbd7065` | RGB | vLLM；greedy/512/seed 42 | full + v3 publication gates passed（2026-08-06） |
 | `llava_next_yi_34b` | `llava-hf/llava-v1.6-34b-hf@84e4488fffae48f9da316ec31288b7c03f102ec7` | RGB | vLLM TP=2；greedy/512/seed 42 | full + v3 publication gates passed（2026-08-06） |
 | `internvl3_8b` | `OpenGVLab/InternVL3-8B-hf@259a3b64a14623c0ec91a045cb43f7c5af5fa6af` | RGB | vLLM；greedy/512/seed 42 | full + v3 publication gates passed（2026-08-06） |
 | `internvl3_38b` | `OpenGVLab/InternVL3-38B-hf@b2a05c0c325235f7530d8274c313a1d01082e069` | RGB | vLLM TP=2；greedy/512/seed 42 | full + v3 publication gates passed（2026-08-06） |
-| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | RGB | vLLM TP=4，四张 80GB；greedy/512/seed 42 | blocked：当前服务器仅 2×A800（2026-08-06） |
+| `internvl3_78b` | `OpenGVLab/InternVL3-78B-hf@3aecc2b26fd0ea29ea9f41e0ecaf877a1351f356` | RGB | vLLM TP=4，四张 80GB；greedy/512/seed 42 | full + v3 publication gates passed（2026-08-11 复核） |
 | `qwen3_vl_2b` | `Qwen/Qwen3-VL-2B-Instruct@89644892e4d85e24eaac8bacfd4f463576704203` | RGB | vLLM；greedy/512/seed 42 | full + v3 publication gates passed（2026-08-06） |
 | `qwen3_vl_4b` | `Qwen/Qwen3-VL-4B-Instruct@ebb281ec70b05090aa6165b016eac8ec08e71b17` | RGB | vLLM；greedy/512/seed 42 | full + v3 publication gates passed（2026-08-06） |
 | `qwen3_vl_8b` | `Qwen/Qwen3-VL-8B-Instruct@0c351dd01ed87e9c1b53cbc748cba10e6187ff3b` | RGB | vLLM；greedy/512/seed 42 | full + v3 publication gates passed（2026-08-06） |
@@ -86,10 +87,8 @@ sharding 进入 inference protocol/gate。HiSpatial 上游 CV 脚本只覆盖 2D
 ## Q-Spatial 当前 21 条目标 inference profile
 
 Q-Spatial 使用独立的 `src/spatial_vlm_eval/benchmarks/q_spatial/profiles.py`；`PROFILE_SEQUENCE` 唯一
-确定下表的 21 条轨与顺序，其中 RGB 18 条、派生输入 3 条。代码、协议和回归已于 2026-08-06
-完成。截至 2026-08-07，除固定 TP=4 blocked 的 `internvl3_78b` 外，其余 20 轨的服务器
-red/blue canary + smoke8 当前 test gate、full-271、正式 validator、完整 provenance、当前 v2 scorer
-评分与 publication gates 均已独立复核通过；全局报告为 20/21，唯一缺失 `internvl3_78b`。
+确定下表的 21 条轨与顺序，其中 RGB 18 条、派生输入 3 条。代码、协议和回归已完成；当前进度统一见
+[评测范围](evaluation-scope.md#已验证进度快照)。
 
 | Profile | Model / locked revision | Input track / comparison group | Backend / decoding |
 |---|---|---|---|
@@ -121,18 +120,16 @@ API 轨明确标记 provider nondeterministic。执行和评分边界见
 [Q-Spatial canonical protocol](benchmarks/q_spatial/protocol.md)。
 
 双卡批次的机器计划由 `scheduled_batch.SCHEDULE` 唯一维护：20 条可运行轨分为阶段 A 双卡/API 与
-阶段 B GPU 0/GPU 1；`internvl3_78b` 仍固定 TP=4 blocked，不进入 20 轨计划。该计划只改变资源调度，
-不改变本表的模型身份、input track、decoding 或 inference protocol。迁移到四卡服务器后，该轨由
-`run_internvl3_78b_evaluation.sh` 独立补齐，正式产物追加到原输出根并原地重建同一份 21 轨报告。
+阶段 B GPU 0/GPU 1；`internvl3_78b` 固定 TP=4，因此始终不进入这份双卡 20 轨计划。它已通过四卡
+入口独立补齐；这项调度排除不表示当前项目状态仍 blocked。该计划只改变资源调度，不改变本表的模型
+身份、input track、decoding 或 inference protocol。
 
 ## SPBench-SI 当前 21 条目标 inference profile
 
 SPBench-SI 使用独立的 `src/spatial_vlm_eval/benchmarks/spbench_si/profiles.py`；`PROFILE_SEQUENCE` 唯一
-确定下表顺序，其中 RGB 18 条、同一源 RGB 派生输入 3 条。代码、协议和本地回归于 2026-08-07 完成。
-截至 2026-08-08，包含固定 TP=4 的 `internvl3_78b` 在内的 20 条轨已通过当前 full-1009、
-主协议与 upstream audit 评分及 publication gates。SpatialLadder 旧 right-padded v1 已作废，
-left-padded v2 已重跑并通过；Gemini 续跑仍没有可发布 summary。当前文档明确排除 Gemini 和
-InternVL3-78B，汇总其余 19 条合法轨；Gemini 作为闭源补充轨已搁置，不阻塞本阶段收尾。
+确定下表顺序，其中 RGB 18 条、同一源 RGB 派生输入 3 条。SpatialLadder 旧 right-padded v1 已作废，
+只有 left-padded v2 可发现、评分和发布；项目进度与报告集合选择统一见
+[评测范围](evaluation-scope.md#已验证进度快照)。
 
 | Profile | Model / locked revision | Input track | Backend / locked decoding |
 |---|---|---|---|
@@ -167,9 +164,8 @@ image-processing、seed strategy、test gate 与 scorer 边界见
 
 ## MSMU 当前 18 条已完成目标 inference profile
 
-下表状态于 2026-08-03 在 `msmu-a800` 的 canonical 结果根现场复核。服务器实时状态仍须读取结果
-目录中的 prediction、validator、metadata、scored rows、judge failures、`summary.json` 和 publication
-gates，不能只引用本快照。
+下表身份与完成集合于 2026-08-11 在 `msmu-a800` 再次只读复核。服务器实时状态仍须读取结果目录中的
+prediction、validator、metadata、scored rows、judge failures、`summary.json` 和 publication gates。
 
 | Profile | Model / locked revision | Input track | Backend | Inference protocol | Status |
 |---|---|---|---|---|---|
@@ -194,7 +190,7 @@ gates，不能只引用本快照。
 
 ## 完成状态
 
-2026-08-03 现场审计发现且只发现上述 18 条目标结果。每条都满足：prediction index 精确覆盖
+2026-08-11 现场审计再次确认上述 18 条目标结果。每条都满足：prediction index 精确覆盖
 `0..986`、正式 validator 通过、metadata 与锁定 profile/revision/protocol 一致、scored rows 为 987
 条、judge failures 为 0、八类齐全，且四项 publication gate 全部为真。评分调度状态为
 `complete=18`、`pending=0`，因此当前 MSMU 目标 profile 集已全部完成正式测试。

@@ -1,10 +1,10 @@
 # CV-Bench 两阶段推理、评分与汇总
 
 本手册只保留操作者需要的命令。协议与产物定义见
-[CV-Bench canonical protocol](benchmarks/cv_bench/protocol.md)。截至 2026-08-06，排除四卡
-InternVL3-78B 后的 22 条目标轨均已通过 full-2638 validator、当前 scorer 评分和 publication gates；
-全局报告为 22/23。只需复制命令时直接看 [CV-Bench 简明运行指令](cv-bench-commands.md)，实时状态以
-服务器 validator、metadata、summary 和 publication gates 为准。
+[CV-Bench canonical protocol](benchmarks/cv_bench/protocol.md)，日期化进度见
+[评测范围](evaluation-scope.md#已验证进度快照)。只需复制命令时直接看
+[CV-Bench 简明运行指令](cv-bench-commands.md)；实时状态以服务器 validator、metadata、summary、
+publication gates 和报告为准。
 
 ## 1. 环境与只读检查
 

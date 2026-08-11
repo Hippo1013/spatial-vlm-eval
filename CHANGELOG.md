@@ -143,6 +143,12 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- 2026-08-11 只读复核 canonical 产物后，项目进度文档更新为：MSMU 当前目标 18/18、CV-Bench
+  23/23、Q-Spatial 21/21；SPBench-SI 有 20/21 条可发布候选，仅 Gemini 缺失，现有结果表按操作者
+  选择纳入 19/21 并额外排除已完成的 InternVL3-78B。进度快照统一收口到
+  `docs/evaluation-scope.md`，README、模型矩阵和 runbook 不再复制易漂移的阶段状态。本次只读复核与
+  文档整理没有启动推理、GPU、评分或 API。
+
 - 明确所有 benchmark 的闭源 API 轨只作补充参照，不是项目核心比较对象或阶段收尾的强制完成条件；
   未完成轨可以显式搁置，不能为了形式完整度自动发起付费调用。已经运行并准备入表的闭源结果仍须
   通过原有 validator、provenance、scorer protocol 与 publication gates。SPBench-SI Gemini 轨按此

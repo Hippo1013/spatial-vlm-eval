@@ -1,5 +1,8 @@
 # CV-Bench InternVL3-78B 一键完整评测
 
+截至 2026-08-11，该轨已在 canonical 输出根完成并通过 publication gates；当前项目进度见
+[评测范围](evaluation-scope.md#已验证进度快照)。本页保留为同一路径的复核、恢复或重建手册。
+
 本页用于用四张 80GB GPU 补齐 `internvl3_78b`。入口自动完成 test gate、full-2638、独立校验、
 精确单轨评分和原有全局报告重建。
 

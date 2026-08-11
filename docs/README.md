@@ -11,15 +11,15 @@
 | CV-Bench 数据、23 条轨、校验、评分与报告 | `src/spatial_vlm_eval/benchmarks/cv_bench/` | [CV-Bench protocol](benchmarks/cv_bench/protocol.md) |
 | Q-Spatial 数据、21 条轨、校验、numeric scorer 与报告 | `src/spatial_vlm_eval/benchmarks/q_spatial/` | [Q-Spatial protocol](benchmarks/q_spatial/protocol.md) |
 | SPBench-SI 数据、21 条轨、校验、双 scorer 与报告 | `src/spatial_vlm_eval/benchmarks/spbench_si/` | [SPBench-SI protocol](benchmarks/spbench_si/protocol.md) |
-| 四 benchmark 范围、推进顺序与数据准备边界 | 实现前为项目规划；实现后由各 benchmark registry/validator 固化 | [评测范围](evaluation-scope.md) |
-| 项目级目标模型身份与新增 SOTA 范围 | 实现前为项目规划 | [模型矩阵](model-matrix.md) |
+| 四 benchmark 范围、日期化进度快照与数据边界 | 服务器 validator/metadata/summary/publication gates；代码由各 registry 固化 | [评测范围与进度](evaluation-scope.md) |
+| 项目级模型身份、profile、revision、输入轨与 decoding | 各 benchmark registry | [模型矩阵](model-matrix.md) |
 | 已注册 MSMU profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` | [模型矩阵的 MSMU profile](model-matrix.md#msmu-当前-18-条已完成目标-inference-profile) |
 | CV-Bench 23 条目标轨及顺序 | `benchmarks.cv_bench.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 CV-Bench profile](model-matrix.md#cv-bench-当前-23-条目标-inference-profile) |
 | Q-Spatial 21 条目标轨及顺序 | `benchmarks.q_spatial.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 Q-Spatial profile](model-matrix.md#q-spatial-当前-21-条目标-inference-profile) |
 | SPBench-SI 21 条目标轨及顺序 | `benchmarks.spbench_si.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 SPBench-SI profile](model-matrix.md#spbench-si-当前-21-条目标-inference-profile) |
 | InternVL3-78B 三 benchmark 共享服务编排 | `orchestration.internvl3_78b_three_bench` / `scripts/internvl3_78b/` | [三 Benchmark 一键测评](internvl3-78b-three-bench-evaluation.md) |
 | 阶段三默认/Qwen3 补测轨与顺序 | `run_stage3_serial_inference.sh --list` / `--qwen3 --list` | [阶段三 runbook](msmu-stage3-full-eval.md) |
-| 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata、`summary.json` 和 publication gates | 模型矩阵只保存注明日期的已验证快照 |
+| 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata、`summary.json`、publication gates 和报告 | 评测范围只保存注明日期的已验证快照 |
 | CLI、环境变量与输出布局 | 脚本 `--help`、`configs/*server.env.example` | 对应 runbook |
 | 服务器显式出站代理 | 仓库外 `/media/datasets/lihaoran/tools/mihomo/` | [网络代理手册](server-network-proxy.md) |
 | 精确代码历史 | Git commit/diff | 根目录 [CHANGELOG](../CHANGELOG.md) 只记录语义变化 |
@@ -59,10 +59,10 @@
 
 ### 状态与参考
 
-- [四 Benchmark 评测范围](evaluation-scope.md)：MSMU、CV-Bench、Q-Spatial Bench、SPBench-SI 的
-  当前阶段、SOTA 对照来源与服务器资产边界。
-- [模型矩阵](model-matrix.md)：19 个项目级目标模型身份、CV-Bench 23 条、Q-Spatial 21 条与
-  SPBench-SI 21 条目标轨，以及 MSMU 已落地 profile、锁定身份、已知偏差和注明日期的验证状态快照。
+- [四 Benchmark 评测范围与项目进度](evaluation-scope.md)：新人入口；集中维护日期化进度、下一步、
+  SOTA 对照来源与服务器资产边界。
+- [模型矩阵](model-matrix.md)：19 个项目级目标模型身份、CV-Bench 23 条、Q-Spatial/SPBench-SI 各
+  21 条目标轨，以及 MSMU 已落地 profile、锁定身份和已知偏差；不复制易漂移进度。
 - [Judge 提示词中文参考](msmu-judge-prompts-zh-reference.md)：人工阅读译文；英文 scorer 源码仍是
   唯一运行真值。
 - [MSMU 遗留小问题](benchmarks/msmu/known-minor-issues.md)：仅供以后人工复核的暂缓问题清单。
@@ -131,14 +131,14 @@
 | profile、模型 revision、decoding 或原生/公平轨改变 | `profiles.py`、模型矩阵、推理手册、CHANGELOG、相关测试 | 同一提交 |
 | 环境变量、服务器路径模板、CLI、输出布局或编排改变 | env example、对应 runbook、README 最短入口、脚本测试 | 同一提交 |
 | 获准阶段范围或串行顺序改变 | 调度脚本、阶段三 runbook、AGENTS 约束、相关测试 | 执行新批次前 |
-| inference/评分状态变化 | 先验证完整产物，再更新模型矩阵的日期与状态；里程碑才进入 CHANGELOG | 验证完成后、报告前 |
+| inference/评分状态变化 | 先验证完整产物，再更新评测范围的日期化进度；里程碑才进入 CHANGELOG | 验证完成后、报告前 |
 | 可复用故障已定位并验证 | troubleshooting：症状、根因、处理、验证；fix 必须有回归测试 | 与修复同一提交 |
 | 故障尚未定位 | 只保留未跟踪运行日志或 issue，不进入 troubleshooting | 根因确认前禁止沉淀 |
 | 新增、重命名或删除文档 | 本索引、所有相对链接和文档一致性测试 | 同一提交 |
 
 ## 写作边界
 
-- README 只保留项目入口和稳定能力，不复制完整 profile 名单或阶段状态。
+- README 只保留项目入口和稳定能力；进度只路由到评测范围，不复制完整 profile 名单或阶段状态。
 - AGENTS 只保留硬约束、阅读路由和更新触发规则，不写历史流水。
 - CHANGELOG 记录“发生了什么”，ADR 记录“为什么这样决定”，troubleshooting 记录“问题如何复现并
   解决”，运行日志保留原始证据；四者不得互相复制全文。

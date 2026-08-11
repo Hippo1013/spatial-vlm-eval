@@ -1,5 +1,8 @@
 # SPBench-SI InternVL3-78B 四卡完整评测
 
+截至 2026-08-11，该轨已在 canonical 输出根完成并通过两套 scorer 的 publication gates；当前项目
+进度与报告集合选择见[评测范围](evaluation-scope.md#已验证进度快照)。本页保留为复核、恢复或重建手册。
+
 本页用于把两卡服务器上固定缺失的 `internvl3_78b` 迁移到四张 80GB GPU 补齐。独立入口自动完成
 test gate、full-1009、独立 validator、主协议与 upstream compatibility audit 精确评分，并把既有
 `spbench-si-result.md` 原地重建为当前所有 publication-gated 候选的汇总；若其余 20 轨也都已完成，
