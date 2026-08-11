@@ -21,7 +21,7 @@ prediction validator、scorer protocol、结果报告和 publication gates。
 
 | Benchmark | 正式范围 | 主结果 | 目标轨 |
 |---|---:|---|---:|
-| MSMU-Bench | official `test` 987 条 | official-compatible local-judge macro-8 | 18 条当前目标 profile |
+| MSMU-Bench | official `test` 987 条 | official-compatible local-judge macro-8 | 18 条已完成目标；另注册 4 条 main + 1 条 thinking 补测 |
 | CV-Bench | locked 2D 1438 + 3D 1200 | 2D / 3D / Overall | 23 |
 | Q-Spatial Bench | ScanNet 170 + Q-Spatial++ 101 | split-macro inclusive `delta <= 2` | 21 |
 | SPBench-SI | single-image `test` 1009 条 | strict original MRA 四题型宏平均 | 21 |
@@ -148,6 +148,19 @@ bash scripts/msmu/run_model_evaluation.sh MODEL --status
 
 获准后，无参数 `bash scripts/msmu/run_model_evaluation.sh MODEL` 完成 full-987、精确单轨评分和全局报告
 重建。正式评分命令见[阶段三评分指令](docs/msmu-stage3-scoring-commands.md)。
+
+RoboBrain2.5 NV/MT、HiSpatial 与 SpatialLadder direct/thinking 使用独立的双 lane 补测入口：
+
+```bash
+bash scripts/msmu/run_sota_supplement.sh --list
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_sota_supplement.sh
+bash scripts/msmu/run_sota_supplement.sh --check
+bash scripts/msmu/run_sota_supplement.sh --status
+```
+
+正式无参数调用会先完成两张 GPU 上的 canary/smoke8/full-987，再统一启动一次 judge、评分五条精确
+prediction 路径并通过 23 行报告门禁。完整资产、恢复和 22+1 晋级边界见
+[MSMU SOTA 双 Lane runbook](docs/msmu-sota-supplement.md)。
 
 ## 验证
 

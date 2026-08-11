@@ -11,6 +11,7 @@ ADR 记录会长期影响复现性、协议身份、模块边界或结果解释�
 | [0002](0002-cv-bench-robust-parser-and-publication-gates.md) | Accepted | CV-Bench 使用稳健选择题解析与独立发布门禁 |
 | [0003](0003-q-spatial-robust-numeric-parser-and-publication-gates.md) | Accepted | Q-Spatial declared-final numeric parser v2 与独立发布门禁 |
 | [0004](0004-spbench-si-original-mra-and-upstream-audit.md) | Accepted | SPBench-SI 原始 MRA、真实输出 parser v2 与上游审计分离 |
+| [0005](0005-msmu-sota-supplement-dual-lane.md) | Accepted | MSMU SOTA 五轨双 Lane、统一评分与 22+1 范围晋级 |
 
 ## 新 ADR 触发条件
 

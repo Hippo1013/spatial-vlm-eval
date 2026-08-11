@@ -391,6 +391,27 @@ Qwen2.5-VL 对不同长度 prompt 执行 `padding=True` 时若不覆盖该值，
 当前 SPBench-SI v2 adapter 在模型加载、逐批 generation metadata、异长 red/blue capacity probe 和
 test gate 四处 fail closed。该要求只改变 SpatialLadder SPBench-SI inference identity，不改变 scorer。
 
+### MSMU SOTA supplement：RoboBrain / HiSpatial / SpatialLadder
+
+MSMU 使用独立的 `models/sota_spatial/` family adapter；不调用 SPBench-SI/Q-Spatial/CV-Bench 的
+benchmark runner。五条 profile 只消费当前 MSMU `index/image/question`，分别锁定 RoboBrain official
+general structured-image、HiSpatial official predictor + same-RGB MoGe-2 XYZ，以及 SpatialLadder
+direct/generic-thinking。SpatialLadder 在 MSMU 同样强制 tied embeddings、BF16/FA2、官方像素范围和
+left-padded native batch；thinking 不使用选择题字母或数值题型模板。
+
+统一入口为：
+
+```bash
+bash scripts/msmu/run_sota_supplement.sh --list
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_sota_supplement.sh
+bash scripts/msmu/run_sota_supplement.sh --check
+bash scripts/msmu/run_sota_supplement.sh --status
+```
+
+正式无参数调用固定双 lane，在所有五路 full-987 完成后才启动一次 judge。不要把五条轨并入历史
+13 轨或 Qwen3 串行计划。环境变量、资产 revision、恢复和报告门禁见
+[SOTA 双 Lane runbook](msmu-sota-supplement.md)。
+
 ## 7. 正式 987 条、评分与报告
 
 本手册只保留 inference/deployment 边界，不复制阶段三操作者命令。每个 profile 仍须依次通过：
@@ -457,3 +478,6 @@ scores/<scorer-protocol>/
   [SpatialRGPT](https://github.com/AnjieCheng/SpatialRGPT)、
   [3DThinker](https://github.com/zhangquanchen/3DThinker)、
   [SpatialBot](https://github.com/BAAI-DCAI/SpatialBot)
+- [RoboBrain2.5](https://github.com/FlagOpen/RoboBrain2.5)、
+  [HiSpatial](https://github.com/microsoft/HiSpatial)、
+  [SpatialLadder](https://github.com/ZJU-REAL/SpatialLadder)

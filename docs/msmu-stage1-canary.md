@@ -91,6 +91,9 @@ bash scripts/msmu/run_manual_stage1.sh qwen3_vl_8b
 bash scripts/msmu/run_manual_stage1.sh qwen3_vl_32b
 bash scripts/msmu/run_manual_stage1.sh ssr_native
 bash scripts/msmu/run_manual_stage1.sh spatialbot_native
+bash scripts/msmu/run_manual_stage1.sh robobrain25_8b_nv_rgb
+bash scripts/msmu/run_manual_stage1.sh hispatial3b_moge2_xyz
+bash scripts/msmu/run_manual_stage1.sh spatialladder3b_rgb
 ```
 
 `qwen25_vl_base` 是 7B。32B 默认使用 GPU 0，72B 默认使用 GPU `0,1` 并做 balanced 加载；
@@ -118,6 +121,11 @@ bash scripts/msmu/run_manual_stage1.sh gemini31pro_openrouter_non_zdr
 ```
 
 non-ZDR 轨使用独立 protocol/run slug/journal，不恢复标准 ZDR 轨的失败 journal。
+
+RoboBrain NV/MT、HiSpatial 和 SpatialLadder direct/thinking 的正式补测优先使用
+`run_sota_supplement.sh`，它会在各自 lane 内自动完成本 canary。SpatialLadder canary 还必须通过
+`16→8→4→2→1` 的异长 red/blue left-padding native batch 探测；详见
+[SOTA 双 Lane runbook](msmu-sota-supplement.md)。
 
 如改用首方 API：
 

@@ -73,6 +73,9 @@ bash scripts/msmu/run_manual_stage2.sh qwen3_vl_8b
 bash scripts/msmu/run_manual_stage2.sh qwen3_vl_32b
 bash scripts/msmu/run_manual_stage2.sh ssr_native
 bash scripts/msmu/run_manual_stage2.sh spatialbot_native
+bash scripts/msmu/run_manual_stage2.sh robobrain25_8b_mt_rgb
+bash scripts/msmu/run_manual_stage2.sh hispatial3b_moge2_xyz
+bash scripts/msmu/run_manual_stage2.sh spatialladder3b_thinking
 ```
 
 `qwen25_vl_base` 是 7B；32B/72B 的单卡/双卡设置、API backend、key、PEFT checkpoint 和 GPU
@@ -83,6 +86,9 @@ validator 当作 non-ZDR 轨的前置通过证据。
 
 Qwen3-VL 2B/4B/8B/32B 均须在各自 stage 1 通过后独立运行本阶段；不能复用其他参数量的 smoke
 journal 或输出目录。
+
+SOTA supplement 控制器冻结一次相同的八类 index，并让五条 profile 分别通过 subset validator；本阶段
+仍禁止评分。完整 lane 顺序与恢复见[双 Lane runbook](msmu-sota-supplement.md)。
 
 ```bash
 bash scripts/msmu/run_manual_stage2.sh --list

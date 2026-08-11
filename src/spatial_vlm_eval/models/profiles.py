@@ -22,6 +22,12 @@ class InferenceProfile:
     deployable_on_two_a800_80gb: bool = True
     upstream_url: str | None = None
     upstream_commit: str | None = None
+    do_sample: bool = False
+    top_p: float | None = None
+    repetition_penalty: float | None = None
+    num_beams: int = 1
+    use_cache: bool = True
+    seed: int = 42
 
 
 def _profile(
@@ -41,6 +47,12 @@ def _profile(
     upstream_url: str | None = None,
     upstream_commit: str | None = None,
     inference_protocol: str | None = None,
+    do_sample: bool = False,
+    top_p: float | None = None,
+    repetition_penalty: float | None = None,
+    num_beams: int = 1,
+    use_cache: bool = True,
+    seed: int = 42,
 ) -> InferenceProfile:
     return InferenceProfile(
         key=key,
@@ -58,6 +70,12 @@ def _profile(
         deployable_on_two_a800_80gb=deployable,
         upstream_url=upstream_url,
         upstream_commit=upstream_commit,
+        do_sample=do_sample,
+        top_p=top_p,
+        repetition_penalty=repetition_penalty,
+        num_beams=num_beams,
+        use_cache=use_cache,
+        seed=seed,
     )
 
 
@@ -293,6 +311,99 @@ PROFILES = {
             upstream_url="https://github.com/BAAI-DCAI/SpatialBot",
             upstream_commit="775ad8cf2f9251261dcd70b2639133d506ff583f",
         ),
+        _profile(
+            "robobrain25_8b_nv_rgb",
+            "robobrain25",
+            "BAAI/RoboBrain2.5-8B-NV",
+            "3d77a19a3ddd8616b3979e03de56096edfb12ff6",
+            "rgb_original_first_question",
+            max_new_tokens=768,
+            temperature=0.7,
+            chat_template="RoboBrain2.5 official AutoProcessor structured-image template",
+            upstream_url="https://github.com/FlagOpen/RoboBrain2.5",
+            upstream_commit="af98c932aac9ff715d70da177088d7bb95573ff7",
+            inference_protocol=(
+                "msmu_robobrain25_8b_nv_rgb_original_first_question_"
+                "official_general_sampling_t07_top_p08_768_v1"
+            ),
+            do_sample=True,
+            top_p=0.8,
+        ),
+        _profile(
+            "robobrain25_8b_mt_rgb",
+            "robobrain25",
+            "BAAI/RoboBrain2.5-8B-MT",
+            "01145b89a0fe49f78f5d677d25af7351088d7c7d",
+            "rgb_original_first_question",
+            max_new_tokens=768,
+            temperature=0.7,
+            chat_template="RoboBrain2.5 official AutoProcessor structured-image template",
+            upstream_url="https://github.com/FlagOpen/RoboBrain2.5",
+            upstream_commit="af98c932aac9ff715d70da177088d7bb95573ff7",
+            inference_protocol=(
+                "msmu_robobrain25_8b_mt_rgb_original_first_question_"
+                "official_general_sampling_t07_top_p08_768_v1"
+            ),
+            do_sample=True,
+            top_p=0.8,
+        ),
+        _profile(
+            "hispatial3b_moge2_xyz",
+            "hispatial",
+            "lhzzzzzy/HiSpatial-3B",
+            "75a5e3d65351d7602c492aa91533f62b8a252604",
+            "same_rgb_moge2_xyz_original_first_question",
+            max_new_tokens=100,
+            temperature=None,
+            chat_template="HiSpatial official PaliGemma predictor template",
+            upstream_url="https://github.com/microsoft/HiSpatial",
+            upstream_commit="9b0a5718ed0fb3b8bd9d9e0b36b6192bd3e99be1",
+            inference_protocol=(
+                "msmu_hispatial3b_same_rgb_moge2_xyz_original_first_question_"
+                "official_predictor_greedy100_v1"
+            ),
+        ),
+        _profile(
+            "spatialladder3b_rgb",
+            "spatialladder",
+            "hongxingli/SpatialLadder-3B",
+            "0819c3adf8827a2ea6c0348d49a23503ecb1f428",
+            "rgb_original_first_question_direct",
+            max_new_tokens=128,
+            temperature=0.01,
+            chat_template="SpatialLadder official Qwen2.5-VL structured-image template",
+            upstream_url="https://github.com/ZJU-REAL/SpatialLadder",
+            upstream_commit="7a0d2ee85c28728835300310a349a53a15967f2e",
+            inference_protocol=(
+                "msmu_spatialladder3b_rgb_original_first_question_direct_"
+                "flashattn2_leftpad_native_batch_128_v1"
+            ),
+            do_sample=True,
+            top_p=1.0,
+            repetition_penalty=1.05,
+        ),
+        _profile(
+            "spatialladder3b_thinking",
+            "spatialladder",
+            "hongxingli/SpatialLadder-3B",
+            "0819c3adf8827a2ea6c0348d49a23503ecb1f428",
+            "rgb_official_generic_special_thinking",
+            max_new_tokens=1024,
+            temperature=0.01,
+            chat_template=(
+                "SpatialLadder official Qwen2.5-VL structured-image template plus "
+                "SPAR-Bench generic special thinking prompt"
+            ),
+            upstream_url="https://github.com/ZJU-REAL/SpatialLadder",
+            upstream_commit="7a0d2ee85c28728835300310a349a53a15967f2e",
+            inference_protocol=(
+                "msmu_spatialladder3b_rgb_official_generic_special_thinking_"
+                "flashattn2_leftpad_native_batch_last_answer_1024_v1"
+            ),
+            do_sample=True,
+            top_p=1.0,
+            repetition_penalty=1.05,
+        ),
     ]
 }
 
@@ -318,6 +429,26 @@ CURRENT_TARGET_PROFILE_KEYS = (
     "3dthinker_native",
     "spatialbot",
     "spatialbot_native",
+)
+
+
+# Registered MSMU SOTA supplement. These profiles remain outside
+# CURRENT_TARGET_PROFILE_KEYS until their live full-987 validator, scorer, and
+# publication artifacts have all been verified. The thinking track is always a
+# supplementary row and never becomes a main target profile.
+SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS = (
+    "robobrain25_8b_nv_rgb",
+    "robobrain25_8b_mt_rgb",
+    "hispatial3b_moge2_xyz",
+    "spatialladder3b_rgb",
+)
+SOTA_SUPPLEMENT_PROFILE_KEYS = (
+    *SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS,
+    "spatialladder3b_thinking",
+)
+SOTA_SUPPLEMENT_REPORT_PROFILE_KEYS = (
+    *CURRENT_TARGET_PROFILE_KEYS,
+    *SOTA_SUPPLEMENT_PROFILE_KEYS,
 )
 
 

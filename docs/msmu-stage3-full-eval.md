@@ -39,6 +39,20 @@ bash scripts/msmu/run_stage3_serial_inference.sh --qwen3 --status
 
 `--qwen3` 只串行四条新轨，状态位于 `_serial_inference/qwen3/`，不修改默认 13 轨完成标记。
 
+RoboBrain NV/MT、HiSpatial、SpatialLadder direct/thinking 不加入上述两个历史计划，使用新的冻结双
+lane 入口：
+
+```bash
+bash scripts/msmu/run_sota_supplement.sh --list
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_sota_supplement.sh
+bash scripts/msmu/run_sota_supplement.sh --check
+bash scripts/msmu/run_sota_supplement.sh
+bash scripts/msmu/run_sota_supplement.sh --status
+```
+
+该入口在两条 lane 都 full-987 完成后自行统一评分并原子重建 23 行报告；详见
+[MSMU SOTA 双 Lane runbook](msmu-sota-supplement.md)。
+
 ## 第一步：串行完成 13 条完整推理
 
 如需释放服务器上由本项目协作者管理的 GPU burn，先按
@@ -243,6 +257,9 @@ SpatialBot 使用 `RGB` / `RGB + 深度估计`。标题与表格之间固定包�
 或提示配置，并明确深度估计来自当前 RGB 而不是 GT 深度。
 不完整、不可发布或 provenance 不一致的诊断 summary 会在终端告警并跳过；筛选后没有任何合法
 评分时 fail closed。
+
+SOTA supplement 写报告前必须先运行只读 `build_results_report.sh --check`；默认冻结检查 18 条 baseline
++ 4 条 main + 1 条 thinking，缺失、重复或不完整 summary 都拒绝覆盖现有报告。
 
 ## 推荐 tmux 名称
 

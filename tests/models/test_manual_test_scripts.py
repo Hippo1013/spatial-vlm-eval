@@ -63,6 +63,19 @@ class ManualStageScriptTest(unittest.TestCase):
             "THREEDTHINKER_MODEL": temporary / "3dthinker",
             "SPATIALBOT_UPSTREAM_ROOT": temporary / "spatialbot-upstream",
             "SPATIALBOT_MODEL": temporary / "spatialbot",
+            "ROBOBRAIN25_PYTHON": "/usr/bin/true",
+            "HISPATIAL_PYTHON": "/usr/bin/true",
+            "SPATIALLADDER_PYTHON": "/usr/bin/true",
+            "ROBOBRAIN25_UPSTREAM_ROOT": temporary / "robobrain25-upstream",
+            "HISPATIAL_UPSTREAM_ROOT": temporary / "hispatial-upstream",
+            "SPATIALLADDER_UPSTREAM_ROOT": temporary / "spatialladder-upstream",
+            "ROBOBRAIN25_8B_NV_MODEL": temporary / "robobrain25-nv",
+            "ROBOBRAIN25_8B_MT_MODEL": temporary / "robobrain25-mt",
+            "HISPATIAL_3B_MODEL": temporary / "hispatial-3b",
+            "SPATIALLADDER_3B_MODEL": temporary / "spatialladder-3b",
+            "MOGE2_MODEL": temporary / "moge2-model",
+            "MOGE2_UPSTREAM_ROOT": temporary / "moge2-upstream",
+            "MOGE2_UTILS3D_ROOT": temporary / "moge2-utils3d",
             "ZOEDEPTH_ROOT": temporary / "zoedepth",
             "ZOEDEPTH_CHECKPOINT": temporary / "zoedepth.pt",
             "JUDGE_MODEL": temporary / "judge",
@@ -241,6 +254,33 @@ class ManualStageScriptTest(unittest.TestCase):
         result = self.run_stage(2, "qwen3_vl_4b")
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertNotIn("QWEN_VISION_CANARY", result.stdout)
+
+    def test_sota_supplement_stage_wrappers_keep_five_profiles_separate(self):
+        expected = {
+            "robobrain25_8b_nv_rgb": "robobrain25-8b-nv-rgb",
+            "robobrain25_8b_mt_rgb": "robobrain25-8b-mt-rgb",
+            "hispatial3b_moge2_xyz": "hispatial3b-moge2-xyz",
+            "spatialladder3b_rgb": "spatialladder3b-rgb-direct",
+            "spatialladder3b_thinking": "spatialladder3b-thinking",
+        }
+        for profile, slug in expected.items():
+            with self.subTest(profile=profile):
+                canary = self.run_stage(1, profile)
+                smoke = self.run_stage(
+                    2,
+                    profile,
+                    extra_environment={"MSMU_SMOKE_INDICES": "0,1,2,3,4,5,6,7"},
+                )
+                full = self.run_stage(3, profile, "infer")
+                for result in (canary, smoke, full):
+                    self.assertEqual(result.returncode, 0, result.stderr)
+                    self.assertIn(f"PROFILE={profile}", result.stdout)
+                    self.assertIn("run_sota_supplement_pipeline.sh", result.stdout)
+                self.assertIn("SOTA_VISION_CANARY=1", canary.stdout)
+                self.assertNotIn("SOTA_VISION_CANARY", smoke.stdout)
+                self.assertIn(f"01_canary/{slug}", canary.stdout)
+                self.assertIn(f"02_smoke8/{slug}", smoke.stdout)
+                self.assertIn(f"03_full987/{slug}", full.stdout)
 
     def test_stage1_api_uses_two_samples_and_backend_specific_slug(self):
         result = self.run_stage(

@@ -38,6 +38,11 @@ spatialrgpt
 3dthinker_native
 spatialbot
 spatialbot_native
+robobrain25_8b_nv_rgb
+robobrain25_8b_mt_rgb
+hispatial3b_moge2_xyz
+spatialladder3b_rgb
+spatialladder3b_thinking
 EOF
 }
 
@@ -170,6 +175,7 @@ qwen_batch_size="8"
 qwen_min_free_gpu_mib="30000"
 stage3_supported="yes"
 stage3_block_reason=""
+sota_batch_size="1"
 
 api_backend="${MANUAL_API_BACKEND:-openrouter}"
 case "${model}" in
@@ -371,6 +377,43 @@ case "${model}" in
     run_slug="spatialbot-native"
     model_path="${SPATIALBOT_MODEL:-}"
     ;;
+  robobrain25_8b_nv_rgb)
+    model_kind="sota_supplement"
+    profile="${model}"
+    run_slug="robobrain25-8b-nv-rgb"
+    model_path="${ROBOBRAIN25_8B_NV_MODEL:-}"
+    default_devices="0"
+    ;;
+  robobrain25_8b_mt_rgb)
+    model_kind="sota_supplement"
+    profile="${model}"
+    run_slug="robobrain25-8b-mt-rgb"
+    model_path="${ROBOBRAIN25_8B_MT_MODEL:-}"
+    default_devices="0"
+    ;;
+  hispatial3b_moge2_xyz)
+    model_kind="sota_supplement"
+    profile="${model}"
+    run_slug="hispatial3b-moge2-xyz"
+    model_path="${HISPATIAL_3B_MODEL:-}"
+    default_devices="0"
+    ;;
+  spatialladder3b_rgb)
+    model_kind="sota_supplement"
+    profile="${model}"
+    run_slug="spatialladder3b-rgb-direct"
+    model_path="${SPATIALLADDER_3B_MODEL:-}"
+    default_devices="0"
+    sota_batch_size="${SPATIALLADDER_BATCH_SIZE:-1}"
+    ;;
+  spatialladder3b_thinking)
+    model_kind="sota_supplement"
+    profile="${model}"
+    run_slug="spatialladder3b-thinking"
+    model_path="${SPATIALLADDER_3B_MODEL:-}"
+    default_devices="0"
+    sota_batch_size="${SPATIALLADDER_BATCH_SIZE:-1}"
+    ;;
   judge)
     if [[ "${stage}" != "3" ]]; then fail "judge is only available in stage 3"; fi
     model_kind="judge"
@@ -536,12 +579,33 @@ run_model_pipeline() {
         JUDGE_BASE_URL="${judge_base_url}" PROFILE="${profile}" MODEL_PATH="${model_path}" \
           bash "${SCRIPT_DIR}/run_spatialbot_pipeline.sh"
       ;;
+    sota_supplement)
+      require_value SOTA_MODEL "${model_path}"
+      local -a sota_assignments=(
+        PROFILE="${profile}"
+        MODEL_PATH="${model_path}"
+        BATCH_SIZE="${sota_batch_size}"
+        CUDA_VISIBLE_DEVICES="${MANUAL_CUDA_VISIBLE_DEVICES:-${default_devices}}"
+      )
+      if [[ "${target_mode}" == "canary" ]]; then
+        sota_assignments+=(SOTA_VISION_CANARY=1)
+      fi
+      run_command env "${unset_args[@]}" ${target_assignments[@]+"${target_assignments[@]}"} \
+        RUN_NAME="${run_name}" RUN_SCORE="${score}" SCORE_ONLY="${score}" \
+        JUDGE_BASE_URL="${judge_base_url}" "${sota_assignments[@]}" \
+          bash "${SCRIPT_DIR}/run_sota_supplement_pipeline.sh"
+      ;;
     *) fail "internal error: ${model_kind} has no inference pipeline" ;;
   esac
 }
 
 select_smoke_indices() {
   local report="${OUTPUT_ROOT}/02_smoke8/selected_indices.json"
+  if [[ -n "${MSMU_SMOKE_INDICES:-}" ]]; then
+    printf '[msmu-manual] smoke_indices=%s\n' "${MSMU_SMOKE_INDICES}"
+    export MSMU_SMOKE_INDICES
+    return 0
+  fi
   if [[ "${manual_dry_run}" == "1" ]]; then
     run_command env DATASET_ROOT="${DATASET_ROOT}" SMOKE_INDEX_REPORT="${report}" \
       bash "${SCRIPT_DIR}/select_smoke_indices.sh"

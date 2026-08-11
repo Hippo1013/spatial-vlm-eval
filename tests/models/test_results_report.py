@@ -213,6 +213,46 @@ class ResultsReportDiscoveryTest(unittest.TestCase):
         self.assertEqual(len(selected), 1)
         self.assertEqual(selected[0].summary_path, valid.resolve())
 
+    def test_exact_profile_check_rejects_missing_duplicate_and_ineligible_rows(self):
+        protocol = "locked-protocol"
+
+        def result(profile: str, suffix: str, *, eligible: bool = True):
+            return results_report.ScoreResult(
+                result_id=f"{profile}-{suffix}",
+                summary_path=self.root / f"{profile}-{suffix}.json",
+                predictions_path=self.root / "predictions.jsonl",
+                metadata_path=self.root / "metadata.json",
+                score_dir=self.root / "scores",
+                eligible=eligible,
+                reason="complete" if eligible else "gate failed",
+                profile=profile,
+                scorer_protocol=protocol,
+            )
+
+        valid = [result("alpha", "one"), result("beta", "one")]
+        self.assertEqual(
+            results_report.check_exact_profile_set(
+                valid,
+                profiles=["alpha", "beta"],
+                scorer_protocol=protocol,
+            ),
+            valid,
+        )
+        cases = (
+            ([result("alpha", "one")], "beta"),
+            ([result("alpha", "one"), result("alpha", "two"), result("beta", "one")], "found 2"),
+            ([result("alpha", "one", eligible=False), result("beta", "one")], "gate failed"),
+        )
+        for values, message in cases:
+            with self.subTest(message=message), self.assertRaisesRegex(
+                results_report.ConfigurationError, message
+            ):
+                results_report.check_exact_profile_set(
+                    values,
+                    profiles=["alpha", "beta"],
+                    scorer_protocol=protocol,
+                )
+
     def test_metadata_protocol_mismatch_is_not_reportable(self):
         summary = write_result(
             self.root,
@@ -369,6 +409,37 @@ class ResultsReportRenderingTest(unittest.TestCase):
         self.assertNotIn("公平版", markdown)
         self.assertNotIn("原生版", markdown)
         self.assertNotIn("估计深度", markdown)
+
+    def test_sota_supplement_rows_show_exact_input_tracks(self):
+        cases = (
+            ("robobrain25_8b_nv_rgb", "BAAI/RoboBrain2.5-8B-NV", "RGB"),
+            ("robobrain25_8b_mt_rgb", "BAAI/RoboBrain2.5-8B-MT", "RGB"),
+            ("hispatial3b_moge2_xyz", "lhzzzzzy/HiSpatial-3B", "RGB + MoGe-2 XYZ"),
+            ("spatialladder3b_rgb", "hongxingli/SpatialLadder-3B", "RGB / direct"),
+            (
+                "spatialladder3b_thinking",
+                "hongxingli/SpatialLadder-3B",
+                "RGB + 官方通用 thinking 提示词",
+            ),
+        )
+        for profile, model, _label in cases:
+            write_result(
+                self.root,
+                run_name=profile,
+                profile=profile,
+                scorer_protocol="protocol-v1",
+                model=model,
+            )
+        selected = results_report.selected_results(
+            results_report.discover_results(self.root),
+            profiles=[profile for profile, _model, _label in cases],
+            scorer_protocols=["protocol-v1"],
+        )
+        markdown = results_report.render_markdown(selected)
+        for profile, model, label in cases:
+            name = "SpatialLadder-3B" if profile.startswith("spatialladder") else model.rsplit("/", 1)[-1]
+            self.assertIn(f"| {name}（{label}） |", markdown)
+        self.assertEqual(sum(1 for line in markdown.splitlines() if "SpatialLadder-3B（" in line), 2)
 
     def test_unmapped_dual_track_profile_fails_closed(self):
         write_result(

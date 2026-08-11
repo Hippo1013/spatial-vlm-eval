@@ -43,6 +43,17 @@ MANUAL_DRY_RUN=1 bash scripts/msmu/run_manual_stage1.sh internvl3_78b serve
 
 `MANUAL_DRY_RUN=1` 只打印将要执行的底层命令，不占 GPU、不调用 API。
 
+五条 MSMU SOTA supplement 由一个独立双 lane 入口覆盖三个阶段、统一评分和报告；不要逐条手工并发：
+
+```bash
+bash scripts/msmu/run_sota_supplement.sh --list
+MANUAL_DRY_RUN=1 bash scripts/msmu/run_sota_supplement.sh
+bash scripts/msmu/run_sota_supplement.sh --check
+bash scripts/msmu/run_sota_supplement.sh --status
+```
+
+正式调用和恢复方式见[MSMU SOTA 双 Lane runbook](msmu-sota-supplement.md)。
+
 ## 固定输出目录
 
 `.env.server` 中的 `MANUAL_TEST_OUTPUT_ROOT` 默认是：
@@ -65,6 +76,7 @@ manual-three-stage-v1/
 pipeline 会继续追加模型 revision、inference protocol 和 scorer protocol；三个阶段不共用 journal。
 阶段三推理调度状态另存于 `03_full987/_serial_inference/`，评分调度状态另存于
 `03_full987/_serial_scoring/<scorer-protocol>/`，都不会混入任何模型的正式结果目录。
+SOTA supplement 控制状态独立位于 `03_full987/_sota_supplement/`。
 
 ## 共同约定
 

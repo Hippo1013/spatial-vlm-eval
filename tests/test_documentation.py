@@ -31,7 +31,12 @@ from spatial_vlm_eval.benchmarks.spbench_si.scorer import (
     AUDIT_SCORER_PROTOCOL as SPBENCH_SI_AUDIT_SCORER_PROTOCOL,
     SCORER_PROTOCOL as SPBENCH_SI_SCORER_PROTOCOL,
 )
-from spatial_vlm_eval.models.profiles import CURRENT_TARGET_PROFILE_KEYS, PROFILES
+from spatial_vlm_eval.models.profiles import (
+    CURRENT_TARGET_PROFILE_KEYS,
+    PROFILES,
+    SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS,
+    SOTA_SUPPLEMENT_PROFILE_KEYS,
+)
 
 
 class DocumentationConsistencyTest(unittest.TestCase):
@@ -160,6 +165,16 @@ class DocumentationConsistencyTest(unittest.TestCase):
                 for key in CURRENT_TARGET_PROFILE_KEYS
             )
         )
+
+        supplement_section = matrix.split(
+            "### MSMU 已注册 SOTA supplement（待现场完成）", 1
+        )[1].split("## 专用模型身份说明", 1)[0]
+        documented_supplement = re.findall(
+            r"^\| `([^`]+)` \|", supplement_section, flags=re.MULTILINE
+        )
+        self.assertEqual(documented_supplement, list(SOTA_SUPPLEMENT_PROFILE_KEYS))
+        self.assertTrue(set(SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS).isdisjoint(CURRENT_TARGET_PROFILE_KEYS))
+        self.assertIn("thinking 永久只作补充轨", supplement_section)
 
         cvbench_section = matrix.split(
             "## CV-Bench 当前 23 条目标 inference profile", 1
@@ -512,6 +527,44 @@ class DocumentationConsistencyTest(unittest.TestCase):
         self.assertNotIn('"Scorer Protocol"', helper)
         self.assertNotIn("llava_next_", helper)
         self.assertNotIn("qwen3_vl_", helper)
+
+    def test_msmu_sota_supplement_runbook_matches_public_controller(self) -> None:
+        runbook = (self.docs / "msmu-sota-supplement.md").read_text(encoding="utf-8")
+        protocol = (self.docs / "benchmarks" / "msmu" / "protocol.md").read_text(encoding="utf-8")
+        readme = (self.repository / "README.md").read_text(encoding="utf-8")
+        architecture = (self.docs / "architecture.md").read_text(encoding="utf-8")
+        config = (self.repository / "configs" / "msmu-server.env.example").read_text(encoding="utf-8")
+        for required in [
+            "run_sota_supplement.sh --list",
+            "run_sota_supplement.sh --check",
+            "run_sota_supplement.sh --status",
+            "MANUAL_DRY_RUN=1",
+            "RoboBrain2.5 NV → HiSpatial + same-RGB MoGe-2 XYZ → SpatialLadder direct",
+            "RoboBrain2.5 MT → SpatialLadder generic thinking",
+            "18 晋级为 22",
+            "thinking 永久只作补充",
+            "status.tsv",
+            "build_results_report.sh --check",
+        ]:
+            with self.subTest(required=required):
+                self.assertIn(required, runbook)
+        for profile in SOTA_SUPPLEMENT_PROFILE_KEYS:
+            self.assertIn(PROFILES[profile].inference_protocol, protocol)
+        self.assertIn("run_sota_supplement.sh --check", readme)
+        self.assertIn("_sota_supplement/", architecture)
+        for variable in [
+            "ROBOBRAIN25_PYTHON",
+            "HISPATIAL_PYTHON",
+            "SPATIALLADDER_PYTHON",
+            "ROBOBRAIN25_8B_NV_MODEL",
+            "ROBOBRAIN25_8B_MT_MODEL",
+            "HISPATIAL_3B_MODEL",
+            "SPATIALLADDER_3B_MODEL",
+            "MOGE2_MODEL",
+            "SOTA_SUPPLEMENT_GPU0=0",
+            "SOTA_SUPPLEMENT_GPU1=1",
+        ]:
+            self.assertIn(variable, config)
 
     def test_single_model_entry_is_targeted_and_globally_reported(self) -> None:
         readme = (self.repository / "README.md").read_text(encoding="utf-8")

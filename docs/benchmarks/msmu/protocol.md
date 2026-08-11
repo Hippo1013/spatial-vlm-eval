@@ -93,6 +93,11 @@ prompt、图像派生组件或 decoding 不同的轨使用独立 inference proto
 | 3DThinker native | one RGB + original question + official begin-position mental-3D control prompt | greedy, 2048；last complete answer tag | `msmu_3dthinker_native_mental3d_native_v1` |
 | SpatialBot fair | one RGB + original question | greedy, 192 | `msmu_spatialbot_rgb_only_v1` |
 | SpatialBot native | one RGB + original question；same-RGB ZoeDepth uint16-mm derived depth | greedy, 192 | `msmu_spatialbot_native_zoedepth_rgbd_native_v1` |
+| RoboBrain2.5-8B-NV | one RGB + original question；official `general` structured image | sampling，temperature 0.7、top-p 0.8、768、seed 42 | `msmu_robobrain25_8b_nv_rgb_original_first_question_official_general_sampling_t07_top_p08_768_v1` |
+| RoboBrain2.5-8B-MT | one RGB + original question；独立 MT checkpoint | sampling，temperature 0.7、top-p 0.8、768、seed 42 | `msmu_robobrain25_8b_mt_rgb_original_first_question_official_general_sampling_t07_top_p08_768_v1` |
+| HiSpatial-3B | current MSMU RGB + 仅由同图 MoGe-2 派生的 XYZ；禁止 GT/题型信息 | official predictor greedy、100、seed 42 | `msmu_hispatial3b_same_rgb_moge2_xyz_original_first_question_official_predictor_greedy100_v1` |
+| SpatialLadder-3B direct | one RGB + original question；不加 post prompt | BF16/FA2、left-padded native batch、temperature 0.01、top-p 1、repetition 1.05、128、seed 42 | `msmu_spatialladder3b_rgb_original_first_question_direct_flashattn2_leftpad_native_batch_128_v1` |
+| SpatialLadder-3B thinking | one RGB + official generic `THINKING_TEMPLATE` + `special_post_prompt`；不使用选择题/数值题型模板 | 同上但 1024；最后完整 answer tag | `msmu_spatialladder3b_rgb_official_generic_special_thinking_flashattn2_leftpad_native_batch_last_answer_1024_v1` |
 
 3DThinker native 缺少完整 `<answer>...</answer>` 时保留 raw response 作为 prediction 并写 warning，不能
 静默返回空值。SpatialBot native 的 depth 只能从当前 RGB 估计，不接受 GT/sensor depth。SpatialRGPT
@@ -101,6 +106,20 @@ prompt、图像派生组件或 decoding 不同的轨使用独立 inference proto
 SpatialBot depth 合同明确为 `clip(round(metres * 1000), 0, 65535)` 后做上游三通道 packing。锁定
 ZoeDepth 的 `save_raw_16bit` helper 使用 `depth * 256`，所以本项目的毫米量化不是该 helper 的字节级
 复刻；该已知偏差属于当前 inference protocol，若改为 `*256` 必须更换 inference protocol id 和测试。
+
+上述五条 MSMU SOTA supplement 只复用 model-family 的官方 processor/predictor 技术，不继承
+CV-Bench、Q-Spatial 或 SPBench-SI 的 benchmark prompt、schema、validator、scorer 或报告语义。
+adapter 的运行输入仍只有 `index/image/question`。RoboBrain 严格走锁定上游 `general` 路由；HiSpatial
+必须记录同一源 RGB digest、派生 XYZ digest、HiSpatial/MoGe-2/utils3d revision，且不能接收 MSMU
+reference、raw type 或 task family。SpatialLadder 保留 tied embeddings、官方像素范围
+`12544..401408`、BF16/FlashAttention2 与 tokenizer left padding；native batch canary 使用异长 red/blue
+prompt 做 `16→8→4→2→1` 容量探测。thinking 轨只取最后一个完整 `<answer>...</answer>` 内容；没有
+完整标签时原始响应成为 prediction，同时 journal 记录 warning、原始响应 SHA-256、字符数和抽取状态。
+它是补充轨，不进入 MSMU 主矩阵完成数。
+
+五条轨的 inference protocol 完全独立，但 scorer、阈值、judge prompt、cache key 和 macro-8 聚合均不
+改变，继续使用本页 canonical scorer protocol。任何一个新 prompt、派生输入或 decoding 的 journal
+都不得被另一条轨恢复。
 
 OpenAI-compatible 请求严格只有一个 user message，其中一个 question text part 和一个 PNG data URI；
 不发送 system、history、reference 或答案格式提示。OpenRouter 路由同时设置首方 provider only、
@@ -126,6 +145,13 @@ inference protocol、run slug、journal 和输出目录，不得恢复或覆盖�
 回答必须同时建立 red-circle/top-left 与
 blue-square/bottom-right 两个语义对应，否则 fail closed。该诊断对每个模型只做一次 generation，不写入
 MSMU prediction journal、不参与评分，也不改变 inference/scorer protocol。
+
+SOTA supplement 另由 `scripts/msmu/run_sota_supplement.sh` 冻结双 lane：GPU0 为 RoboBrain NV →
+HiSpatial → SpatialLadder direct，GPU1 为 RoboBrain MT → SpatialLadder thinking。每条 lane 内依次通过
+组合视觉 canary、固定 smoke8 和 full-987；两条 lane 都 COMPLETE 且五份 prediction/validator/metadata
+合法后，才释放推理模型并只启动一次本地 judge，按 NV、MT、HiSpatial、direct、thinking 顺序评分。
+两个 watcher 只由继承 pipe 的状态事件唤醒并读取仓库外 `status.tsv`，不调用 LLM。任一 lane 失败只
+终止控制器自有进程组；合法 journal/正式产物保留，非法 finalized 产物原地 fail closed 且不覆盖。
 
 vLLM 0.19 服务必须设置 `--limit-mm-per-prompt.image 1`、锁定 revision/served name/TP/dtype。静态
 preflight 分别检查 LLaVA prompt 中恰有一个 `<image>`、InternVL prompt 中恰有一个
@@ -224,6 +250,11 @@ official_macro8_accuracy = mean(
 reference 或额外标注。精确 revision、inference protocol、scorer protocol 和结果性质仍由生成前
 强制校验的 metadata、summary 与结果目录追溯，不得从展示表反推。未知双轨 profile 若没有显式展示
 配置必须 fail closed，不能退回含混的“公平版/原生版”。
+
+SOTA supplement 完成后的固定展示再增加五行：RoboBrain NV/MT 为 `RGB`，HiSpatial 为
+`RGB + MoGe-2 XYZ`，SpatialLadder 为 `RGB / direct` 与
+`RGB + 官方通用 thinking 提示词`。报告写入前的 `--check` 必须确认既有 18 行和新增 5 行在当前 scorer
+protocol 下各有且只有一个完整 publication-gated summary；成功后才原子重建 23 行报告。
 
 ## Cache 与产物
 

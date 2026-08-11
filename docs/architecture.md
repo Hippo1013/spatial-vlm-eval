@@ -103,6 +103,11 @@ red/blue + smoke8 gate、full validator、严格原始 MRA 主 scorer 与当前�
 - `profiles.py`：锁定 model/revision/input track/inference protocol；
 - family 子包：上游 processor/chat template、图像输入、模型加载与 deterministic generation。
 
+MSMU SOTA supplement 的 `models/sota_spatial/` 是 benchmark-neutral family 层：RoboBrain、HiSpatial 和
+SpatialLadder adapter 只接收结构化 `index/image/question`。MSMU 的首问选择、row schema、validator、
+scorer 和报告仍留在 `benchmarks/msmu/`；其他 benchmark 不经该 package 反向向 MSMU 注入 task/type、
+reference 或 prompt。
+
 可识别的 Hugging Face `snapshots/<sha>` 路径会与锁定 hash 比较；Git checkout 存在 `.git` 时必须位于
 锁定 HEAD。普通本地目录/源码 archive 无法自行证明 revision，metadata 会明确写
 `*_revision_verified=false`，不得在报告中描述为已机器验证。
@@ -181,6 +186,12 @@ gates。全局锁加三个 benchmark 既有批次/单模型锁阻止同根并发
 process group 中启动每个模型，使用 fsync journal 的文件活动做停滞 watchdog，只终止自己记录的
 process group，并在进入下一条轨前等待相应 GPU 无 compute process。独占锁、同 commit 完成标记和
 活动进程记录防止重复批次、跨代码版本误续跑或意外接管其他服务；judge/scoring 始终留在后续独立阶段。
+
+MSMU SOTA 控制器独立于历史 13 轨和 Qwen3 计划，冻结两条 GPU lane 与五条 profile。每条 lane 有一个
+pipe-driven 只读 watcher；状态、冻结计划和日志位于仓库外 `_sota_supplement/`。控制器复用 MSMU
+canary/smoke/full validator 和目录评分入口，只有两条 lane 完成才释放 inference lock 并启动一个 judge。
+报告层先以只读 `--check` 强制 baseline18 + main4 + thinking1 各有且只有一个 publication-gated summary，
+再原子替换原报告。该状态机与 18→22 主范围晋级由 ADR-0005 约束。
 
 阶段三评分调度器递归发现结果根中的 `predictions.jsonl`，从 scorer 模块读取当前 protocol，并按完整
 路径稳定排序；脚本中不维护模型名单。只有 prediction 的直接父目录等于当前 scorer protocol 才能进入
@@ -325,6 +336,17 @@ OUTPUT_ROOT/
                 ├── predictions.infer.log
                 └── scores/SCORER_PROTOCOL/
 ```
+
+SOTA supplement 在同一 `MANUAL_TEST_OUTPUT_ROOT` 的三个 canonical stage 下写正式结果，并额外使用：
+
+```text
+03_full987/_sota_supplement/
+├── frozen-plan.json
+├── status.tsv
+└── logs/
+```
+
+控制目录不保存 prediction 副本；五条正式 prediction 仍在上面的 run/revision/inference/scorer 深层目录。
 
 不同模型 revision、decoding/input profile、inference protocol 或 scorer protocol 不共享目录。生成物
 不进入 Git，可另行归档到对象存储或实验平台。

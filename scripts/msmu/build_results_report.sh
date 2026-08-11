@@ -12,6 +12,7 @@ Usage: bash scripts/msmu/build_results_report.sh [OPTIONS]
 
 Options:
   --list                       list all discovered score summaries
+  --check                      require the frozen 18 baseline + five supplement summaries
   --results-root ABSOLUTE_PATH override the stage-three results root
   --output ABSOLUTE_PATH       override the Markdown output path
   --profile PROFILE            select one metadata profile; repeatable

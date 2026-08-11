@@ -13,12 +13,13 @@
 | SPBench-SI 数据、21 条轨、校验、双 scorer 与报告 | `src/spatial_vlm_eval/benchmarks/spbench_si/` | [SPBench-SI protocol](benchmarks/spbench_si/protocol.md) |
 | 四 benchmark 范围、日期化进度快照与数据边界 | 服务器 validator/metadata/summary/publication gates；代码由各 registry 固化 | [评测范围与进度](evaluation-scope.md) |
 | 项目级模型身份、profile、revision、输入轨与 decoding | 各 benchmark registry | [模型矩阵](model-matrix.md) |
-| 已注册 MSMU profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` | [模型矩阵的 MSMU profile](model-matrix.md#msmu-当前-18-条已完成目标-inference-profile) |
+| 已注册 MSMU profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` / `SOTA_SUPPLEMENT_PROFILE_KEYS` | [模型矩阵的 MSMU profile](model-matrix.md#msmu-当前-18-条已完成目标-inference-profile) |
 | CV-Bench 23 条目标轨及顺序 | `benchmarks.cv_bench.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 CV-Bench profile](model-matrix.md#cv-bench-当前-23-条目标-inference-profile) |
 | Q-Spatial 21 条目标轨及顺序 | `benchmarks.q_spatial.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 Q-Spatial profile](model-matrix.md#q-spatial-当前-21-条目标-inference-profile) |
 | SPBench-SI 21 条目标轨及顺序 | `benchmarks.spbench_si.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 SPBench-SI profile](model-matrix.md#spbench-si-当前-21-条目标-inference-profile) |
 | InternVL3-78B 三 benchmark 共享服务编排 | `orchestration.internvl3_78b_three_bench` / `scripts/internvl3_78b/` | [三 Benchmark 一键测评](internvl3-78b-three-bench-evaluation.md) |
 | 阶段三默认/Qwen3 补测轨与顺序 | `run_stage3_serial_inference.sh --list` / `--qwen3 --list` | [阶段三 runbook](msmu-stage3-full-eval.md) |
+| MSMU SOTA 五轨双 lane 补测与 23 行发布门禁 | `run_sota_supplement.sh --list` / `_run_sota_supplement.py` | [SOTA 双 Lane runbook](msmu-sota-supplement.md) |
 | 当前运行与评分状态 | 服务器 `status.tsv`、validator、metadata、`summary.json`、publication gates 和报告 | 评测范围只保存注明日期的已验证快照 |
 | CLI、环境变量与输出布局 | 脚本 `--help`、`configs/*server.env.example` | 对应 runbook |
 | 服务器显式出站代理 | 仓库外 `/media/datasets/lihaoran/tools/mihomo/` | [网络代理手册](server-network-proxy.md) |
@@ -88,6 +89,8 @@
 - [SPBench-SI InternVL3-78B 四卡完整评测](spbench-si-internvl3-78b-evaluation.md)：一键 test/full、
   独立校验、精确双协议评分、报告重建与 FAQ。
 - [MSMU 多模型推理与验收](msmu-inference.md)：环境、模型 family 和完整产物说明。
+- [MSMU SOTA 双 Lane 补测](msmu-sota-supplement.md)：RoboBrain NV/MT、HiSpatial、SpatialLadder
+  direct/thinking 的五轨冻结调度、恢复、统一评分与 23 行报告门禁。
 - [三阶段统一入口](msmu-all-model-test-commands.md)：人工测试总入口。
 - [阶段一 canary](msmu-stage1-canary.md)：接口、processor 和视觉链路检查。
 - [阶段二 smoke8](msmu-stage2-smoke8.md)：八类各一条的 debug 验收。
@@ -104,6 +107,7 @@
 - [CV-Bench 稳健解析与发布门禁决策](decisions/0002-cv-bench-robust-parser-and-publication-gates.md)。
 - [Q-Spatial declared-final numeric parser v2 与发布门禁决策](decisions/0003-q-spatial-robust-numeric-parser-and-publication-gates.md)。
 - [SPBench-SI 原始 MRA、真实输出 parser v2 与 upstream audit 分离决策](decisions/0004-spbench-si-original-mra-and-upstream-audit.md)。
+- [MSMU SOTA 双 Lane、统一评分与范围晋级决策](decisions/0005-msmu-sota-supplement-dual-lane.md)。
 - [Troubleshooting 规则](troubleshooting/README.md)与
   [服务器问题库](troubleshooting/server.md)。
 

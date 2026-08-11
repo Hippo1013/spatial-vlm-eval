@@ -7,6 +7,18 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 为 MSMU 新增 RoboBrain2.5 NV/MT、HiSpatial + same-RGB MoGe-2 XYZ、SpatialLadder direct 与官方
+  generic thinking 共五条独立 inference profile。adapter 只接收 MSMU `index/image/question`，锁定官方
+  processor/predictor、revision、decoding、XYZ digest、SpatialLadder tied embeddings/FA2/left-padded
+  native batch 和 thinking 最后完整 answer-tag 抽取；MSMU scorer protocol、阈值、judge 与 macro-8 不变。
+- 增加 MSMU SOTA 双 GPU lane 控制器：GPU0 固定 NV → HiSpatial → Ladder direct，GPU1 固定 MT →
+  Ladder thinking；每条 lane 有 pipe-driven 只读 watcher，支持 canary/smoke/full provenance 恢复、只清理
+  自有进程组和非法 finalized 产物 fail closed。两 lane 完成后只启动一次 judge，按五条冻结路径串行
+  评分；报告 `--check` 要求 baseline18 + main4 + thinking1 唯一完整后才原子重建 23 行结果。
+- 四条 main supplement 在现场 full-987、validator、summary、judge failures、publication gates 与报告
+  验收前保持在 `CURRENT_TARGET_PROFILE_KEYS` 之外；完成后主矩阵由 18 晋级为 22，thinking 永久作为
+  第 23 条补充行。该范围门禁由 ADR-0005 和独立 runbook 固化。
+
 - SPBench-SI 结果表对齐其他 benchmark 的精简展示：模型名与实际输入形式合并为
   `模型（输入）` 单元格，每个指标列的并列最高分全部加粗，Markdown 只展示主协议结果表；
   上游兼容审计仍作为独立评分与

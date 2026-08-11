@@ -199,6 +199,24 @@ prediction、validator、metadata、scored rows、judge failures、`summary.json
 Qwen2.5-VL/PEFT 轨和其他历史注册 API 轨不进入本表；新增四个 SOTA 模型也不追溯计入这 18 条结果。
 报告生成器仍按合法 summary 发现结果，不硬编码本表名单。
 
+### MSMU 已注册 SOTA supplement（待现场完成）
+
+2026-08-11 已完成代码、协议和回归注册；下列 4 条主轨仍不属于
+`CURRENT_TARGET_PROFILE_KEYS`，必须等服务器 full-987、validator、v4 summary、publication gates 和
+23 行报告全部现场复核后，才把主集合从 18 晋级为 22；thinking 永久只作补充轨，不计入 22 条主矩阵。
+
+| Profile | Model / locked revision | Input track | Backend / decoding | Matrix role |
+|---|---|---|---|---|
+| `robobrain25_8b_nv_rgb` | `BAAI/RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | MSMU RGB + original first question | official `AutoModelForImageTextToText` / structured image；0.7/top-p .8/768/seed 42 | pending main |
+| `robobrain25_8b_mt_rgb` | `BAAI/RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | MSMU RGB + original first question | 同一 official general runner，独立 checkpoint/protocol | pending main |
+| `hispatial3b_moge2_xyz` | `lhzzzzzy/HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | current MSMU RGB + same-RGB MoGe-2 XYZ；无 GT | official predictor + locked MoGe-2；greedy/100/seed 42 | pending main |
+| `spatialladder3b_rgb` | `hongxingli/SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | MSMU RGB / direct original first question | Qwen2.5-VL BF16/FA2；left-padded native batch；0.01/top-p 1/repetition 1.05/128/seed 42 | pending main |
+| `spatialladder3b_thinking` | 同上 | MSMU RGB + official generic `special_post_prompt` | 同上但 1024；最后完整 answer tag，缺失则保留 raw + warning | permanent supplement |
+
+五条 inference protocol 的精确 ID 以 registry 与
+[MSMU canonical protocol](benchmarks/msmu/protocol.md#多模型-inference-protocol)为准。技术实现不得把
+其他 benchmark 的题型、prompt、reference 或 scorer 语义带入 MSMU。
+
 ## 专用模型身份说明
 
 - SSR-VLM 与 SSR-MIDI 是同一原生推理栈的互补权重，不作为两个模型重复计分。SSR 使用上游

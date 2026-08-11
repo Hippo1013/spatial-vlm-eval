@@ -98,8 +98,8 @@ class ProfileRegistryTest(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError, "Unexpected SpatialBot vision tower"):
             bind_spatialbot_vision_tower(Config(), "/locked/siglip")
 
-    def test_registry_contains_exactly_twenty_three_unique_protocols(self):
-        self.assertEqual(len(PROFILES), 23)
+    def test_registry_contains_exactly_twenty_eight_unique_protocols(self):
+        self.assertEqual(len(PROFILES), 28)
         protocols = [profile.inference_protocol for profile in PROFILES.values()]
         self.assertEqual(len(protocols), len(set(protocols)))
         self.assertTrue(all(protocol.startswith("msmu_") for protocol in protocols))

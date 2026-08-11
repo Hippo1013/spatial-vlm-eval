@@ -63,6 +63,9 @@ gates；它只把冻结候选从结果根中的全部 prediction 收窄为这个
 # 只读列出全部 scorer protocol 下已有 summary 及其可收录状态。
 bash scripts/msmu/build_results_report.sh --list
 
+# SOTA supplement 发布前只读检查固定 18+4+1 集合，不写报告。
+bash scripts/msmu/build_results_report.sh --check
+
 # 收录当前 canonical scorer protocol 下全部通过 publication gates 的评分结果。
 bash scripts/msmu/build_results_report.sh
 

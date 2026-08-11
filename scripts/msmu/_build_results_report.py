@@ -28,13 +28,17 @@ from _score_pending_results import (  # noqa: E402
     complete_state_errors,
     read_json,
 )
+from spatial_vlm_eval.models.profiles import (  # noqa: E402
+    SOTA_SUPPLEMENT_REPORT_PROFILE_KEYS,
+)
 
 
 REPORT_TITLE = "# MSMU-Bench评测结果"
 REPORT_NOTE = (
     "注：模型按 API、通用开源、空间专项排序；同系列按参数量升序，专项同模型按纯 RGB 到额外先验排序；"
     "各指标列（含平均）最高分加粗。括号内标明实际评测输入或提示配置；“RGB + 深度估计”中的深度由"
-    "当前 MSMU RGB 图像估算，不使用 GT 深度、reference 或额外标注。"
+    "当前 MSMU RGB 图像估算，不使用 GT 深度、reference 或额外标注；MoGe-2 XYZ 同样只由当前 "
+    "MSMU RGB 派生。"
 )
 DEFAULT_OUTPUT_NAME = "msmu-result.md"
 PROFILE_PRESENTATION_CONFIGS: dict[str, str | None] = {
@@ -45,10 +49,17 @@ PROFILE_PRESENTATION_CONFIGS: dict[str, str | None] = {
     "3dthinker_native": "RGB + Mental-3D 提示词",
     "spatialbot": "RGB",
     "spatialbot_native": "RGB + 深度估计",
+    "robobrain25_8b_nv_rgb": "RGB",
+    "robobrain25_8b_mt_rgb": "RGB",
+    "hispatial3b_moge2_xyz": "RGB + MoGe-2 XYZ",
+    "spatialladder3b_rgb": "RGB / direct",
+    "spatialladder3b_thinking": "RGB + 官方通用 thinking 提示词",
 }
 PROFILE_PRESENTATION_MODEL_NAMES = {
     "3dthinker": "3DThinker-Mindcube",
     "3dthinker_native": "3DThinker-Mindcube",
+    "spatialladder3b_rgb": "SpatialLadder-3B",
+    "spatialladder3b_thinking": "SpatialLadder-3B",
 }
 OFFICIAL_METRICS = (
     ("existence", "存在性"),
@@ -72,6 +83,9 @@ PROFILE_SORT_FAMILIES = (
     ("spatialbot", 2, 1),
     ("spatialrgpt", 2, 2),
     ("ssr", 2, 3),
+    ("robobrain25", 2, 4),
+    ("hispatial", 2, 5),
+    ("spatialladder", 2, 6),
 )
 PARAMETER_COUNT_PATTERN = re.compile(
     r"(?<![\d.])(\d+(?:\.\d+)?)\s*[Bb](?![A-Za-z])"
@@ -109,11 +123,20 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
             "publication-gated Markdown table."
         )
     )
-    parser.add_argument(
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument(
         "--list",
         action="store_true",
         dest="list_results",
         help="list every discovered score summary without writing a report",
+    )
+    modes.add_argument(
+        "--check",
+        action="store_true",
+        help=(
+            "require exactly one complete canonical summary for each selected profile; "
+            "defaults to the frozen 18 baseline plus five SOTA supplement rows"
+        ),
     )
     parser.add_argument(
         "--results-root",
@@ -568,6 +591,37 @@ def selected_results(
     return sorted(reportable, key=key)
 
 
+def check_exact_profile_set(
+    results: list[ScoreResult],
+    *,
+    profiles: list[str],
+    scorer_protocol: str,
+) -> list[ScoreResult]:
+    if not profiles:
+        raise ConfigurationError("report check requires a non-empty frozen profile set")
+    failures: list[str] = []
+    selected: list[ScoreResult] = []
+    for profile in profiles:
+        matches = [
+            result
+            for result in results
+            if result.profile == profile and result.scorer_protocol == scorer_protocol
+        ]
+        if len(matches) != 1:
+            failures.append(
+                f"{profile}: expected exactly one summary for {scorer_protocol}, found {len(matches)}"
+            )
+            continue
+        result = matches[0]
+        if not result.eligible:
+            failures.append(f"{profile}: {result.reason}")
+            continue
+        selected.append(result)
+    if failures:
+        raise ConfigurationError("report readiness failed: " + "; ".join(failures))
+    return selected
+
+
 def markdown_text(value: str, *, code: bool = False) -> str:
     escaped = html.escape(value, quote=False).replace("|", "&#124;")
     escaped = escaped.replace("\r\n", "<br>").replace("\n", "<br>")
@@ -717,6 +771,20 @@ def main(argv: list[str] | None = None) -> int:
             raise ConfigurationError(
                 "the concise report requires exactly one scorer protocol"
             )
+        if args.check:
+            checked_profiles = profiles or list(SOTA_SUPPLEMENT_REPORT_PROFILE_KEYS)
+            checked = check_exact_profile_set(
+                results,
+                profiles=checked_profiles,
+                scorer_protocol=scorer_protocols[0],
+            )
+            print(
+                "[msmu-results-report] CHECK "
+                f"profiles={len(checked)} scorer_protocol={scorer_protocols[0]}"
+            )
+            for result in checked:
+                print(f"complete\t{result.profile}\t{result.summary_path}")
+            return 0
         selected = selected_results(
             results,
             profiles=profiles,
