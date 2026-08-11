@@ -7,6 +7,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- MSMU SOTA supplement 的 stage wrapper 保留当前 shell 显式绑定的 family 解释器与资产，不再被通用
+  `.env.server` 静默覆盖；`--check` 同时探测每个 family 环境的 MSMU `datasets` loader，缺依赖会在占用
+  GPU 前失败。
 - 组合视觉 canary 升级为 v5：除原有逐对象方位词与归一化 bbox 外，严格接受同一受控 `<shape>` 标签
   内同时绑定 `type/color/position` 的输出；跨标签拼接、颜色或位置交换仍 fail closed。该变更只扩展
   canary 回答表示，不改变任何 benchmark 输入、推理、scorer、阈值或聚合协议。

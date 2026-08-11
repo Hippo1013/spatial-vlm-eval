@@ -113,6 +113,7 @@ class SotaSupplementControllerTest(unittest.TestCase):
         self.assertIn("AutoConfig.from_pretrained", source)
         self.assertIn("SOTA_PROBE_MODEL", source)
         self.assertIn("config.model_type == 'qwen3_vl'", source)
+        self.assertIn('code = "import datasets; " + code', source)
 
     def test_existing_compute_process_on_selected_gpu_fails_closed(self):
         responses = [

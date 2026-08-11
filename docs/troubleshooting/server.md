@@ -26,6 +26,13 @@
 
 <!-- 按模板在此处下方插入条目，最新条目在最上方。 -->
 
+### 2026-08-11 · [MSMU/SOTA supplement] 通用 server env 覆盖冻结 family 解释器
+- 场景：SpatialLadder thinking v5 canary 已通过，继续加载一条 MSMU 子集。
+- 报错：实际进程落到 legacy `va` Python，随后 `ModuleNotFoundError: No module named 'datasets'`。
+- 原因：manual stage wrapper 重载 `.env.server`，覆盖控制器在当前 shell 显式验证并传入的 family Python。
+- 处理：仅对 supplement 解释器/资产保留显式 shell 值；`--check` 为三套环境补充 MSMU loader import。
+- 验证：覆盖优先级和 import 探针回归通过；canary PASS 未产生 benchmark prediction/journal。
+
 ### 2026-08-11 · [MSMU/SpatialLadder] 语义正确的 shape 标签未被视觉 canary 识别
 - 场景：SOTA supplement SpatialLadder thinking stage-1 canary，官方 generic thinking 输出抽取前的 raw response。
 - 报错：回答含两个正确的 `<shape type=... color=... position=.../>`，validator 却报告缺少 red-circle/blue-square。

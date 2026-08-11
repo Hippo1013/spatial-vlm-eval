@@ -793,6 +793,7 @@ def check_assets_and_imports(repository: Path) -> None:
         ),
     }
     for family, code in probes.items():
+        code = "import datasets; " + code
         python = required_environment(FAMILY_PYTHON_ENVS[family])
         if not Path(python).is_file() or not os.access(python, os.X_OK):
             raise ConfigurationError(f"configured {family} interpreter is unavailable: {python}")

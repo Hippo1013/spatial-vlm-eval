@@ -38,7 +38,7 @@ bash scripts/msmu/run_sota_supplement.sh --check
 - 两张不同、空闲、至少 80GB 的选中 GPU；只检查选中卡，不接管或停止任何现有进程；
 - 五个精确 HF snapshot revision；
 - RoboBrain、HiSpatial、SpatialLadder、MoGe-2 与 utils3d 的锁定 checkout；
-- 三个 family-specific interpreter 的 import；
+- 三个 family-specific interpreter 的模型依赖和 MSMU `datasets` loader import；
 - supplement lock、既有 MSMU 全量推理锁与 judge `127.0.0.1:18080`；
 - 已存在 frozen plan 是否与当前代码、dataset、profile 和 adapter digest 完全一致。
 
@@ -62,7 +62,8 @@ MOGE2_UTILS3D_ROOT
 
 路径模板见 `configs/msmu-server.env.example`。新下载、checkout、env 和 cache 只能写入
 `/media/datasets/lihaoran/`；优先复用已有 HiSpatial/SpatialLadder 环境。只有 import probe 失败且确认
-没有合适环境时，才创建 family-specific 环境。`/media/datasets/tangzecong/` 只读。
+没有合适环境时，才创建 family-specific 环境。当前 shell 显式提供的上述 supplement 解释器与资产
+路径优先于通用 `.env.server`，并由 stage wrapper 原样保留。`/media/datasets/tangzecong/` 只读。
 
 ## 启动与观察
 

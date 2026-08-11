@@ -344,6 +344,52 @@ class ManualTestPreparationTest(unittest.TestCase):
             for stage in ["01_canary", "02_smoke8", "03_full987"]:
                 self.assertTrue((manual_output / stage).is_dir())
 
+    def test_explicit_sota_family_environment_survives_server_env_loading(self):
+        with tempfile.TemporaryDirectory() as directory:
+            temporary = Path(directory)
+            server_env = temporary / "server.env"
+            server_env.write_text(
+                "\n".join(
+                    [
+                        f"REPO_ROOT={self.repository}",
+                        "DATASET_ROOT=/locked/msmu",
+                        f"OUTPUT_ROOT={temporary / 'outputs'}",
+                        "SPATIALLADDER_PYTHON=/configured/ladder-python",
+                        "SPATIALLADDER_3B_MODEL=/configured/ladder-model",
+                    ]
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            environment = dict(os.environ)
+            environment.update(
+                {
+                    "MSMU_SERVER_ENV": str(server_env),
+                    "SPATIALLADDER_PYTHON": "/explicit/ladder-python",
+                    "SPATIALLADDER_3B_MODEL": "/explicit/ladder-model",
+                }
+            )
+            completed = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    (
+                        'source "$1" || exit $?; '
+                        'printf "python=%s\\nmodel=%s\\n" '
+                        '"$SPATIALLADDER_PYTHON" "$SPATIALLADDER_3B_MODEL"'
+                    ),
+                    "bash",
+                    str(self.script),
+                ],
+                cwd=temporary,
+                env=environment,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+        self.assertIn("python=/explicit/ladder-python", completed.stdout)
+        self.assertIn("model=/explicit/ladder-model", completed.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

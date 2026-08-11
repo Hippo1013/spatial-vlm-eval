@@ -15,6 +15,26 @@ fi
 _msmu_prepare_manual_test() {
   local script_dir repository env_file configured_repository manual_output
   local had_allexport=0 source_status=0
+  local name index
+  local -a protected_sota_names=(
+    ROBOBRAIN25_PYTHON HISPATIAL_PYTHON SPATIALLADDER_PYTHON
+    ROBOBRAIN25_UPSTREAM_ROOT HISPATIAL_UPSTREAM_ROOT SPATIALLADDER_UPSTREAM_ROOT
+    ROBOBRAIN25_8B_NV_MODEL ROBOBRAIN25_8B_MT_MODEL HISPATIAL_3B_MODEL
+    SPATIALLADDER_3B_MODEL MOGE2_MODEL MOGE2_UPSTREAM_ROOT MOGE2_UTILS3D_ROOT
+  )
+  local -a protected_sota_is_set=() protected_sota_values=()
+
+  # The supplement controller may bind verified family environments/assets for
+  # one run. Preserve only those explicit values across the generic server env.
+  for name in "${protected_sota_names[@]}"; do
+    if declare -p "${name}" >/dev/null 2>&1; then
+      protected_sota_is_set+=(1)
+      protected_sota_values+=("${!name}")
+    else
+      protected_sota_is_set+=(0)
+      protected_sota_values+=("")
+    fi
+  done
 
   script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)" || return 2
   repository="$(cd "${script_dir}/../.." && pwd -P)" || return 2
@@ -39,6 +59,13 @@ _msmu_prepare_manual_test() {
     echo "[msmu-prepare] could not load ${env_file}" >&2
     return "${source_status}"
   fi
+  for ((index = 0; index < ${#protected_sota_names[@]}; index++)); do
+    if [[ "${protected_sota_is_set[index]}" == "1" ]]; then
+      name="${protected_sota_names[index]}"
+      printf -v "${name}" '%s' "${protected_sota_values[index]}"
+      export "${name}"
+    fi
+  done
 
   if [[ -n "${REPO_ROOT:-}" ]]; then
     configured_repository="$(cd "${REPO_ROOT}" 2>/dev/null && pwd -P)" || {
