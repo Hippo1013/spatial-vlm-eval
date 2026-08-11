@@ -774,8 +774,11 @@ def check_assets_and_imports(repository: Path) -> None:
 
     probes = {
         "robobrain25": (
-            "import torch, transformers, qwen_vl_utils; "
-            "from transformers import AutoModelForImageTextToText, AutoProcessor"
+            "import os, torch, transformers, qwen_vl_utils; "
+            "from transformers import AutoConfig, AutoModelForImageTextToText, AutoProcessor; "
+            "config = AutoConfig.from_pretrained(os.environ['SOTA_PROBE_MODEL'], "
+            "local_files_only=True); "
+            "assert config.model_type == 'qwen3_vl', config.model_type"
         ),
         "hispatial": (
             "import torch, transformers, utils3d; "
@@ -792,6 +795,10 @@ def check_assets_and_imports(repository: Path) -> None:
         if not Path(python).is_file() or not os.access(python, os.X_OK):
             raise ConfigurationError(f"configured {family} interpreter is unavailable: {python}")
         environment = dict(os.environ)
+        if family == "robobrain25":
+            environment["SOTA_PROBE_MODEL"] = required_environment(
+                "ROBOBRAIN25_8B_NV_MODEL"
+            )
         python_paths = [str(repository / "src")]
         if family == "hispatial":
             python_paths.extend(

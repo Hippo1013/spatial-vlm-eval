@@ -7,6 +7,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- MSMU SOTA supplement 的 RoboBrain 环境预检从“Auto 类可导入”收紧为离线解析锁定 NV checkpoint，
+  并强制 `model_type=qwen3_vl`；避免 Transformers 版本过旧时通过 `--check` 后才在双 lane canary 失败。
+
 - 为 MSMU 新增 RoboBrain2.5 NV/MT、HiSpatial + same-RGB MoGe-2 XYZ、SpatialLadder direct 与官方
   generic thinking 共五条独立 inference profile。adapter 只接收 MSMU `index/image/question`，锁定官方
   processor/predictor、revision、decoding、XYZ digest、SpatialLadder tied embeddings/FA2/left-padded

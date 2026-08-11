@@ -26,6 +26,14 @@
 
 <!-- 按模板在此处下方插入条目，最新条目在最上方。 -->
 
+### 2026-08-11 · [MSMU/RoboBrain2.5] 通用 Auto 类可导入但不能解析 Qwen3-VL checkpoint
+- 场景：SOTA supplement 双 lane 的 NV/MT stage-1 canary，固定 RoboBrain2.5 权重。
+- 报错：`KeyError: 'qwen3_vl'`，随后 Transformers 报 checkpoint 架构不受支持。
+- 原因：旧预检只验证 Auto 类可导入；复用的 4.55.2 环境不含 Qwen3-VL config mapping。
+- 处理：RoboBrain 复用现有 `vlmeval_qwen3vl` 环境，并让 `--check` 离线解析锁定 NV config、强制
+  `model_type=qwen3_vl`；失败尝试没有生成 prediction/journal。
+- 验证：checkpoint 级环境探针与回归通过；双 lane canary/full 状态以本次重跑产物为准。
+
 ### 2026-08-07 · [Q-Spatial/scoring] smoke8 产物被误纳入正式候选
 - 场景：对 20 条 full-271 结果运行目录驱动 v2 评分预检。
 - 报错：`num_candidates=50, num_pending=20`，30 条 `test_artifacts*/smoke8` 被列为 invalid。

@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 import csv
 import importlib.util
+import inspect
 import io
 import subprocess
 import sys
@@ -106,6 +107,12 @@ class SotaSupplementControllerTest(unittest.TestCase):
         process_commands = [call.args[0] for call in run.call_args_list[1:]]
         self.assertEqual([command[command.index("-i") + 1] for command in process_commands], ["0", "1"])
         self.assertTrue(all("2" not in command for command in process_commands))
+
+    def test_robobrain_preflight_resolves_the_locked_checkpoint_architecture(self):
+        source = inspect.getsource(controller_module.check_assets_and_imports)
+        self.assertIn("AutoConfig.from_pretrained", source)
+        self.assertIn("SOTA_PROBE_MODEL", source)
+        self.assertIn("config.model_type == 'qwen3_vl'", source)
 
     def test_existing_compute_process_on_selected_gpu_fails_closed(self):
         responses = [
