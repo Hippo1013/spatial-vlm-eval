@@ -77,6 +77,10 @@ class VisionCanaryTest(unittest.TestCase):
             "Top left: red circle; bottom right: blue square.",
             "There is a circle colored red at the top left and a square colored blue at the bottom right.",
             "The image features a blue square [0.564,0.582,0.816,0.93] and a red circle [0.176,0.086,0.426,0.43].",
+            '<shape type="circle" color="red" position="top-left"/>\n'
+            '<shape type="square" color="blue" position="bottom-right"/>',
+            "<shape position='top_left' color='red' type='circle'></shape>\n"
+            "<shape color='blue' position='bottom_right' type='square'></shape>",
         )
         for answer in accepted:
             with self.subTest(answer=answer):
@@ -90,6 +94,12 @@ class VisionCanaryTest(unittest.TestCase):
             "A blue square [0.1,0.1,0.4,0.4] and a red circle [0.6,0.6,0.9,0.9].",
             "A red circle is top left [0.6,0.6,0.9,0.9] and a blue square is bottom right [0.1,0.1,0.4,0.4].",
             "A red circle [48,48,208,208] and a blue square [304,304,464,464].",
+            '<shape type="circle" color="blue" position="top-left"/>\n'
+            '<shape type="square" color="red" position="bottom-right"/>',
+            '<shape type="circle" color="red" position="bottom-right"/>\n'
+            '<shape type="square" color="blue" position="top-left"/>',
+            '<shape type="circle" color="red"/> red circle top left; '
+            '<shape type="square" color="blue"/> blue square bottom right',
         )
         for answer in rejected:
             with self.subTest(answer=answer), self.assertRaises(ValueError):

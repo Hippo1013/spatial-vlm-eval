@@ -7,6 +7,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 组合视觉 canary 升级为 v5：除原有逐对象方位词与归一化 bbox 外，严格接受同一受控 `<shape>` 标签
+  内同时绑定 `type/color/position` 的输出；跨标签拼接、颜色或位置交换仍 fail closed。该变更只扩展
+  canary 回答表示，不改变任何 benchmark 输入、推理、scorer、阈值或聚合协议。
 - MSMU SOTA supplement 的 RoboBrain 环境预检从“Auto 类可导入”收紧为离线解析锁定 NV checkpoint，
   并强制 `model_type=qwen3_vl`；避免 Transformers 版本过旧时通过 `--check` 后才在双 lane canary 失败。
 - MSMU SOTA supplement 的 smoke8 冻结身份统一使用 recoverable runtime 的 canonical 数值 index 顺序，

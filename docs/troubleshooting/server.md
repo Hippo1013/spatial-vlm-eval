@@ -26,6 +26,13 @@
 
 <!-- 按模板在此处下方插入条目，最新条目在最上方。 -->
 
+### 2026-08-11 · [MSMU/SpatialLadder] 语义正确的 shape 标签未被视觉 canary 识别
+- 场景：SOTA supplement SpatialLadder thinking stage-1 canary，官方 generic thinking 输出抽取前的 raw response。
+- 报错：回答含两个正确的 `<shape type=... color=... position=.../>`，validator 却报告缺少 red-circle/blue-square。
+- 原因：v4 只识别自然语言相邻词或归一化 bbox，不解析同一 shape 标签内被属性语法分隔的绑定。
+- 处理：canary v5 严格解析单标签 `type/color/position` 三元组；缺属性、跨标签拼接与交换绑定均拒绝。
+- 验证：锁定现场原始回答与颜色/位置交换反例的共享回归通过；该失败未发布 prediction/journal。
+
 ### 2026-08-11 · [MSMU/SOTA supplement] smoke8 类型选择顺序与 canonical index 顺序不一致
 - 场景：RoboBrain2.5 NV/MT canary 通过后进入固定八类 smoke8。
 - 报错：`target indices; prediction indices do not match the frozen target`。

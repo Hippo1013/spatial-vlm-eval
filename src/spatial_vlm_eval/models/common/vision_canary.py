@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 VISION_CANARY_PROTOCOL = (
     "msmu_semantic_vision_canary_red_circle_top_left_blue_square_"
-    "bottom_right_quadrant_prompt_words_or_normalized_bbox_antialiased512_v4"
+    "bottom_right_quadrant_prompt_words_bbox_or_bound_shape_tag_antialiased512_v5"
 )
 VISION_CANARY_QUESTION = (
     "Identify every colored shape in this image. For each one, state its color, shape, "
@@ -126,12 +126,49 @@ def _bbox_locations_are_correct(
     return red_x < 0.5 and red_y < 0.5 and blue_x > 0.5 and blue_y > 0.5
 
 
+def _bound_shape_tag_locations(answer: str) -> set[tuple[str, str, str]] | None:
+    """Extract only same-tag color/type/position bindings from controlled shape tags."""
+
+    shape_tags = re.findall(r"<\s*shape\b([^<>]*)/?>", answer, flags=re.IGNORECASE)
+    if not shape_tags:
+        return None
+    bindings: set[tuple[str, str, str]] = set()
+    for raw_attributes in shape_tags:
+        attributes = {
+            name.lower(): re.sub(r"[\s_-]+", " ", value.strip().lower())
+            for name, _, value in re.findall(
+                r"([A-Za-z_][\w:.-]*)\s*=\s*([\"'])(.*?)\2",
+                raw_attributes,
+                flags=re.DOTALL,
+            )
+        }
+        color = attributes.get("color")
+        shape_type = attributes.get("type")
+        position = attributes.get("position")
+        if color and shape_type and position:
+            bindings.add((color, shape_type, position))
+    return bindings
+
+
 def validate_vision_canary_answer(answer: str) -> None:
     """Require the two expected color/shape/location associations.
 
     Minimum-distance one-to-one pairing rejects a response that merely mentions
     every keyword while swapping the objects' locations.
     """
+
+    shape_tag_bindings = _bound_shape_tag_locations(str(answer))
+    if shape_tag_bindings is not None:
+        required = {
+            ("red", "circle", "top left"),
+            ("blue", "square", "bottom right"),
+        }
+        if required.issubset(shape_tag_bindings):
+            return
+        raise ValueError(
+            "Vision canary shape tags did not bind red/circle/top-left and "
+            f"blue/square/bottom-right within their respective tags: {answer!r}"
+        )
 
     normalized = _normalized_answer(answer)
     patterns = {
