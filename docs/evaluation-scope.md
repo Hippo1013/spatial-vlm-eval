@@ -10,7 +10,7 @@
 
 | Benchmark | 正式范围 | 已验证进度 | 下一步 |
 |---|---|---|---|
-| MSMU-Bench | official `test` 987 条 | 当前 18 条目标 profile 均有完整 validator、v4 summary 与 publication gates；5 条 SOTA supplement 已完成代码/协议注册但尚未形成本站正式产物 | 已获授权：先做服务器 `--check`，再按冻结双 lane 补测 4 条主轨 + 1 条 thinking 补充轨 |
+| MSMU-Bench | official `test` 987 条 | 22 条主 profile + 1 条 thinking 补充轨均有完整 validator、v4 summary 与 publication gates；23 行报告已原子重建 | 本阶段完成 |
 | CV-Bench | locked 2D 1438 + 3D 1200，共 2638 条 | 23/23 条轨可发布；`cv-bench-result.md` 完整且 missing 为空 | 本阶段完成 |
 | Q-Spatial Bench | ScanNet 170 + Q-Spatial++ 101，共 271 条 | 21/21 条轨可发布；RGB 18/18、全轨 21/21，报告 missing 为空 | 本阶段完成 |
 | SPBench-SI | official single-image `test` 1009 条；不含 SPBench-MV | 20/21 条轨可发布，仅 Gemini 无 summary；当前报告按操作者选择纳入 19/21，并明确排除已完成的 InternVL3-78B 与未完成的 Gemini | 核心开源比较已完成；Gemini 仅在新需求和付费授权后恢复 |
@@ -19,9 +19,9 @@
 没有启动推理、GPU、评分或 API。SPBench-SI 的“20 条可发布候选”和“报告 19 条”不是冲突：前者描述
 canonical 产物，后者描述一次显式的报告集合选择。
 
-截至该快照，四个 benchmark 的原有范围代码/回归完成；MSMU SOTA supplement 是 2026-08-11 新登记
-范围，不改变既有 18 条结果或 scorer protocol。只有新增 5 路 predictions、validator、summary、judge
-failures、publication gates 与 23 行报告现场通过后，才更新本快照为 22 条主轨 + 1 条补充轨。
+截至该快照，四个 benchmark 的范围代码/回归完成。MSMU SOTA supplement 的新增 5 路 prediction、
+validator、summary、judge failures、publication gates 与 23 行报告已现场通过；MSMU scorer protocol、
+阈值、judge 和 macro-8 聚合均未改变。
 
 ## 比较重点与完成边界
 
@@ -39,14 +39,14 @@ RoboBrain2.5-8B-NV、RoboBrain2.5-8B-MT、HiSpatial-3B 和 SpatialLadder-3B；�
 decoding 见[模型矩阵](model-matrix.md#新增的-4-个开源-sota-模型)。
 
 “19 个模型身份”不等于“19 条 inference profile”。fair RGB-only、派生 depth/XYZ、额外提示词和不同
-checkpoint 必须拆成独立 profile、protocol 和结果目录。MSMU 的 18 条
+checkpoint 必须拆成独立 profile、protocol 和结果目录。MSMU 的 22 条
 `CURRENT_TARGET_PROFILE_KEYS` 是其已完成目标集合；CV-Bench 的 23 条目标轨由独立 registry 维护，
 Q-Spatial 与 SPBench-SI 也各自维护 21 条，不能跨 benchmark 复制语义。
 
 MSMU 新注册 `robobrain25_8b_nv_rgb`、`robobrain25_8b_mt_rgb`、`hispatial3b_moge2_xyz`、
-`spatialladder3b_rgb` 四条 main profile 与 `spatialladder3b_thinking` 补充 profile。开发阶段五条都在
-`SOTA_SUPPLEMENT_PROFILE_KEYS`，只有前四条在现场 publication 门禁完成后才加入
-`CURRENT_TARGET_PROFILE_KEYS`；thinking 永久排除在主完成数之外。
+`spatialladder3b_rgb` 四条 main profile 与 `spatialladder3b_thinking` 补充 profile。五条都保留在
+`SOTA_SUPPLEMENT_PROFILE_KEYS` 作为冻结执行集合；前四条已在现场 publication 门禁完成后加入
+`CURRENT_TARGET_PROFILE_KEYS`，thinking 永久排除在主完成数之外。
 
 ## 开源 SOTA 参考
 

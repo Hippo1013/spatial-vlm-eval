@@ -142,7 +142,7 @@ class DocumentationConsistencyTest(unittest.TestCase):
     def test_model_matrix_matches_current_target_profiles(self) -> None:
         matrix = (self.docs / "model-matrix.md").read_text(encoding="utf-8")
         msmu_section = matrix.split(
-            "## MSMU 当前 18 条已完成目标 inference profile", 1
+            "## MSMU 当前 22 条已完成目标 inference profile", 1
         )[1].split("## 完成状态", 1)[0]
         documented = re.findall(r"^\| `([^`]+)` \|", msmu_section, flags=re.MULTILINE)
         self.assertEqual(documented, list(CURRENT_TARGET_PROFILE_KEYS))
@@ -167,13 +167,14 @@ class DocumentationConsistencyTest(unittest.TestCase):
         )
 
         supplement_section = matrix.split(
-            "### MSMU 已注册 SOTA supplement（待现场完成）", 1
+            "### MSMU SOTA supplement（现场已完成）", 1
         )[1].split("## 专用模型身份说明", 1)[0]
         documented_supplement = re.findall(
             r"^\| `([^`]+)` \|", supplement_section, flags=re.MULTILINE
         )
         self.assertEqual(documented_supplement, list(SOTA_SUPPLEMENT_PROFILE_KEYS))
-        self.assertTrue(set(SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS).isdisjoint(CURRENT_TARGET_PROFILE_KEYS))
+        self.assertTrue(set(SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS) <= set(CURRENT_TARGET_PROFILE_KEYS))
+        self.assertNotIn("spatialladder3b_thinking", CURRENT_TARGET_PROFILE_KEYS)
         self.assertIn("thinking 永久只作补充轨", supplement_section)
 
         cvbench_section = matrix.split(
@@ -194,7 +195,7 @@ class DocumentationConsistencyTest(unittest.TestCase):
 
         spbench_section = matrix.split(
             "## SPBench-SI 当前 21 条目标 inference profile", 1
-        )[1].split("## MSMU 当前 18 条已完成目标 inference profile", 1)[0]
+        )[1].split("## MSMU 当前 22 条已完成目标 inference profile", 1)[0]
         documented_spbench = re.findall(
             r"^\| `([^`]+)` \|", spbench_section, flags=re.MULTILINE
         )

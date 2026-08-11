@@ -408,6 +408,18 @@ PROFILES = {
 }
 
 
+# MSMU SOTA supplement identities. The four main profiles were promoted into
+# the current target scope only after their live full-987 publication artifacts
+# and the 23-row report passed independent verification. The thinking track is
+# permanently supplementary.
+SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS = (
+    "robobrain25_8b_nv_rgb",
+    "robobrain25_8b_mt_rgb",
+    "hispatial3b_moge2_xyz",
+    "spatialladder3b_rgb",
+)
+
+
 # Current MSMU comparison scope. Registered profiles outside this tuple remain
 # available for historical reproduction but are not part of the target matrix.
 CURRENT_TARGET_PROFILE_KEYS = (
@@ -429,26 +441,17 @@ CURRENT_TARGET_PROFILE_KEYS = (
     "3dthinker_native",
     "spatialbot",
     "spatialbot_native",
+    *SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS,
 )
 
 
-# Registered MSMU SOTA supplement. These profiles remain outside
-# CURRENT_TARGET_PROFILE_KEYS until their live full-987 validator, scorer, and
-# publication artifacts have all been verified. The thinking track is always a
-# supplementary row and never becomes a main target profile.
-SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS = (
-    "robobrain25_8b_nv_rgb",
-    "robobrain25_8b_mt_rgb",
-    "hispatial3b_moge2_xyz",
-    "spatialladder3b_rgb",
-)
 SOTA_SUPPLEMENT_PROFILE_KEYS = (
     *SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS,
     "spatialladder3b_thinking",
 )
 SOTA_SUPPLEMENT_REPORT_PROFILE_KEYS = (
     *CURRENT_TARGET_PROFILE_KEYS,
-    *SOTA_SUPPLEMENT_PROFILE_KEYS,
+    "spatialladder3b_thinking",
 )
 
 

@@ -21,7 +21,7 @@ prediction validator、scorer protocol、结果报告和 publication gates。
 
 | Benchmark | 正式范围 | 主结果 | 目标轨 |
 |---|---:|---|---:|
-| MSMU-Bench | official `test` 987 条 | official-compatible local-judge macro-8 | 18 条已完成目标；另注册 4 条 main + 1 条 thinking 补测 |
+| MSMU-Bench | official `test` 987 条 | official-compatible local-judge macro-8 | 22 条主轨 + 1 条 thinking 补充轨已完成 |
 | CV-Bench | locked 2D 1438 + 3D 1200 | 2D / 3D / Overall | 23 |
 | Q-Spatial Bench | ScanNet 170 + Q-Spatial++ 101 | split-macro inclusive `delta <= 2` | 21 |
 | SPBench-SI | single-image `test` 1009 条 | strict original MRA 四题型宏平均 | 21 |
@@ -159,7 +159,8 @@ bash scripts/msmu/run_sota_supplement.sh --status
 ```
 
 正式无参数调用会先完成两张 GPU 上的 canary/smoke8/full-987，再统一启动一次 judge、评分五条精确
-prediction 路径并通过 23 行报告门禁。完整资产、恢复和 22+1 晋级边界见
+prediction 路径并通过 23 行报告门禁；2026-08-11 已完成现场运行与 22+1 范围晋级。完整资产、恢复和
+发布边界见
 [MSMU SOTA 双 Lane runbook](docs/msmu-sota-supplement.md)。
 
 ## 验证

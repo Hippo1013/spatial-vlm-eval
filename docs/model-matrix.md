@@ -162,7 +162,7 @@ publication provenance。完整 prompt、processor、
 image-processing、seed strategy、test gate 与 scorer 边界见
 [SPBench-SI canonical protocol](benchmarks/spbench_si/protocol.md)。
 
-## MSMU 当前 18 条已完成目标 inference profile
+## MSMU 当前 22 条已完成目标 inference profile
 
 下表身份与完成集合于 2026-08-11 在 `msmu-a800` 再次只读复核。服务器实时状态仍须读取结果目录中的
 prediction、validator、metadata、scored rows、judge failures、`summary.json` 和 publication gates。
@@ -187,31 +187,36 @@ prediction、validator、metadata、scored rows、judge failures、`summary.json
 | `3dthinker_native` | 同上 | official mental-3D control prompt | modified Transformers | `msmu_3dthinker_native_mental3d_native_v1` | full-987 validator + v4 publication gates passed（2026-08-03） |
 | `spatialbot` | `SpatialBot-3B@41d3b52c642058dfb087885bec0b8e37e0e67f8d` | fair RGB-only | official Bunny | `msmu_spatialbot_rgb_only_v1` | full-987 validator + v4 publication gates passed（2026-08-03） |
 | `spatialbot_native` | 同上 | same-RGB ZoeDepth RGB-D | official Bunny | `msmu_spatialbot_native_zoedepth_rgbd_native_v1` | full-987 validator + v4 publication gates passed（2026-08-03） |
+| `robobrain25_8b_nv_rgb` | `BAAI/RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | MSMU RGB + original first question | official Transformers | `msmu_robobrain25_8b_nv_rgb_original_first_question_official_general_sampling_t07_top_p08_768_v1` | full-987 validator + v4 publication gates passed（2026-08-11） |
+| `robobrain25_8b_mt_rgb` | `BAAI/RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | MSMU RGB + original first question | official Transformers | `msmu_robobrain25_8b_mt_rgb_original_first_question_official_general_sampling_t07_top_p08_768_v1` | full-987 validator + v4 publication gates passed（2026-08-11） |
+| `hispatial3b_moge2_xyz` | `lhzzzzzy/HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | current MSMU RGB + same-RGB MoGe-2 XYZ；无 GT | official predictor | `msmu_hispatial3b_same_rgb_moge2_xyz_original_first_question_official_predictor_greedy100_v1` | full-987 validator + v4 publication gates passed（2026-08-11） |
+| `spatialladder3b_rgb` | `hongxingli/SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | MSMU RGB / direct original first question | official Qwen2.5-VL Transformers | `msmu_spatialladder3b_rgb_original_first_question_direct_flashattn2_leftpad_native_batch_128_v1` | full-987 validator + v4 publication gates passed（2026-08-11） |
 
 ## 完成状态
 
-2026-08-11 现场审计再次确认上述 18 条目标结果。每条都满足：prediction index 精确覆盖
+2026-08-11 现场审计确认上述 22 条目标结果。每条都满足：prediction index 精确覆盖
 `0..986`、正式 validator 通过、metadata 与锁定 profile/revision/protocol 一致、scored rows 为 987
-条、judge failures 为 0、八类齐全，且四项 publication gate 全部为真。评分调度状态为
-`complete=18`、`pending=0`，因此当前 MSMU 目标 profile 集已全部完成正式测试。
+条、judge failures 为 0、八类齐全，且四项 publication gate 全部为真。新增四条主轨与 thinking
+补充轨均由双 lane 控制器完成；五路统一评分后，现有结果报告已原子重建为 23 行。
 
 本次只收敛“MSMU 已完成目标 profile 集”，不删除历史 adapter、注册 profile 或既有结果。直接
-Qwen2.5-VL/PEFT 轨和其他历史注册 API 轨不进入本表；新增四个 SOTA 模型也不追溯计入这 18 条结果。
+Qwen2.5-VL/PEFT 轨和其他历史注册 API 轨不进入本表。
 报告生成器仍按合法 summary 发现结果，不硬编码本表名单。
 
-### MSMU 已注册 SOTA supplement（待现场完成）
+### MSMU SOTA supplement（现场已完成）
 
-2026-08-11 已完成代码、协议和回归注册；下列 4 条主轨仍不属于
-`CURRENT_TARGET_PROFILE_KEYS`，必须等服务器 full-987、validator、v4 summary、publication gates 和
-23 行报告全部现场复核后，才把主集合从 18 晋级为 22；thinking 永久只作补充轨，不计入 22 条主矩阵。
+2026-08-11 已现场完成五路 full-987、validator、v4 summary、零 judge failure、publication gates 与
+23 行报告复核，主集合据此从 18 晋级为 22。前四条已属于 `CURRENT_TARGET_PROFILE_KEYS`；
+thinking 永久只作补充轨，不计入 22 条主矩阵。五路 official macro-8 依次为 38.34、38.25、31.36、
+21.91 和 21.41。
 
 | Profile | Model / locked revision | Input track | Backend / decoding | Matrix role |
 |---|---|---|---|---|
-| `robobrain25_8b_nv_rgb` | `BAAI/RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | MSMU RGB + original first question | official `AutoModelForImageTextToText` / structured image；0.7/top-p .8/768/seed 42 | pending main |
-| `robobrain25_8b_mt_rgb` | `BAAI/RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | MSMU RGB + original first question | 同一 official general runner，独立 checkpoint/protocol | pending main |
-| `hispatial3b_moge2_xyz` | `lhzzzzzy/HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | current MSMU RGB + same-RGB MoGe-2 XYZ；无 GT | official predictor + locked MoGe-2；greedy/100/seed 42 | pending main |
-| `spatialladder3b_rgb` | `hongxingli/SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | MSMU RGB / direct original first question | Qwen2.5-VL BF16/FA2；left-padded native batch；0.01/top-p 1/repetition 1.05/128/seed 42 | pending main |
-| `spatialladder3b_thinking` | 同上 | MSMU RGB + official generic `special_post_prompt` | 同上但 1024；最后完整 answer tag，缺失则保留 raw + warning | permanent supplement |
+| `robobrain25_8b_nv_rgb` | `BAAI/RoboBrain2.5-8B-NV@3d77a19a3ddd8616b3979e03de56096edfb12ff6` | MSMU RGB + original first question | official `AutoModelForImageTextToText` / structured image；0.7/top-p .8/768/seed 42 | promoted main；38.34 |
+| `robobrain25_8b_mt_rgb` | `BAAI/RoboBrain2.5-8B-MT@01145b89a0fe49f78f5d677d25af7351088d7c7d` | MSMU RGB + original first question | 同一 official general runner，独立 checkpoint/protocol | promoted main；38.25 |
+| `hispatial3b_moge2_xyz` | `lhzzzzzy/HiSpatial-3B@75a5e3d65351d7602c492aa91533f62b8a252604` | current MSMU RGB + same-RGB MoGe-2 XYZ；无 GT | official predictor + locked MoGe-2；greedy/100/seed 42 | promoted main；31.36 |
+| `spatialladder3b_rgb` | `hongxingli/SpatialLadder-3B@0819c3adf8827a2ea6c0348d49a23503ecb1f428` | MSMU RGB / direct original first question | Qwen2.5-VL BF16/FA2；left-padded native batch；0.01/top-p 1/repetition 1.05/128/seed 42 | promoted main；21.91 |
+| `spatialladder3b_thinking` | 同上 | MSMU RGB + official generic `special_post_prompt` | 同上但 1024；最后完整 answer tag，缺失则保留 raw + warning | permanent supplement；21.41 |
 
 五条 inference protocol 的精确 ID 以 registry 与
 [MSMU canonical protocol](benchmarks/msmu/protocol.md#多模型-inference-protocol)为准。技术实现不得把

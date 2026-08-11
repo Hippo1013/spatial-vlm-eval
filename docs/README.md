@@ -13,7 +13,7 @@
 | SPBench-SI 数据、21 条轨、校验、双 scorer 与报告 | `src/spatial_vlm_eval/benchmarks/spbench_si/` | [SPBench-SI protocol](benchmarks/spbench_si/protocol.md) |
 | 四 benchmark 范围、日期化进度快照与数据边界 | 服务器 validator/metadata/summary/publication gates；代码由各 registry 固化 | [评测范围与进度](evaluation-scope.md) |
 | 项目级模型身份、profile、revision、输入轨与 decoding | 各 benchmark registry | [模型矩阵](model-matrix.md) |
-| 已注册 MSMU profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` / `SOTA_SUPPLEMENT_PROFILE_KEYS` | [模型矩阵的 MSMU profile](model-matrix.md#msmu-当前-18-条已完成目标-inference-profile) |
+| 已注册 MSMU profile、revision 与 inference protocol | `src/spatial_vlm_eval/models/profiles.py` 的 `PROFILES` / `CURRENT_TARGET_PROFILE_KEYS` / `SOTA_SUPPLEMENT_PROFILE_KEYS` | [模型矩阵的 MSMU profile](model-matrix.md#msmu-当前-22-条已完成目标-inference-profile) |
 | CV-Bench 23 条目标轨及顺序 | `benchmarks.cv_bench.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 CV-Bench profile](model-matrix.md#cv-bench-当前-23-条目标-inference-profile) |
 | Q-Spatial 21 条目标轨及顺序 | `benchmarks.q_spatial.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 Q-Spatial profile](model-matrix.md#q-spatial-当前-21-条目标-inference-profile) |
 | SPBench-SI 21 条目标轨及顺序 | `benchmarks.spbench_si.profiles.PROFILE_SEQUENCE` / `PROFILES` | [模型矩阵的 SPBench-SI profile](model-matrix.md#spbench-si-当前-21-条目标-inference-profile) |

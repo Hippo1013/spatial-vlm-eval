@@ -20,6 +20,10 @@ lane 均 COMPLETE，五份 full prediction 精确覆盖 `0..986` 且 validator/p
 
 四条 direct/main 轨只有在全部现场门禁完成后才能加入 MSMU 主矩阵；thinking 永久只作补充行。
 
+2026-08-11 现场运行已经满足该晋级条件：五路 full-987、validator、metadata、v4 summary、零 judge
+failure 与 publication gates 全部通过，thinking 987/987 均抽取完整 answer tag，报告原子重建为 23 行；
+四条 main 已由 18 晋级为 22，thinking 仍为第 23 条补充行。
+
 ## 环境与只读预检
 
 先检查已有 Conda 环境和资产；默认/系统 Python 缺包不是安装理由：
@@ -132,5 +136,5 @@ bash scripts/msmu/build_results_report.sh --check
 5. `build_results_report.sh --check` 通过，报告恰有 23 个模型行；
 6. 五条显示名分别标明 `RGB`、`RGB + MoGe-2 XYZ`、`RGB / direct` 和官方通用 thinking 提示词。
 
-只有上述现场证据全部满足，才把四条 main profile 加入 `CURRENT_TARGET_PROFILE_KEYS`，将 MSMU 主矩阵
-由 18 晋级为 22；thinking 不加入。晋级时同步更新模型矩阵、评测范围、README、CHANGELOG 和文档测试。
+上述现场证据已于 2026-08-11 全部满足，四条 main profile 已加入 `CURRENT_TARGET_PROFILE_KEYS`，MSMU
+主矩阵由 18 晋级为 22；thinking 未加入。模型矩阵、评测范围、README、CHANGELOG 和文档测试已同步。

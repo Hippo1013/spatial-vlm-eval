@@ -35,7 +35,7 @@ from spatial_vlm_eval.models.sota_spatial.spatialladder import (
 
 
 class SotaSupplementProfileTest(unittest.TestCase):
-    def test_five_profiles_are_registered_but_main_scope_is_not_promoted_early(self):
+    def test_four_main_profiles_are_promoted_and_thinking_remains_supplementary(self):
         self.assertEqual(
             SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS,
             (
@@ -49,12 +49,14 @@ class SotaSupplementProfileTest(unittest.TestCase):
             SOTA_SUPPLEMENT_PROFILE_KEYS,
             (*SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS, "spatialladder3b_thinking"),
         )
-        self.assertEqual(len(CURRENT_TARGET_PROFILE_KEYS), 18)
-        self.assertTrue(set(SOTA_SUPPLEMENT_PROFILE_KEYS).isdisjoint(CURRENT_TARGET_PROFILE_KEYS))
+        self.assertEqual(len(CURRENT_TARGET_PROFILE_KEYS), 22)
+        self.assertTrue(set(SOTA_SUPPLEMENT_MAIN_PROFILE_KEYS) <= set(CURRENT_TARGET_PROFILE_KEYS))
+        self.assertNotIn("spatialladder3b_thinking", CURRENT_TARGET_PROFILE_KEYS)
         self.assertEqual(
             SOTA_SUPPLEMENT_REPORT_PROFILE_KEYS,
-            (*CURRENT_TARGET_PROFILE_KEYS, *SOTA_SUPPLEMENT_PROFILE_KEYS),
+            (*CURRENT_TARGET_PROFILE_KEYS, "spatialladder3b_thinking"),
         )
+        self.assertEqual(len(SOTA_SUPPLEMENT_REPORT_PROFILE_KEYS), 23)
 
     def test_locked_revisions_protocols_and_decoding_are_independent(self):
         expected_revisions = {

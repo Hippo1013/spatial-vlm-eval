@@ -312,8 +312,8 @@ class ResultsReportRenderingTest(unittest.TestCase):
             "**60.00** | **70.00** | **80.00** | **45.00** |",
             lines[6],
         )
-        self.assertNotIn("strict official", markdown)
-        self.assertNotIn(results_report.EXPECTED_RESULT_KIND, markdown)
+        self.assertIn("不是 strict official score", markdown)
+        self.assertIn(results_report.EXPECTED_RESULT_KIND, markdown)
         self.assertNotIn("Profile", markdown)
         self.assertEqual(len(lines[6].strip("|").split("|")), 10)
 

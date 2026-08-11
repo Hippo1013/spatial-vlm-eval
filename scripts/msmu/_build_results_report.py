@@ -35,7 +35,8 @@ from spatial_vlm_eval.models.profiles import (  # noqa: E402
 
 REPORT_TITLE = "# MSMU-Bench评测结果"
 REPORT_NOTE = (
-    "注：模型按 API、通用开源、空间专项排序；同系列按参数量升序，专项同模型按纯 RGB 到额外先验排序；"
+    "注：结果性质为 official-compatible internal score，不是 strict official score。模型按 API、通用开源、"
+    "空间专项排序；同系列按参数量升序，专项同模型按纯 RGB 到额外先验排序；"
     "各指标列（含平均）最高分加粗。括号内标明实际评测输入或提示配置；“RGB + 深度估计”中的深度由"
     "当前 MSMU RGB 图像估算，不使用 GT 深度、reference 或额外标注；MoGe-2 XYZ 同样只由当前 "
     "MSMU RGB 派生。"

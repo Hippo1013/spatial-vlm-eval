@@ -251,7 +251,7 @@ reference 或额外标注。精确 revision、inference protocol、scorer protoc
 强制校验的 metadata、summary 与结果目录追溯，不得从展示表反推。未知双轨 profile 若没有显式展示
 配置必须 fail closed，不能退回含混的“公平版/原生版”。
 
-SOTA supplement 完成后的固定展示再增加五行：RoboBrain NV/MT 为 `RGB`，HiSpatial 为
+SOTA supplement 的固定展示包含五行：RoboBrain NV/MT 为 `RGB`，HiSpatial 为
 `RGB + MoGe-2 XYZ`，SpatialLadder 为 `RGB / direct` 与
 `RGB + 官方通用 thinking 提示词`。报告写入前的 `--check` 必须确认既有 18 行和新增 5 行在当前 scorer
 protocol 下各有且只有一个完整 publication-gated summary；成功后才原子重建 23 行报告。

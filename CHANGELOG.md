@@ -169,6 +169,12 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Changed
 
+- MSMU SOTA supplement 于 2026-08-11 完成服务器双 lane 评测与独立现场验收：五路 prediction 均精确
+  覆盖 987 条、validator/provenance 通过、八类完整、judge failures 为 0 且 publication gates 全真；
+  official-compatible macro-8 依次为 RoboBrain NV 38.34、MT 38.25、HiSpatial 31.36、SpatialLadder
+  direct 21.91、thinking 21.41。23 行报告已原子重建，四条 main 据此加入
+  `CURRENT_TARGET_PROFILE_KEYS`，MSMU 主范围由 18 晋级为 22；thinking 永久保持补充轨。
+
 - 2026-08-11 只读复核 canonical 产物后，项目进度文档更新为：MSMU 当前目标 18/18、CV-Bench
   23/23、Q-Spatial 21/21；SPBench-SI 有 20/21 条可发布候选，仅 Gemini 缺失，现有结果表按操作者
   选择纳入 19/21 并额外排除已完成的 InternVL3-78B。进度快照统一收口到
