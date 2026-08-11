@@ -26,6 +26,13 @@
 
 <!-- 按模板在此处下方插入条目，最新条目在最上方。 -->
 
+### 2026-08-11 · [MSMU/SOTA supplement] smoke8 类型选择顺序与 canonical index 顺序不一致
+- 场景：RoboBrain2.5 NV/MT canary 通过后进入固定八类 smoke8。
+- 报错：`target indices; prediction indices do not match the frozen target`。
+- 原因：控制器保留八类选择顺序，但 recoverable runtime 会按数值 index 排序后写 metadata/prediction。
+- 处理：冻结计划、stage 参数和复用检查统一使用排序后的八个 index；原选择明细仍保留 raw type。
+- 验证：非有序选择回归通过；已有完整 smoke 仅在 metadata/validator 同时匹配时复用。
+
 ### 2026-08-11 · [MSMU/RoboBrain2.5] 通用 Auto 类可导入但不能解析 Qwen3-VL checkpoint
 - 场景：SOTA supplement 双 lane 的 NV/MT stage-1 canary，固定 RoboBrain2.5 权重。
 - 报错：`KeyError: 'qwen3_vl'`，随后 Transformers 报 checkpoint 架构不受支持。

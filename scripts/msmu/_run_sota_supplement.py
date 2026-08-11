@@ -312,7 +312,9 @@ class Controller:
     def select_smoke_indices(self, *, write_report: bool) -> None:
         test = load_arrow_split(os.environ["DATASET_ROOT"], "test")
         selections = select_type_covering_indices(test)
-        self.smoke_indices = [int(item["index"]) for item in selections]
+        # The recoverable runtime canonicalizes every explicit target selection
+        # into numeric index order before it writes metadata and predictions.
+        self.smoke_indices = sorted(int(item["index"]) for item in selections)
         report = {
             "dataset_root": str(Path(os.environ["DATASET_ROOT"]).resolve()),
             "split": "test",

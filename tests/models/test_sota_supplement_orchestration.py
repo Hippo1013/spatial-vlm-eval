@@ -83,7 +83,7 @@ class SotaSupplementControllerTest(unittest.TestCase):
     def test_check_smoke_selection_can_remain_read_only(self):
         selections = [
             {"index": index, "raw_type": f"type-{index}"}
-            for index in range(8)
+            for index in (7, 1, 6, 0, 5, 2, 4, 3)
         ]
         with mock.patch.object(controller_module, "load_arrow_split", return_value=object()), mock.patch.object(
             controller_module, "select_type_covering_indices", return_value=selections
