@@ -26,6 +26,13 @@
 
 <!-- 按模板在此处下方插入条目，最新条目在最上方。 -->
 
+### 2026-08-11 · [MSMU/SpatialLadder direct] 分行 Markdown 对象绑定未被 canary 识别
+- 场景：HiSpatial full-987 PASS 后，GPU0 切换 SpatialLadder direct stage-1 canary。
+- 报错：回答逐对象正确列出 `Shape/Color/Location`，validator 却报告缺少 red-circle/blue-square。
+- 原因：v5 只解析自然语言相邻词、bbox 与 shape 标签，不把同一 Markdown record 的三个字段绑定。
+- 处理：canary v6 严格解析逐对象字段记录；缺字段、跨对象拼接以及颜色/位置交换均拒绝。
+- 验证：锁定现场回答和两组交换/跨记录反例；失败未生成 canary report 或 benchmark prediction。
+
 ### 2026-08-11 · [MSMU/SOTA supplement] 通用 server env 覆盖冻结 family 解释器
 - 场景：SpatialLadder thinking v5 canary 已通过，继续加载一条 MSMU 子集。
 - 报错：实际进程落到 legacy `va` Python，随后 `ModuleNotFoundError: No module named 'datasets'`。

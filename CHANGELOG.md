@@ -7,6 +7,9 @@ Git 历史为准；临时调试过程和未定位问题不写入。
 
 ### Added
 
+- 组合视觉 canary 升级为 v6：SpatialLadder direct 可用同一 Markdown 对象记录内的
+  `Shape/Color/Location` 三字段证明绑定；缺字段、跨记录拼接与颜色/位置交换继续 fail closed。MSMU
+  输入、inference protocol、scorer、阈值和聚合均不变。
 - MSMU SOTA supplement 的 stage wrapper 保留当前 shell 显式绑定的 family 解释器与资产，不再被通用
   `.env.server` 静默覆盖；`--check` 同时探测每个 family 环境的 MSMU `datasets` loader，缺依赖会在占用
   GPU 前失败。

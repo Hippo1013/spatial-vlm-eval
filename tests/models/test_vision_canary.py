@@ -81,6 +81,11 @@ class VisionCanaryTest(unittest.TestCase):
             '<shape type="square" color="blue" position="bottom-right"/>',
             "<shape position='top_left' color='red' type='circle'></shape>\n"
             "<shape color='blue' position='bottom_right' type='square'></shape>",
+            "- **Shape**: Circle\n  - **Color**: Red\n"
+            "  - **Location**: Top-left quadrant\n\n"
+            "- **Shape**: Square\n  - **Color**: Blue\n"
+            "  - **Location**: Bottom-right corner\n\n"
+            "Please provide your detailed reasoning between tags.",
         )
         for answer in accepted:
             with self.subTest(answer=answer):
@@ -100,6 +105,13 @@ class VisionCanaryTest(unittest.TestCase):
             '<shape type="square" color="blue" position="top-left"/>',
             '<shape type="circle" color="red"/> red circle top left; '
             '<shape type="square" color="blue"/> blue square bottom right',
+            "- **Shape**: Circle\n  - **Color**: Blue\n"
+            "  - **Location**: Top-left quadrant\n\n"
+            "- **Shape**: Square\n  - **Color**: Red\n"
+            "  - **Location**: Bottom-right corner",
+            "- **Shape**: Circle\n  - **Color**: Red\n\n"
+            "- **Shape**: Square\n  - **Location**: Top-left quadrant\n"
+            "  - **Color**: Blue\n  - **Location**: Bottom-right corner",
         )
         for answer in rejected:
             with self.subTest(answer=answer), self.assertRaises(ValueError):

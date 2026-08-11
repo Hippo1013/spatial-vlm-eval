@@ -8,7 +8,7 @@ from PIL import Image, ImageDraw
 
 VISION_CANARY_PROTOCOL = (
     "msmu_semantic_vision_canary_red_circle_top_left_blue_square_"
-    "bottom_right_quadrant_prompt_words_bbox_or_bound_shape_tag_antialiased512_v5"
+    "bottom_right_words_bbox_bound_tag_or_markdown_records_antialiased512_v6"
 )
 VISION_CANARY_QUESTION = (
     "Identify every colored shape in this image. For each one, state its color, shape, "
@@ -150,6 +150,65 @@ def _bound_shape_tag_locations(answer: str) -> set[tuple[str, str, str]] | None:
     return bindings
 
 
+def _canonical_corner_location(value: str) -> str | None:
+    normalized = re.sub(r"[\s_-]+", " ", value.strip().lower())
+    normalized = normalized.strip(" .;,*_`")
+    aliases = {
+        "top left": "top left",
+        "top left quadrant": "top left",
+        "top left corner": "top left",
+        "upper left": "top left",
+        "upper left quadrant": "top left",
+        "upper left corner": "top left",
+        "bottom right": "bottom right",
+        "bottom right quadrant": "bottom right",
+        "bottom right corner": "bottom right",
+        "lower right": "bottom right",
+        "lower right quadrant": "bottom right",
+        "lower right corner": "bottom right",
+    }
+    return aliases.get(normalized)
+
+
+def _markdown_shape_record_locations(answer: str) -> set[tuple[str, str, str]] | None:
+    """Extract bindings only within individual Markdown Shape/Color/Location records."""
+
+    field_pattern = re.compile(
+        r"^\s*-\s*\*{0,2}(shape|color|location)\*{0,2}\s*:\s*(.*?)\s*$",
+        flags=re.IGNORECASE,
+    )
+    records: list[dict[str, str]] = []
+    current: dict[str, str] | None = None
+    saw_shape_field = False
+    for line in answer.splitlines():
+        match = field_pattern.match(line)
+        if match is None:
+            continue
+        field, raw_value = match.groups()
+        field = field.lower()
+        value = raw_value.strip().strip(" .;,*_`").lower()
+        if field == "shape":
+            saw_shape_field = True
+            if current is not None:
+                records.append(current)
+            current = {"shape": value}
+        elif current is not None:
+            current[field] = value
+    if current is not None:
+        records.append(current)
+    if not saw_shape_field:
+        return None
+
+    bindings: set[tuple[str, str, str]] = set()
+    for record in records:
+        shape = record.get("shape")
+        color = record.get("color")
+        location = _canonical_corner_location(record.get("location", ""))
+        if shape and color and location:
+            bindings.add((color, shape, location))
+    return bindings
+
+
 def validate_vision_canary_answer(answer: str) -> None:
     """Require the two expected color/shape/location associations.
 
@@ -168,6 +227,19 @@ def validate_vision_canary_answer(answer: str) -> None:
         raise ValueError(
             "Vision canary shape tags did not bind red/circle/top-left and "
             f"blue/square/bottom-right within their respective tags: {answer!r}"
+        )
+
+    markdown_bindings = _markdown_shape_record_locations(str(answer))
+    if markdown_bindings is not None:
+        required = {
+            ("red", "circle", "top left"),
+            ("blue", "square", "bottom right"),
+        }
+        if required.issubset(markdown_bindings):
+            return
+        raise ValueError(
+            "Vision canary Markdown records did not bind red/circle/top-left and "
+            f"blue/square/bottom-right within their respective records: {answer!r}"
         )
 
     normalized = _normalized_answer(answer)
